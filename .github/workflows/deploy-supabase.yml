@@ -1,0 +1,45 @@
+name: Deploy Supabase backend
+on:
+  workflow_dispatch:
+    inputs:
+      apply_database:
+        description: 'Apply NEW migrations after reconciling existing remote history'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: nitaq-supabase-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run check
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.0.0
+      - name: Check deployment secrets
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_PROJECT_REF"
+      - name: Apply future database migrations
+        if: ${{ inputs.apply_database }}
+        run: |
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$(find supabase/migrations -name '*.sql' -print -quit)"
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db push --dry-run
+          supabase db push
+      - name: Deploy invitation function
+        run: supabase functions deploy invite-workspace-user --project-ref "$SUPABASE_PROJECT_REF"

@@ -1,0 +1,75 @@
+:root {
+  --tool-navy: #101725;
+  --tool-blue: #34507f;
+  --tool-line: #e4e1da;
+  --tool-soft: #eeedea;
+  --tool-bronze: #8f6f35;
+}
+.compact-navigation .btn, #secondaryFilters .btn, #edit .actions .btn {
+  border-radius: 7px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.compact-navigation .btn.primary, #edit .btn.primary {
+  background: var(--tool-navy);
+  color: white;
+}
+.compact-navigation .btn:not(.primary):not(:disabled):hover,
+#secondaryFilters .btn:not(:disabled):hover {
+  background: var(--tool-soft);
+  border-color: var(--tool-bronze);
+}
+#primaryFilters #search {
+  background: #fff;
+  border-color: var(--tool-line);
+  border-inline-start: 3px solid var(--tool-blue);
+  border-radius: 7px;
+}
+#primaryFilters :is(input,select):focus-visible,
+.compact-navigation :is(button,select,summary):focus-visible,
+#activeFilters button:focus-visible,
+#edit :is(button,input,select,textarea):focus-visible {
+  outline: 2px solid var(--tool-blue);
+  outline-offset: 2px;
+}
+#edit :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+  border-radius: 7px;
+}
+#activeFilters {display:flex;gap:4px;flex-wrap:wrap}
+#activeFilters:empty {display:none}
+#activeFilters button {
+  font: inherit;
+  max-inline-size: 19em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tool-blue);
+  background: #eef3fa;
+  border: 1px solid #d6e1ef;
+  border-radius: 999px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+#savehint[data-save-state="error"] {
+  color: #8c2d1e;
+  background: #fff1ed;
+  border-radius: 5px;
+  padding: 4px 8px;
+}
+@media(prefers-reduced-motion:reduce) {
+  .compact-navigation .btn, #secondaryFilters .btn, #edit .actions .btn {transition:none}
+}
+#stageBreakdown:not([hidden]) {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:6px 10px;
+  background:#f5f7fa;
+  border:1px solid var(--tool-line);
+  font-size:12px;
+}
+#stageBreakdown .btn[aria-pressed="true"] {
+  background:var(--tool-navy);
+  color:#fff;
+}
+#stageBreakdown b {margin-inline-start:3px}

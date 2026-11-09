@@ -1,0 +1,167 @@
+<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نطاق | متابعة المشاريع</title><style>
+:root{--ink:#132a46;--gold:#a9824f;--paper:#edeee8;--line:#d7d9d0}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px Tahoma,Arial}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.5}dialog{max-height:90vh;overflow:auto}button:focus-visible,input:focus,select:focus{outline:2px solid var(--gold)}header{background:var(--ink);color:white;padding:22px 32px;display:flex;align-items:center;gap:24px}.brand{font-size:32px;font-weight:bold;color:#e4cfad}.brand small{display:block;font-size:9px;letter-spacing:4px;color:white}.headnote{border-right:1px solid #ffffff40;padding-right:24px;font-size:13px}.demo{margin-right:auto;background:#ffffff16;border:1px solid #ffffff30;padding:8px 12px;border-radius:4px;color:#e4cfad}main{padding:28px 32px}h1{font-size:26px;margin:0 0 10px}p{color:#647287;line-height:1.8}.title{display:flex;justify-content:space-between;gap:16px;align-items:center}.btn{border:1px solid var(--line);background:white;padding:10px 16px;border-radius:5px}.primary{background:var(--ink);color:white;border-color:var(--ink)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:20px 0}.stat{background:white;border:1px solid var(--line);padding:18px;border-top:3px solid var(--gold);cursor:pointer;text-align:right}.stat b{font-size:28px;display:block;margin-top:10px}.stat span{color:#647287;font-size:12px}.tools{display:flex;gap:10px;flex-wrap:wrap;background:white;padding:16px;border:1px solid var(--line);border-radius:6px 6px 0 0}.tools input{min-width:250px;flex:1}.tools input,.tools select{padding:9px;border:1px solid var(--line);background:#fafbf9;border-radius:4px}.hint{font-size:12px;padding:12px 16px;background:#f7f7f2;border:1px solid var(--line);border-top:0;display:flex;justify-content:space-between;gap:12px}.tablebox{overflow:auto;max-height:62vh;border:1px solid var(--line);background:white}table{border-collapse:separate;border-spacing:0;white-space:nowrap;font-size:12px;min-width:100%}th,td{padding:14px 12px;border-left:1px solid #e6e8e2;border-bottom:1px solid #e6e8e2;text-align:right}thead th{position:sticky;top:0;background:#f5f6f1;z-index:3;height:45px}thead tr:nth-child(2) th{top:45px;background:#fafbf8;font-weight:normal;color:#718096;height:38px}th.group{text-align:center;background:#e5e9e4;border-top:3px solid var(--gold)}th.group button{border:0;background:none;width:100%;font-weight:bold}.fixednum{position:sticky;right:0;min-width:90px;background:white;z-index:2}.fixedname{position:sticky;right:90px;min-width:175px;background:white;z-index:2;box-shadow:-4px 0 7px #132a4609}thead .fixednum,thead .fixedname{z-index:6;background:#f5f6f1}tbody tr:hover td{background:#f9faf5}.owner{border:0;background:none;text-align:right;font-weight:bold;padding:0}.sub{font-size:10px;color:#8996a8;margin-top:6px}.badge{border:0;border-radius:5px;padding:7px 10px;min-width:98px;font-size:11px;background:#edf0f3;color:#6b7a8b}.done{background:#ddeae6;color:#2e6e63}.work{background:#dde7f1;color:#2f5e8c}.wait{background:#f3e5c4;color:#986d21}.blocked{background:#f3ddd2;color:#ae4e2d}.late{color:#ae4e2d;font-weight:bold}.note{max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#6f7b89}.footer{padding:12px 2px;display:flex;justify-content:space-between;color:#718096;font-size:11px}dialog{border:1px solid var(--line);border-radius:10px;padding:28px;width:min(540px,94vw);color:var(--ink)}dialog::backdrop{background:#132a4670}dialog h2{margin:0 0 8px}label{display:block;margin:18px 0 7px;font-size:12px}dialog input,dialog select,dialog textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px}dialog textarea{min-height:85px}.actions{display:flex;gap:10px;margin-top:24px}.empty{text-align:center;padding:40px}#toast{position:fixed;bottom:25px;left:25px;background:var(--ink);color:white;padding:14px 22px;display:none;border-radius:5px;z-index:20}@media(max-width:800px){main{padding:18px 12px}header{padding:16px;gap:12px}.headnote{display:none}.stats{grid-template-columns:repeat(2,1fr)}.title{align-items:flex-start}h1{font-size:22px}.demo{font-size:10px}.tools input{min-width:180px}.hint{line-height:1.7}}
+.inline-state{display:flex;align-items:center;gap:5px}.inline-state select{cursor:pointer;min-width:86px;max-width:140px;appearance:auto}.detail-btn{border:1px solid #d7d9d0;background:white;border-radius:4px;font-size:20px;padding:0 7px;line-height:28px;color:#647287}.detail-btn:hover{background:#ede1cb}select:disabled{opacity:.6;cursor:not-allowed}.project-details{min-width:240px;max-width:290px;white-space:normal;line-height:1.7}.project-details .owner{text-align:right;line-height:1.7}.fee-note{color:#98723e;background:#f8f2e8;border-radius:4px;padding:3px 6px;margin-top:8px}.doc-list{width:100%;white-space:normal}.doc-list td{padding:9px 5px}.support-notice{padding:10px;background:#f8f2e8;border-radius:4px;font-size:12px;line-height:1.8}dialog:has(.doc-list){width:min(850px,95vw)}.doc-section{margin-top:22px;padding:16px;border:1px solid #d7d9d0;border-radius:5px}.doc-section h3{margin:0 0 12px}.doc-section>.btn{margin-top:12px}.doc-list label{margin:0;min-width:130px}.doc-list select{min-width:110px}progress{accent-color:#2e6e63}.doc-list input{min-width:180px}@media(max-width:600px){.doc-section{padding:8px}.doc-list{font-size:11px}}.document-grid-input{width:145px;padding:7px;border:1px solid #d7d9d0;border-radius:4px;background:#fff}#table-scroll-top{overflow-x:scroll;overflow-y:hidden;height:22px;background:#e5e9e4;border:1px solid #d7d9d0;scrollbar-color:#8996a8 #e5e9e4}#table-scroll-top>div{height:1px}
+/* Compact project grids. Keep form controls usable at the same text size. */
+#table{width:max-content;min-width:0}
+#table th,#table td{padding:5px 8px;line-height:1.35}
+#table thead th{height:38px}
+#table thead tr:nth-child(2) th{top:38px;height:28px}
+#table .fixednum{width:76px;min-width:76px;max-width:76px}
+#table .fixedname{right:76px;width:135px;min-width:135px;max-width:135px;white-space:normal;overflow-wrap:anywhere}
+#table .project-details{min-width:155px;max-width:185px;overflow-wrap:anywhere}
+#table .project-details .owner{line-height:1.35}
+#table .sub{margin-top:2px}
+#table .fee-note{margin-top:3px}
+#table .badge{min-width:0;padding:4px 6px}
+#table .inline-state{gap:3px}
+#table .inline-state select{min-width:61px;max-width:110px}
+#table .detail-btn,#table .btn{padding:3px 6px;line-height:1.4}
+#table .detail-btn{font-size:15px}
+#table .document-grid-input{width:115px;padding:4px 5px;min-height:27px}
+#table textarea.document-grid-input{width:158px;height:29px;min-height:29px;resize:vertical;vertical-align:middle}
+#table .note{max-width:150px}
+#table .empty{padding:18px}
+.followup-group{background:#e5e9e4;font-weight:bold}.title-actions,.followup-menu{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.followup-menu{padding:4px;background:#e5e9e4;border:1px solid var(--line);border-radius:6px}.title-actions #add{white-space:nowrap}@media(max-width:850px){.title{flex-wrap:wrap}.title-actions{max-width:100%}}#table .coord-title,#table .coord-en{display:block;line-height:1.2}#table .coord-title{max-width:105px;white-space:normal;margin:auto}#table .coord-en{font-size:9px}.column-actions{display:flex;gap:8px;margin:12px 0}.column-actions button{flex:1}
+.workspace-nav,.workspace-tabs,.workspace-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.workspace-nav{justify-content:space-between;margin-top:18px;padding:7px;background:#f9faf6;border:1px solid var(--line);border-radius:7px}
+.workspace-nav .btn,.tools .btn{padding:7px 11px;font-size:12px}
+.workspace-tabs .btn:not(.primary){background:transparent}
+.admin-menu{position:relative}
+.admin-menu summary{cursor:pointer;list-style-position:inside}
+.admin-actions{position:absolute;z-index:12;inset-inline-end:0;top:calc(100% + 5px);display:grid;gap:4px;width:215px;background:white;border:1px solid var(--line);border-radius:6px;padding:6px;box-shadow:0 6px 20px #132a4622}
+.admin-actions button{text-align:start}
+.admin-actions button[hidden]{display:none}
+.stats{gap:9px;margin:12px 0}
+.stat{padding:10px 14px}
+.stat b{font-size:23px;margin-top:4px}
+.tools{padding:8px;gap:6px}
+.tools input,.tools select{padding:6px 8px;font-size:12px;max-width:100%}
+.tools-secondary{align-items:center;border-top:0;border-radius:0;background:#f8f9f5}
+.undo-label{font-size:11px;color:#647287;margin-inline-start:auto}
+.hint{padding:7px 9px}
+#table :is(input,select,textarea):focus-visible,.btn:focus-visible,summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+dialog .column-actions+label{margin-top:10px}
+@media(max-width:650px){.workspace-nav{align-items:flex-start}.tools input{flex-basis:100%}.undo-label{margin-inline-start:0}.admin-actions{inset-inline-start:0;inset-inline-end:auto}.title-actions .btn{padding:7px 9px}.hint{flex-wrap:wrap}}
+
+.filter-summary{display:flex;align-items:center;gap:8px}
+.stat[aria-pressed="true"]{outline:2px solid var(--gold);outline-offset:-2px}
+.tablebox{scroll-padding-inline-start:211px;scroll-padding-block-start:75px}
+#table .fixednum{white-space:normal;overflow-wrap:anywhere}
+#dialogError:empty{display:none}
+@media(max-width:650px){
+  #table td.fixednum{position:static}
+  #table th.fixednum{position:sticky;right:auto}
+  #table .fixedname{right:0}
+  .tablebox{scroll-padding-inline-start:135px}
+}
+.activity-scroll{overflow:auto}.activity-scroll td{overflow-wrap:anywhere;min-width:75px}
+/* Workspace hierarchy and scanning */
+.workspace-nav{background:#fff;box-shadow:0 2px 5px #132a460a}
+.workspace-tabs .btn[aria-current="page"]{background:var(--ink);color:white}
+.tools{background:#fff}
+.tools-secondary{background:#f6f7f3}
+#search{min-height:35px}
+.filter-summary #count{white-space:nowrap;font-weight:700}
+.tablebox{background:#fff;border-radius:0 0 6px 6px}
+#table tbody tr:nth-child(even) td{background:#fafbf8}
+#table tbody tr:hover td,#table tbody tr:focus-within td{background:#eef2f5}
+#table tbody td.followup-group{background:#e5e9e4}
+#table .badge{font-weight:600}
+#table .detail-btn{min-width:26px}
+#table-scroll-top{background:#eef0eb}
+@media(max-width:650px){
+  .workspace-tabs,.workspace-actions{width:100%}
+  .workspace-nav .btn,.tools .btn{min-height:34px}
+  .tools select{min-height:34px}
+  .filter-summary{width:100%;justify-content:space-between}
+}
+.data-center{display:grid;gap:12px}.data-center section{padding:14px;border:1px solid var(--line);border-radius:6px;background:#fafbf8}.data-center h3{margin:0}.data-center p{margin:6px 0 12px}.data-actions{display:flex;gap:8px;flex-wrap:wrap}#replaceBackup{width:auto;margin-inline-end:6px}
+.users-heading,.user-card-heading,.user-card-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.users-heading{margin:16px 0}.users-heading h2{font-size:21px}.users-heading p{margin:5px 0}
+.user-card{margin:12px 0;background:white;border:1px solid var(--line);border-radius:7px;padding:18px}
+.user-card h3{margin:0;font-size:16px}.user-card-heading{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.user-card .tag{display:inline-block;font-size:11px;background:#dde7f1;padding:3px 8px;border-radius:12px;margin-top:5px}
+.user-fields{display:grid;grid-template-columns:140px minmax(160px,1fr);gap:8px 14px;align-items:center;margin:14px 0}
+.user-fields label{margin:0}.user-card input:not([type=checkbox]),.user-card select{padding:8px 10px;border:1px solid var(--line);border-radius:4px;max-width:100%;width:100%}
+.user-permission-editor{max-width:620px}.user-permissions{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0}
+.user-permissions label{display:flex;align-items:center;gap:7px;margin:0}.user-permissions input{width:17px;height:17px;accent-color:var(--ink)}
+.user-card-actions{justify-content:flex-start;margin-top:12px}
+#usersPanel[hidden],#primaryFilters[hidden],#secondaryFilters[hidden],#gridHint[hidden],#gridViewport[hidden],#stats[hidden]{display:none}
+@media(max-width:600px){.user-card{padding:12px}.user-fields{grid-template-columns:1fr;gap:5px}.user-fields label:not(:first-child){margin-top:8px}.user-permissions{display:grid;gap:12px}}
+
+.operation-nav,.operation-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.operation-nav{background:#fff;border:1px solid var(--line);border-radius:7px;padding:10px}.operation-nav>span{font-size:11px;color:#687b91;margin-inline:8px}.operation-nav .btn{padding:7px 12px}.operation-toolbar input{max-width:450px;flex:1;min-width:180px;padding:9px;border:1px solid var(--line);border-radius:5px}.operation-scroll{overflow:auto;max-height:65vh}.operation-table{width:100%;min-width:650px;border-collapse:collapse;table-layout:auto}.operation-table th,.operation-table td{padding:9px 12px;white-space:normal;min-width:0;font-size:12px;max-width:330px;overflow-wrap:anywhere}.operation-table th{position:sticky;top:0;background:#f1f3ee;z-index:1}.operation-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:15px 0}.operation-kpis>div{padding:15px;background:#f3f5f1;border-top:3px solid #aa834d}.operation-kpis b{display:block;font-size:26px}.user-card h2{margin-top:0}
+.dialog-heading{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;padding:8px 0 12px}.dialog-heading h2{margin:0;flex:1}.dialog-close{flex:none;width:38px;height:38px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:28px;line-height:1}.dialog-close:hover{background:#f4f1eb}.dialog-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}.project-context{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0}.project-context select{max-width:380px;padding:7px;border:1px solid var(--line);border-radius:5px}#documentViews[hidden]{display:none}dialog .actions{position:sticky;bottom:0;z-index:21;background:#fff;padding:12px 0;margin-bottom:0;border-top:1px solid var(--line)}.document-grid-input:focus{min-width:170px}
+/* Compact daily workspace header */
+header{padding:9px 20px;gap:18px}.brand{font-size:25px}.brand small{font-size:8px;letter-spacing:3px}.headnote{font-size:11px}.demo{font-size:10px;padding:5px 9px}
+main{padding:12px 20px}.title{gap:12px;margin-bottom:8px}.title>div:first-child>div,.title>div:first-child>p{display:none}.title h1{font-size:21px;margin:0}.title-actions{gap:6px}.title-actions .btn{padding:6px 10px;font-size:12px;min-height:32px}.followup-menu{padding:2px;gap:4px}.followup-menu select{max-width:230px}
+.compact-navigation{display:flex;align-items:center;flex-wrap:wrap;gap:4px;background:white;border:1px solid var(--line);border-radius:6px;padding:5px 7px;margin:0 0 7px}.compact-navigation .workspace-nav,.compact-navigation .operation-nav{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;gap:4px}.compact-navigation .workspace-nav{display:contents}.compact-navigation .workspace-tabs{order:-1}.compact-navigation .workspace-actions{margin-inline-start:auto}.compact-navigation .operation-nav>span{display:none}.compact-navigation .btn{padding:6px 9px;font-size:11px;white-space:nowrap}.compact-navigation .operation-nav{border-inline-start:1px solid var(--line);padding-inline-start:7px}
+.project-context{margin:5px 0;gap:7px;font-size:11px}.project-context label{margin:0;font-size:11px}.project-context select{padding:5px 7px;max-width:280px;font-size:11px}.project-context .sub{margin:0}.project-context .btn{padding:5px 8px;font-size:11px}
+.stats{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.stat{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--line);border-inline-start:3px solid var(--gold);border-radius:4px}.stat b{display:inline;font-size:19px;margin:0}.stat span{font-size:11px}
+.tools{padding:6px;gap:5px}.tools .btn{padding:5px 8px;font-size:11px}.tools input,.tools select{padding:5px 7px;font-size:11px}#search{min-height:31px}.hint{padding:5px 8px;font-size:11px}.hint .btn{padding:4px 7px;font-size:11px}.undo-label{font-size:10px}#table-scroll-top{height:18px}.tablebox{max-height:calc(100vh - 320px);min-height:220px}
+@media(max-width:800px){header{padding:8px 12px}main{padding:10px 12px}.title h1{font-size:18px}.title-actions{width:100%;justify-content:space-between}.title{gap:7px}.compact-navigation .workspace-tabs,.compact-navigation .workspace-actions{width:auto}.compact-navigation .workspace-actions{margin-inline-start:0}.compact-navigation .operation-nav{border:0;padding:0}.compact-navigation{gap:6px}.stat{min-width:calc(50% - 6px)}.project-context .sub{display:none}.tools input{min-width:150px}.tablebox{max-height:65vh}}
+
+#table .project-actions-select{display:block;width:64px;max-width:100%;margin-top:3px;padding:3px 1px;font-size:10px;border:1px solid var(--line);border-radius:4px;background:white;white-space:nowrap}
+#table tbody td{padding-block:5px;vertical-align:middle}
+#table .project-details{line-height:1.25}
+#table .project-details .sub{line-height:1.25}
+#table .fee-note{padding:2px 4px;font-size:9px}
+#table .project-details .sub:not(.fee-note){max-width:185px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+dialog:has(.workflow-wide){width:calc(100vw - 40px);max-width:1600px;padding:20px;max-height:94vh}
+.workflow-wide .operation-scroll{max-height:none;overflow:visible}
+.workflow-wide .operation-table{width:100%;min-width:0;table-layout:fixed}
+.workflow-wide .operation-table th,.workflow-wide .operation-table td{padding:8px 10px;max-width:none;overflow-wrap:break-word}
+.workflow-wide th:nth-child(1){width:16%}.workflow-wide th:nth-child(2){width:10%}.workflow-wide th:nth-child(3){width:15%}.workflow-wide th:nth-child(4){width:23%}.workflow-wide th:nth-child(5){width:18%}.workflow-wide th:nth-child(6){width:18%}
+.workflow-wide .btn{margin:2px;padding:5px 7px;white-space:nowrap}
+@media(max-width:700px){dialog:has(.workflow-wide){width:96vw;padding:12px}.workflow-wide .operation-scroll{overflow:auto}.workflow-wide .operation-table{min-width:850px}}
+
+#table .project-row-meta{display:flex;align-items:center;gap:3px;margin-top:2px}
+#table .project-row-meta .sub{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#table .project-row-meta select{flex:none;margin:0;padding-block:1px;width:58px}
+
+#table .project-details .fee-note{display:inline-block;margin:0;max-width:100%}
+#table .project-details>.sub:nth-child(3){display:inline-block;max-width:50%;vertical-align:middle;margin-inline-end:4px}
+#table .project-details:not(:has([dir="ltr"])) .fee-note{max-width:46%;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#table td.project-number{font-size:22px;font-weight:700;line-height:1.1;text-align:center;font-variant-numeric:tabular-nums}
+
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.compact-navigation .title-actions{width:auto;max-width:100%;gap:4px;justify-content:flex-start}
+.compact-navigation .followup-menu{background:transparent;border:0;padding:0}
+.compact-navigation .title-actions .btn{min-height:0}
+
+.combined-filters{align-items:center}
+.combined-filters #projectContext{margin:0}
+.combined-filters #projectContext>.sub{display:none}
+.combined-filters #primaryFilters{flex:1 1 640px;min-width:0;border:0;padding:0;align-items:center}
+@media(max-width:800px){.combined-filters #primaryFilters{flex-basis:100%}}
+#projectContext[hidden],.combined-filters:has(#projectContext[hidden]):has(#primaryFilters[hidden]){display:none}
+.activity-page .doc-list th,.activity-page .doc-list td{padding:8px 10px}
+.activity-page .activity-scroll{max-height:72vh}
+html.portal-embedded body > header{display:none}
+</style><link rel="stylesheet" href="tools-ui.css?v=20261109-fix1"><script>
+if (window.parent !== window && location.hash === "#portal-embedded") {
+  document.documentElement.classList.add("portal-embedded");
+}
+</script><header><div class="brand">نطاق<small>NITAQ ENGINEERING</small></div><div class="headnote">الاستشارات الهندسية<br><span style="color:#b2bdc9;font-size:11px">إدارة ومتابعة المشاريع</span></div><div class="demo">مساحة المشاريع المشتركة</div></header><main><h1 id="pageTitle" class="visually-hidden"></h1><div class="compact-navigation"><nav class="operation-nav" aria-label="التشغيل والإدارة"><span>التشغيل اليومي</span><button class="btn" id="ownersTab">ملفات الملاك</button><button class="btn" id="tasksTab">المهام</button><button class="btn" id="archiveTab">الأرشيف</button><span>الإدارة والتقارير</span><button class="btn" id="dashboardTab">لوحة التحكم</button><button class="btn" id="reportsTab">التقارير</button></nav><div class="workspace-nav"><nav class="workspace-tabs" aria-label="أقسام البرنامج"><button class="btn primary" id="projectsTab">جدول المشاريع</button><button class="btn" id="documentsTab">مستندات المشاريع</button><button class="btn" id="tenderTab">قسم المناقصات</button><button class="btn" id="superTab">جدول الإشراف</button></nav><div class="workspace-actions"><button class="btn" id="undo" disabled>↶ تراجع</button><details class="admin-menu"><summary class="btn">إدارة النظام</summary><div class="admin-actions"><button class="btn" id="permissions">المستخدمون والصلاحيات</button><button class="btn" id="activity">سجل التغييرات</button><button class="btn" id="accountingCloud">اتصال تلقائي بالحسابات</button><button class="btn" id="accountingLink">ربط بيانات الحسابات</button><button class="btn" id="backup">البيانات والنسخ</button><button class="btn" id="manageColumns">إدارة الأعمدة</button><button class="btn" id="settings">القوائم</button></div></details></div></div><div class="title-actions"><div class="followup-menu" role="group" aria-label="أدوات المتابعة"><button class="btn" id="followupTab">متابعة اليوم</button><select class="btn" id="previewUser" aria-label="معاينة حسب المهندس"></select><button class="btn" id="mine" aria-pressed="false">المسند لي</button></div><button class="btn primary" id="add">＋ مشروع جديد</button></div></div><div class="project-context" id="documentViews" hidden></div><div id="usersPanel" hidden></div><div class="stats" id="stats"></div><div class="tools combined-filters"><div class="project-context" id="projectContext"></div><div class="tools" id="primaryFilters"><input id="search" placeholder="ابحث بالمشروع، المالك، الهاتف، الهوية أو رقم الأرض…" aria-label="البحث"><select id="engineer" aria-label="المسؤول"><option value="">كل المسؤولين</option></select><select id="filter" aria-label="تصفية"><option value="all">كل المشاريع</option><option value="late">مراحل متأخرة</option><option value="stopped">معلقة أو مغلقة</option><option value="hold">مشاريع معلقة</option><option value="done">مشاريع مغلقة DONE</option><option value="active">مشاريع جارية</option></select><select id="stagefilter" aria-label="المرحلة"></select><select id="statefilter" aria-label="حالة المرحلة"></select></div></div><div class="tools tools-secondary" id="secondaryFilters"><button class="btn" id="expand">فتح تفاصيل المراحل</button><select id="savedFilters" aria-label="الفلاتر المحفوظة"></select><button class="btn" id="saveFilter">حفظ الفلتر</button><button class="btn" id="deleteFilter">حذف الفلتر المحفوظ</button><button class="btn" id="export">تصدير CSV</button><span id="undolabel" class="undo-label"></span></div><div class="hint" id="gridHint"><span id="hinttext"></span><span id="activeFilters" aria-label="الفلاتر النشطة"></span><span class="filter-summary"><span id="count"></span><span id="projectPager" hidden><button type="button" class="btn xs" id="projectPrev">السابق</button> <span id="projectPageLabel" aria-live="polite"></span> <button type="button" class="btn xs" id="projectNext">التالي</button></span><button type="button" class="btn xs" id="clearFilters">مسح الفلاتر</button></span></div><div id="stageBreakdown" aria-label="توزيع حالات المرحلة" hidden></div><div id="table-scroll-top" tabindex="0" role="region" aria-label="تمرير الجدول أفقيًا" hidden><div></div></div><div class="tablebox" id="gridViewport"><table id="table"></table></div><div class="footer"><span id="savehint" role="status"></span><span id="accountingCloudStatus" role="status"></span><span id="folderBackupWarning" class="late" role="status"></span><span>نطاق — متابعة المشاريع</span></div></main><dialog id="edit" aria-labelledby="dialogtitle"><form id="form"><div class="dialog-heading"><h2 id="dialogtitle"></h2><button type="button" id="closeDialog" class="dialog-close" aria-label="إغلاق النافذة" title="إغلاق">×</button></div><p id="dialogsub"></p><div id="fields"></div><p id="dialogError" class="late" role="alert"></p><div class="actions"><button class="btn primary" type="submit">حفظ التعديلات</button><button class="btn" type="button" id="cancel">إلغاء</button></div></form></dialog><div id="toast" role="status"></div><script>window.NITAQ_REQUIRE_SHARED=true;</script><script src="support.js?v=20261109-fix1"></script><script src="documents.js?v=20261109-fix1"></script><script src="followup.js?v=20261109-fix1"></script><script src="users.js?v=20261109-fix1"></script><script src="admin.js?v=20261109-fix1"></script><script src="folder-backup.js?v=20261109-fix1"></script><script src="backup.js?v=20261109-fix1"></script><script src="columns.js?v=20261109-fix1"></script><script src="interface.js?v=20261109-fix1"></script><script src="operations.js?v=20261109-fix1"></script><script src="usability.js?v=20261109-fix1"></script><script src="workflow.js?v=20261109-fix1"></script><script src="accounting-projects.js?v=20261109-fix1"></script><script src="accounting-link.js?v=20261109-fix1"></script><script src="accounting-cloud-config.js?v=20261109-fix1"></script><script src="accounting-cloud.js?v=20261109-fix1"></script><script src="fflate-0.8.2.js?v=20261109-fix1"></script><script src="app.js?v=20261109-fix1"></script><script src="engineering-cloud.js?v=20261109-fix1"></script><script src="shared-workspace.js?v=20261109-fix1"></script><script>
+{
+  const topBar = document.querySelector('#table-scroll-top');
+  const table = document.querySelector('#table');
+  const viewport = table.parentElement;
+  function refreshScrollBar() {
+    topBar.hidden = viewport.scrollWidth <= viewport.clientWidth;
+    topBar.style.width = viewport.clientWidth + 'px';
+    topBar.firstElementChild.style.width = viewport.scrollWidth + 'px';
+    topBar.scrollLeft = viewport.scrollLeft;
+  }
+  topBar.addEventListener('scroll', () => {
+    if (!topBar.hidden && viewport.scrollLeft !== topBar.scrollLeft) viewport.scrollLeft = topBar.scrollLeft;
+  });
+  viewport.addEventListener('scroll', () => {
+    if (topBar.scrollLeft !== viewport.scrollLeft) topBar.scrollLeft = viewport.scrollLeft;
+  });
+  const resize = new ResizeObserver(refreshScrollBar);
+  resize.observe(table);
+  resize.observe(viewport);
+  refreshScrollBar();
+}
+</script></html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نطاق | الحسابات والمشاريع وCRM</title>
+<link rel="icon" type="image/svg+xml" href="NITAQ-Logo-gold.svg">
+<style>
+:root{font-family:Tahoma,Arial,sans-serif;color:#101725;background:#EEEDEA}
+*{box-sizing:border-box}
+body{margin:0;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.portal-header{display:flex;align-items:center;gap:18px;padding:8px 18px;background:#101725;color:white;flex:none}
+.brand{display:block;width:66px;height:40px;object-fit:contain;margin-inline:8px;flex:none}
+nav{display:flex;gap:6px}
+nav button{font:inherit;font-size:13px;border:1px solid #ffffff45;border-radius:5px;padding:8px 18px;background:transparent;color:white;cursor:pointer}
+nav button[aria-selected="true"]{background:#C9A25D;border-color:#C9A25D;color:#101725;font-weight:bold}
+nav button:focus-visible,a:focus-visible{outline:2px solid #C9A25D;outline-offset:2px}
+.portal-actions{margin-inline-start:auto;display:flex;gap:8px;align-items:center}
+.portal-actions a{font-size:11px;color:white;text-decoration:none;border:1px solid #ffffff45;border-radius:4px;padding:6px 9px}
+#portal-status{font-size:10px;color:#d2dae3}
+main{position:relative;flex:1;min-height:0}
+section{height:100%}
+section[hidden]{display:none}
+iframe{display:block;width:100%;height:100%;border:0;background:#EEEDEA}
+@media(max-width:600px){.portal-header{padding:7px 9px;gap:10px;flex-wrap:wrap}.brand{width:50px;height:34px;margin-inline:6px}nav{flex:1;flex-wrap:wrap}nav button{flex:1;padding:8px 10px}.portal-actions{width:100%;justify-content:space-between}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+<img class="brand" src="NITAQ-Logo-gold.svg" alt="نطاق للاستشارات الهندسية">
+<nav role="tablist" aria-label="أقسام نطاق">
+<button type="button" id="tab-crm" role="tab" aria-controls="panel-crm" aria-selected="false" tabindex="-1">CRM · العملاء والاسكتشات</button>
+<button type="button" id="tab-accounting" role="tab" aria-controls="panel-accounting" aria-selected="false" tabindex="-1">حسابات</button>
+<button type="button" id="tab-engineering" role="tab" aria-controls="panel-engineering" aria-selected="true">متابعة مشاريع</button>
+<button type="button" id="tab-studio" role="tab" aria-controls="panel-studio" aria-selected="false" tabindex="-1">استديو نطاق</button>
+</nav>
+<div class="portal-actions"><span id="portal-status" role="status"></span><a id="open-system" target="_blank" rel="noopener">فتح القسم في نافذة مستقلة ↗</a></div>
+</header>
+<main>
+<section id="panel-crm" role="tabpanel" aria-labelledby="tab-crm" hidden><iframe id="frame-crm" title="CRM · العملاء والاسكتشات" data-src="crm/index.html" allow="clipboard-read; clipboard-write"></iframe></section>
+<section id="panel-accounting" role="tabpanel" aria-labelledby="tab-accounting" hidden><iframe id="frame-accounting" title="حسابات" data-src="accounting/index.html" allow="clipboard-read; clipboard-write"></iframe></section>
+<section id="panel-engineering" role="tabpanel" aria-labelledby="tab-engineering"><iframe id="frame-engineering" title="متابعة مشاريع" data-src="engineering/index.html?v=20261109-fix1" allow="clipboard-read; clipboard-write"></iframe></section>
+<section id="panel-studio" role="tabpanel" aria-labelledby="tab-studio" hidden><iframe id="frame-studio" title="استديو نطاق" data-src="studio/index.html" allow="clipboard-read; clipboard-write"></iframe></section>
+</main>
+<script>
+const systems = Object.fromEntries(
+  Array.from(document.querySelectorAll('nav [role="tab"]'), tab => {
+    const name = tab.id.slice(4);
+    return [name, {
+      tab,
+      panel: document.getElementById('panel-' + name),
+      frame: document.getElementById('frame-' + name)
+    }];
+  })
+);
+function selectSystem(name){
+  if(!Object.hasOwn(systems,name))name='engineering';
+  for(const [key,system] of Object.entries(systems)){
+    const selected=key===name;
+    system.tab.setAttribute('aria-selected',String(selected));
+    system.tab.tabIndex=selected?0:-1;
+    system.panel.hidden=!selected;
+  }
+  const current=systems[name];
+  if (!current.frame.hasAttribute('src')) {
+    const suffix = name === 'engineering' ? '#portal-embedded' : '';
+    current.frame.src = current.frame.dataset.src + suffix;
+  }
+  document.getElementById('open-system').href=current.frame.dataset.src;
+  document.getElementById('portal-status').textContent=current.tab.textContent;
+  history.replaceState(null,'','#'+name);
+}
+for(const [name,system] of Object.entries(systems)){
+  system.tab.onclick=()=>selectSystem(name);
+  system.tab.onkeydown=event=>{
+    if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+      event.preventDefault();
+      const names=Object.keys(systems),index=names.indexOf(name);
+      const next=event.key==='Home'?names[0]:event.key==='End'?names[names.length-1]:names[(index+(event.key==='ArrowLeft'?1:-1)+names.length)%names.length];
+      selectSystem(next);systems[next].tab.focus();
+    }
+  };
+}
+selectSystem(location.hash.slice(1));
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+project_id = "nitaq-company-systems"
+
+[functions.invite-workspace-user]
+verify_jwt = true

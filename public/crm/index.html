@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نطاق — نظام متابعة العملاء والمشاريع</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   هوية نطاق البصرية — منقولة حرفياً من NITAQ ERP v13
+   الطبقة دي بصرية بالكامل: مفيش أي كلاس اتشال ولا اتغيّر اسمه،
+   فالمنطق والوظائف والصلاحيات زي ما هي بالحرف.
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  /* نفس متغيّرات الـERP بالظبط */
+  --ink:#132A46; --ink-soft:#4C617D; --ink-faint:#8996A8;
+  --paper:#EDEEE8; --surface:#FFFFFF;
+  --line:#D7D9D0; --line-strong:#B7BCAF;
+  --brass:#A9824F; --brass-soft:#EDE1CB;
+  --teal:#2E6E63;  --teal-soft:#DDEAE6;
+  --rust:#AE4E2D;  --rust-soft:#F3DDD2;
+  --amber:#B8862C; --amber-soft:#F3E5C4;
+  --blue:#2F5E8C;  --blue-soft:#DDE7F1;
+  --radius:5px;
+  --shadow:0 1px 2px rgba(19,42,70,.06), 0 6px 18px rgba(19,42,70,.05);
+  /* أسماء قديمة مربوطة على الجديدة عشان أي بقايا تفضل متسقة */
+  --muted:var(--ink-soft); --red:var(--rust); --red-bg:var(--rust-soft);
+  --green:var(--teal); --green-bg:var(--teal-soft);
+  --gold:var(--brass); --navy:var(--ink); --pearl:var(--paper);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden;width:100%}
+body{
+  font-family:'Tajawal',sans-serif; color:var(--ink); font-size:14px;
+  font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
+  /* ورق الرسم الهندسي — نفس خلفية الـERP */
+  background:
+    linear-gradient(var(--paper),var(--paper)),
+    repeating-linear-gradient(0deg, rgba(19,42,70,.035) 0, rgba(19,42,70,.035) 1px, transparent 1px, transparent 40px),
+    repeating-linear-gradient(90deg, rgba(19,42,70,.035) 0, rgba(19,42,70,.035) 1px, transparent 1px, transparent 40px);
+}
+h1,h2,h3,h4{font-family:'Cairo',sans-serif;margin:0;color:var(--ink)}
+.en,.num{font-family:'Tajawal',sans-serif;direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+span.en,span.num,b.num,div.num{display:inline-block}
+td.num,th.num,td.en,th.en{display:table-cell}
+button,input,select,textarea{font-family:'Tajawal',sans-serif;font-size:14px;color:inherit}
+button{cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:6px}
+
+/* ─────────── الهيكل: نفس توزيع الـERP ─────────── */
+#root{display:flex;min-height:100vh}
+.side{width:236px;flex:none;background:var(--ink);color:#EDEFEA;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{padding:22px 20px 16px;border-bottom:1px solid rgba(255,255,255,.12);text-align:center}
+/* الشعار الرسمي — نفس مقاس وموضع الـERP بالظبط */
+.blogo{width:110px;display:block;margin:0 auto 8px}
+.brand p{margin:4px 0 0;font-size:11px;color:#AAB5C3;letter-spacing:.5px}
+.vchip{display:inline-block;background:rgba(169,130,79,.22);color:var(--brass-soft);
+  border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;vertical-align:middle;
+  margin-inline-end:6px}
+
+.nav{flex:1;overflow-y:auto;padding:14px 10px}
+.nav b{display:block;font-size:10.5px;color:#8794A6;letter-spacing:1px;padding:14px 10px 6px;font-weight:500}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:4px;
+  font-size:13.5px;color:#C7D0DB;margin-bottom:2px;border:1px solid transparent;
+  transition:background .12s;position:relative;cursor:pointer}
+.nav a:hover{background:rgba(255,255,255,.06)}
+.nav a.on{background:rgba(169,130,79,.18);color:#fff;border-color:rgba(169,130,79,.4)}
+.nav a .ic{width:16px;text-align:center;flex:none;opacity:.9}
+.nav a .pill{margin-inline-start:auto;background:var(--rust);color:#fff;border-radius:20px;
+  padding:1px 7px;font-size:10.5px;font-weight:700}
+.nav a .pill.q{background:rgba(255,255,255,.16)}
+.sfoot{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;color:#7C8AA0;line-height:1.7}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{background:var(--surface);border-bottom:1px solid var(--line);padding:16px 28px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:20}
+.top h2{font-size:19px;font-weight:800}
+.top .sub{font-size:12px;color:var(--ink-soft);margin-top:2px}
+.grow{flex:1}
+.wrap{padding:26px 28px 60px;max-width:1500px;width:100%}
+
+/* ─────────── الكروت: بأركان الـERP الهندسية ─────────── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);position:relative}
+.card::before,.card::after{content:"";position:absolute;top:8px;width:9px;height:9px;
+  border-top:1.4px solid var(--line-strong);pointer-events:none;z-index:1}
+.card::before{right:8px;border-right:1.4px solid var(--line-strong)}
+.card::after{left:8px;border-left:1.4px solid var(--line-strong)}
+.card-h{padding:16px 20px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+.card-h h3{font-size:15px;font-weight:800}
+.card-h .dot{width:6px;height:6px;border-radius:50%;background:var(--brass);flex:none}
+.grid{display:grid;gap:16px}
+
+/* ─────────── الأزرار ─────────── */
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;padding:8px 16px;
+  border-radius:4px;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;
+  transition:background .12s}
+.btn:hover{background:#0D1D33}
+.btn.gold{background:var(--brass);border-color:var(--brass);color:#fff}
+.btn.gold:hover{background:#96713F}
+.btn.ghost{border-color:var(--line-strong);background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:rgba(19,42,70,.05)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.xs{padding:4px 9px;font-size:11px;border-radius:4px}
+.btn.danger{background:transparent;border-color:var(--rust-soft);color:var(--rust)}
+.btn.danger:hover{background:var(--rust-soft)}
+.btn.wa{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.wa:hover{background:#255A51}
+.btn:disabled{cursor:not-allowed}
+
+/* ─────────── الشارات = badge في الـERP ─────────── */
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:3px 9px;border-radius:20px;white-space:nowrap}
+.t-red{background:var(--rust-soft);color:var(--rust)}
+.t-amber{background:var(--amber-soft);color:var(--amber)}
+.t-green{background:var(--teal-soft);color:var(--teal)}
+.t-blue{background:var(--blue-soft);color:var(--blue)}
+.t-gray{background:#EAEAE4;color:var(--ink-soft)}
+.t-gold{background:var(--brass-soft);color:var(--brass)}
+
+/* ─────────── النماذج ─────────── */
+label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;font-weight:700}
+.in{width:100%;border:1px solid var(--line-strong);border-radius:4px;padding:9px 10px;
+  background:#FBFBF9;color:var(--ink);outline:none;font-size:14px}
+.in:focus{border-color:var(--brass);background:#fff}
+textarea.in{min-height:74px;resize:vertical;line-height:1.7}
+.f{margin-bottom:14px}
+.req::after{content:" *";color:var(--rust)}
+
+/* ─────────── الجداول ─────────── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--surface);text-align:right;font-size:11px;color:var(--ink-soft);font-weight:700;
+  padding:8px 10px;border-bottom:1.4px solid var(--line-strong);letter-spacing:.3px;
+  white-space:nowrap;position:sticky;top:0;z-index:2}
+td{padding:10px 10px;border-bottom:1px solid var(--line);color:var(--ink);vertical-align:middle}
+tbody tr:hover{background:rgba(19,42,70,.025)}
+tbody tr:last-child td{border-bottom:none}
+tr.late{background:var(--rust-soft)} tr.late:hover{background:#EFD2C5}
+tr.today{background:var(--amber-soft)} tr.today:hover{background:#EEDCB4}
+.scroll{overflow:auto;max-height:66vh}
+.empty{color:var(--ink-faint);text-align:center;padding:34px 20px;font-size:13px}
+.empty .big{font-size:30px;margin-bottom:10px;opacity:.4}
+
+/* ─────────── مؤشرات الأداء ─────────── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;position:relative;box-shadow:var(--shadow)}
+.kpi::before,.kpi::after{content:"";position:absolute;top:8px;width:9px;height:9px;
+  border-top:1.4px solid var(--line-strong)}
+.kpi::before{right:8px;border-right:1.4px solid var(--line-strong)}
+.kpi::after{left:8px;border-left:1.4px solid var(--line-strong)}
+.kpi .v{font-family:'Cairo',sans-serif;font-size:26px;font-weight:800;margin-top:8px;line-height:1.1}
+.kpi .l{font-size:12px;color:var(--ink-soft)}
+.kpi.r .v{color:var(--rust)} .kpi.a .v{color:var(--amber)}
+.kpi.g .v{color:var(--teal)} .kpi.b .v{color:var(--blue)}
+.kpi.click{cursor:pointer;transition:.15s}
+.kpi.click:hover{border-color:var(--brass)}
+
+/* ─────────── مسار التحويل ─────────── */
+.funnel{padding:18px 20px}
+.fr{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+.fr .nm{width:118px;flex:0 0 118px;font-size:12px;font-weight:700;text-align:left;color:var(--ink-soft)}
+.fr .bar{flex:1;height:24px;background:#E6E7E0;border-radius:3px;overflow:hidden}
+.fr .fill{height:100%;background:var(--ink);border-radius:3px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.fr.win .fill{background:var(--brass)}
+.fr.lost .fill{background:var(--line-strong)}
+.fr .c{width:34px;text-align:center;font-weight:800;font-family:'Cairo',sans-serif;font-size:14px}
+.conv{margin-top:14px;padding:14px 16px;background:var(--ink);border-radius:var(--radius);
+  color:#EDEFEA;display:flex;align-items:center;gap:14px}
+.conv .big{font-size:26px;font-weight:800;color:var(--brass-soft);font-family:'Cairo',sans-serif}
+.conv .tx{font-size:12px;line-height:1.7;color:#AAB5C3}
+.bars .b{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:12px}
+.bars .b .n{width:96px;flex:0 0 96px;font-weight:700;color:var(--ink-soft)}
+.bars .b .tr{flex:1;height:15px;background:#E6E7E0;border-radius:3px;overflow:hidden}
+.bars .b .fl{height:100%;background:var(--brass);border-radius:3px}
+.bars .b .v{width:26px;text-align:center;font-weight:800;font-family:'Cairo',sans-serif}
+
+/* ─────────── كروت المهام (يومي) — بلغة كروت الـERP ─────────── */
+.fcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.fc{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;box-shadow:var(--shadow);position:relative;border-top:2px solid var(--line-strong)}
+.fc::before,.fc::after{content:"";position:absolute;top:10px;width:9px;height:9px;
+  border-top:1.4px solid var(--line-strong)}
+.fc::before{right:8px;border-right:1.4px solid var(--line-strong)}
+.fc::after{left:8px;border-left:1.4px solid var(--line-strong)}
+.fc.late{border-top-color:var(--rust)} .fc.today{border-top-color:var(--amber)}
+.fc.next{border-top-color:var(--teal)} .fc.none{border-top-color:var(--rust)}
+.fc .nm{font-size:15px;font-weight:800;font-family:'Cairo',sans-serif;margin-bottom:2px}
+.fc .meta{font-size:11.5px;color:var(--ink-soft);margin-bottom:9px}
+.fc .note{background:#F6F6F2;border:1px solid var(--line);border-radius:4px;padding:9px 11px;
+  font-size:11.5px;line-height:1.7;color:var(--ink-soft);margin:9px 0;max-height:62px;overflow:hidden}
+.fc .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
+.tform{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.tform .in{width:auto}
+.tform textarea.in{min-height:52px}
+.secbar{display:flex;align-items:center;gap:9px;margin-bottom:14px;cursor:pointer;user-select:none}
+.secbar .dot{width:6px;height:6px;border-radius:50%;background:var(--brass);flex:none}
+.secbar h3{font-size:15px;font-weight:800}
+.secbar .chev{font-size:13px;color:var(--ink-soft)}
+.secbar:hover h3{color:var(--brass)}
+.moreb{margin:0 0 24px}
+
+/* ─────────── الدرج والنوافذ ─────────── */
+.ov{position:fixed;inset:0;background:rgba(19,42,70,.45);z-index:50;display:flex;justify-content:flex-start}
+.dw{background:var(--paper);width:min(720px,100%);height:100%;overflow:auto;
+  box-shadow:0 20px 50px rgba(0,0,0,.25);animation:sl .22s ease}
+@keyframes sl{from{transform:translateX(-40px);opacity:.4}to{transform:none;opacity:1}}
+.dw-h{position:sticky;top:0;background:var(--ink);color:#fff;padding:18px 22px;
+  display:flex;align-items:center;gap:12px;z-index:5}
+.dw-h h3{font-size:16px;color:#fff}
+.dw-h .s{font-size:11.5px;color:var(--brass-soft);margin-top:3px}
+.dw-b{padding:20px 22px 90px}
+.dw-f{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+  padding:16px 22px;display:flex;gap:10px}
+.x{margin-inline-start:auto;background:none;border:none;font-size:18px;color:#AAB5C3}
+.x:hover{color:#fff}
+.mo{position:fixed;inset:0;background:rgba(19,42,70,.45);z-index:60;display:flex;
+  align-items:center;justify-content:center;padding:20px}
+.mo .box{background:var(--surface);border-radius:6px;width:480px;max-width:100%;
+  max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.mo .box h3{padding:18px 22px;border-bottom:1px solid var(--line);font-size:16px}
+.mo .box .bd{padding:20px 22px}
+.mo .box .ft{padding:16px 22px;border-top:1px solid var(--line);display:flex;gap:10px}
+
+/* ─────────── الخط الزمني ─────────── */
+.tl{position:relative;padding-right:18px}
+.tl::before{content:"";position:absolute;right:5px;top:6px;bottom:6px;width:1px;
+  border-right:1px dashed var(--line-strong)}
+.tli{position:relative;margin-bottom:14px}
+.tli::before{content:"";position:absolute;right:-17px;top:5px;width:9px;height:9px;
+  border-radius:50%;background:var(--brass);border:2px solid var(--paper)}
+.tli .d{font-size:11px;color:var(--ink-soft);font-weight:700}
+.tli .t{font-size:12.5px;line-height:1.7;margin-top:3px}
+
+/* ─────────── عناصر مشتركة ─────────── */
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow:auto}
+.tabs button{padding:9px 14px;font-size:13px;font-weight:700;color:var(--ink-soft);
+  border-bottom:2px solid transparent;white-space:nowrap;background:none}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--brass)}
+.filt{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.filt .in{width:auto;min-width:118px;padding:7px 10px;font-size:12.5px}
+.hint{font-size:11.5px;color:var(--ink-soft);line-height:1.75}
+.hint b{color:var(--ink)}
+.warn{background:var(--amber-soft);border:1px solid #E4CE93;border-radius:4px;
+  padding:11px 13px;font-size:12px;line-height:1.75;color:#6E5116}
+.toast{position:fixed;bottom:24px;left:24px;background:var(--ink);color:#fff;padding:12px 18px;
+  border-radius:var(--radius);font-size:13px;font-weight:700;z-index:99;
+  box-shadow:0 12px 30px rgba(19,42,70,.3);animation:sl .2s;display:flex;align-items:center;gap:12px}
+.tundo{background:var(--brass);color:#fff;border-radius:4px;padding:5px 12px;font-weight:700;font-size:12px}
+.tundo:hover{background:#96713F}
+.cta{background:var(--ink);color:#EDEFEA;border-radius:var(--radius);padding:16px 20px;
+  margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:var(--shadow)}
+.cta .tx{flex:1;min-width:190px;font-size:12.5px;line-height:1.75}
+.cta b{color:var(--brass-soft)}
+.ptools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.rowbtns{display:flex;gap:5px}
+.ro{display:inline-block;padding:4px 7px;font-size:12.5px;color:var(--ink-soft)}
+.nml{padding:4px 7px;font-weight:800;font-size:13px;color:var(--ink);text-align:right;
+  border-radius:4px;border:1px solid transparent;transition:.12s;background:none}
+.nml:hover{border-color:var(--brass);background:#fff;color:var(--brass)}
+
+/* ─────────── التعديل المباشر ─────────── */
+.ed{width:100%;min-width:118px;padding:5px 8px;border:1px solid transparent;border-radius:4px;
+  background:transparent;font-size:12.5px;font-family:inherit;color:inherit;cursor:pointer;transition:.12s}
+.ed:hover{border-color:var(--line-strong);background:#FBFBF9}
+.ed:focus{border-color:var(--brass);background:#fff;outline:none;cursor:text}
+.ed.dt{min-width:118px;direction:ltr;text-align:right}
+.ed.ltr{direction:ltr;text-align:right}
+.ed.g{font-weight:700;border-radius:20px;text-align:center;min-width:96px;padding:4px 9px}
+.ed.t-red{background:var(--rust-soft);color:var(--rust)}
+.ed.t-amber{background:var(--amber-soft);color:var(--amber)}
+.ed.t-green{background:var(--teal-soft);color:var(--teal)}
+.ed.t-blue{background:var(--blue-soft);color:var(--blue)}
+.ed.t-gray{background:#EAEAE4;color:var(--ink-soft)}
+.ed.t-gold{background:var(--brass-soft);color:var(--brass)}
+.ed.nm{font-weight:800;font-size:13px;min-width:130px}
+.ed.wide{min-width:210px}
+.ed.wide2{min-width:150px}
+.ed.area{display:block;resize:none;overflow:hidden;white-space:pre-wrap;overflow-wrap:break-word;
+  line-height:1.6;font-family:inherit}
+tbody tr:hover .ed{border-color:#E6E7E0}
+
+/* ─────────── الأعمدة المثبّتة ─────────── */
+td.stk,th.stk{position:sticky;inset-inline-start:var(--stk,0)}
+td.stk{z-index:3;background:var(--surface)}
+th.stk{z-index:7;background:var(--surface)}
+tr.late  td.stk{background:var(--rust-soft)}
+tr.today td.stk{background:var(--amber-soft)}
+tbody tr:hover td.stk{background:#F4F5F1}
+tbody tr.late:hover  td.stk{background:#EFD2C5}
+tbody tr.today:hover td.stk{background:#EEDCB4}
+td.stkEdge,th.stkEdge{box-shadow:-7px 0 9px -7px rgba(19,42,70,.22)}
+td.stk-name .nml{white-space:normal;text-align:right}
+@media(max-width:760px){
+  td.stkOpt,th.stkOpt{position:static!important;box-shadow:none!important}
+  td.stk-name,th.stk-name{box-shadow:-7px 0 9px -7px rgba(19,42,70,.22);
+    width:126px!important;min-width:126px!important;max-width:126px!important}
+}
+
+/* ─────────── لوحة الأعمدة ─────────── */
+.pop{position:relative;display:inline-block}
+.pop .panel{position:fixed;left:12px;right:12px;top:auto;bottom:12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 16px 44px rgba(19,42,70,.18);
+  padding:10px;z-index:50;width:auto;max-width:none;max-height:70vh;overflow:auto}
+.pop .panel .hd{display:flex;gap:6px;padding:2px 2px 9px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.pop .panel label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:4px;
+  font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;margin:0}
+.pop .panel label:hover{background:#F4F5F1}
+.pop .panel label.lock{opacity:.45;cursor:not-allowed}
+.pop .panel input{accent-color:var(--brass)}
+.backdrop{position:fixed;inset:0;z-index:45}
+/* زرار الفلتر المتعدد — بيبان زي حقول الفلتر، ويتلوّن لما يكون فيه اختيار */
+.mfbtn{min-width:118px;padding:7px 10px;font-size:12.5px;border:1px solid var(--line-strong);
+  background:#fff;border-radius:4px;text-align:start;justify-content:space-between;display:inline-flex;gap:6px}
+.mfbtn.mfon{border-color:var(--brass);color:var(--brass);font-weight:800}
+/* القائمة دايماً ثابتة على الشاشة نفسها (مش متعلّقة تحت الزرار) — بتبدأ
+   من حرف الشاشة الشمال لحد حرفها اليمين، بغض النظر عن مكان الزرار أو
+   مقدار السكرول الأفقي في الجدول اللي وراها. فمفيش سيناريو تقدر فيه
+   القائمة تطلع نص شكلها برّه حدود الشاشة. على الشاشات الواسعة (كمبيوتر)
+   بنرجّعها تتعلّق بشكل طبيعي تحت الزرار بعرض معقول. */
+@media (min-width:900px){
+  .pop .panel{position:absolute;left:auto;right:auto;top:calc(100% + 6px);bottom:auto;
+    inset-inline-start:0;width:252px;max-height:330px}
+}
+
+/* ─────────── ترقيم الصفحات ─────────── */
+.pgbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;
+  border-top:1px solid var(--line);background:#F6F6F2;border-radius:0 0 var(--radius) var(--radius)}
+
+/* ─────────── حالة الحفظ ─────────── */
+.svchip{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;
+  border:1px solid transparent}
+.svchip.saved{background:var(--teal-soft);color:var(--teal)}
+.svchip.saving{background:var(--amber-soft);color:var(--amber)}
+.svchip.fail{background:var(--rust-soft);color:var(--rust);border-color:var(--rust)}
+.savefail{background:var(--rust);color:#fff;padding:12px 28px;display:flex;flex-direction:column;gap:3px;
+  position:sticky;top:0;z-index:19;box-shadow:0 3px 12px rgba(174,78,45,.35)}
+.savefail b{font-size:13.5px;font-weight:800;line-height:1.5}
+.savefail span{font-size:11.5px;opacity:.92;line-height:1.6}
+
+/* ─────────── سجل التعديلات ─────────── */
+.chg{border-bottom:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.chg .cf{font-weight:800;font-size:12.5px;min-width:104px;color:var(--ink)}
+.chg .cv{font-size:12.5px;flex:1;min-width:180px;line-height:1.7}
+.chg .cv .old{background:var(--rust-soft);color:var(--rust);padding:1px 7px;border-radius:3px;text-decoration:line-through}
+.chg .cv .new{background:var(--teal-soft);color:var(--teal);padding:1px 7px;border-radius:3px}
+.chg .cm{font-size:11px;color:var(--ink-faint);white-space:nowrap}
+
+/* ─────────── الموبايل ─────────── */
+@media(max-width:900px){
+  #root{flex-direction:column}
+  .side{width:100%;flex:none;height:auto;position:static;flex-direction:column;overflow:visible}
+  .brand{border-bottom:1px solid rgba(255,255,255,.12);padding:12px 16px}
+  .brand p{display:none}
+  .nav{display:flex;flex-wrap:wrap;padding:8px;gap:5px;flex:none;overflow:visible}
+  .nav b,.sfoot{display:none}
+  .nav a{margin:0;white-space:nowrap;padding:7px 11px;font-size:12.5px}
+  .wrap{padding:18px 14px 60px}
+  .top{padding:13px 16px} .top h2{font-size:16px}
+  .dw{width:100%}
+  .svchip{font-size:10.5px;padding:3px 8px}
+  .savefail{padding:10px 16px}
+  .pgbar{padding:10px}
+}
+
+/* ══════════════ الطباعة — نفس أسلوب مستندات الـERP ══════════════ */
+.printsheet{display:none}
+@media print{
+  @page{size:A4 portrait;margin:11mm 10mm}
+  html,body{background:#fff!important;height:auto!important;min-height:0!important;overflow:visible!important}
+  #root{display:block!important;min-height:0!important;height:auto!important}
+  #root>aside,#root>.main,.side,.top,.ov,.mo,.toast,.savefail,.svchip,.pgbar,.no-print{display:none!important}
+  .printsheet{display:block!important}
+  a[href]:after{content:none!important}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
+.psheet{font-family:'Tajawal',sans-serif;color:var(--ink);font-size:10.5pt}
+.psheet+.psheet{page-break-before:always;break-before:page}
+/* ترويسة المستند: شريط حبر بحد نحاسي — نفس ترويسة مستندات الـERP.
+   ضروري كمان لأن حبر الشعار أبيض فمايبانش على ورق أبيض. */
+.ph{display:flex;align-items:center;gap:14px;background:var(--ink);color:#fff;
+  padding:12px 16px;border-bottom:3px solid var(--brass);margin-bottom:9px}
+.plogo{height:44px;width:auto;display:block;flex:none}
+.ph h1{font-size:14pt;font-weight:800;line-height:1.25;color:#fff}
+.ph .sb{font-size:8pt;color:#AAB5C3;margin-top:2px;letter-spacing:.3px}
+.ph .who{margin-inline-start:auto;text-align:left;font-size:9.5pt;line-height:1.6;color:#C7D0DB}
+.ph .who b{font-size:12pt;color:#fff}
+.pmeta{display:flex;gap:14px;font-size:8.5pt;color:var(--ink-soft);margin-bottom:10px;flex-wrap:wrap}
+.psec{margin-bottom:10px}
+.psec h2{font-size:10pt;font-weight:800;background:#F0F0EA;
+  border-inline-start:3px solid var(--brass);padding:4px 9px;margin-bottom:4px}
+.ptab{width:100%;border-collapse:collapse}
+.ptab th{background:#fff;color:var(--ink-soft);font-size:8pt;font-weight:800;
+  border-bottom:1.2px solid var(--ink);padding:3px 4px;text-align:right;position:static}
+.ptab td{border-bottom:1px solid var(--line);padding:5px 4px;font-size:9pt;vertical-align:top;line-height:1.5}
+.cbx{display:inline-block;width:11px;height:11px;border:1.2px solid var(--ink);border-radius:2px}
+.pline{border-bottom:1px dotted var(--line-strong);display:block;min-height:15px}
+.pfoot{margin-top:16px;padding-top:10px;border-top:1px solid var(--line-strong);
+  display:flex;gap:26px;font-size:9pt}
+.pfoot div{flex:1}
+.pfoot .sig{border-bottom:1px solid var(--ink);height:26px;margin-top:4px}
+.pnote{font-size:7.5pt;color:var(--ink-faint);margin-top:10px;text-align:center}
+.rtab{width:100%;border-collapse:collapse;table-layout:auto}
+.rtab thead{display:table-header-group}
+.rtab tr{page-break-inside:avoid;break-inside:avoid}
+.rtab th{background:#F0F0EA!important;color:var(--ink);font-size:7.5pt;font-weight:800;
+  border:1px solid var(--line-strong);padding:3px 5px;text-align:right;position:static;white-space:nowrap}
+.rtab td{border:1px solid var(--line);padding:3px 5px;font-size:8pt;vertical-align:top;
+  line-height:1.5;overflow-wrap:normal;word-break:keep-all;white-space:nowrap}
+/* الأعمدة النصية الطويلة بس (وصف/ملاحظات) هي اللي بتلتف — على المسافات، مش نص الكلمة */
+.rtab td.wrap{white-space:normal;overflow-wrap:break-word;min-width:120px;max-width:230px}
+.rtab td.num{direction:ltr;text-align:right;unicode-bidi:plaintext}
+.rtab tr:nth-child(even) td{background:#FAFAF7!important}
+.rtab .lt{background:var(--rust-soft)!important}
+.rtab .td2{background:var(--amber-soft)!important}
+.rsmall{font-size:7pt;color:var(--ink-soft)}
+</style>
+
+</head>
+<body>
+<div id="root"></div>
+<script src="../vendor/react-18.2.0.min.js"></script>
+<script src="../vendor/react-dom-18.2.0.min.js"></script>
+
+<script src="../vendor/exceljs-4.4.0.min.js"></script>
+<script src="../vendor/supabase-2.45.3.min.js"></script>
+<script>// Export workbooks are created from current authorized data only.</script>
+<script>
+const accountingCloudConfig = { url: 'https://kitsnfpgcrsxizzimgwx.supabase.co', key: 'sb_publishable_p3siT7m9YcUNnbRIjiCq0w_l-MVdplw' };
+
+const accountingCloudFields='id,projectNo:data->projectNo,owner:data->owner,plotNumber:data->plotNumber,ownershipNumber:data->ownershipNumber';
+let crmAccountingClient;
+function getCrmAccountingClient() {
+  return crmAccountingClient ||= window.supabase.createClient(accountingCloudConfig.url, accountingCloudConfig.key, {
+    auth:{storageKey:'nitaq-crm-accounting-reader',persistSession:false,autoRefreshToken:true}
+  });
+}
+async function readAccountingCloudProjects(client,userId,number,accountingId){
+ const identity=await client.auth.getUser();if(identity.error||identity.data?.user?.id!==userId)throw Error('تغير حساب الاتصال؛ سجل الدخول مجددًا');
+ if(!accountingId&&!String(number||'').trim())throw Error('رقم المشروع مطلوب للمطابقة');
+ let query=client.from('nitaq_records').select(accountingCloudFields).eq('entity','projects');
+ query=accountingId?query.eq('id',accountingId):query.eq('data->>projectNo',String(number));
+ const result=await query.limit(2);if(result.error||!Array.isArray(result.data))throw Error('تعذرت قراءة مشروع الحسابات؛ راجع الاتصال والصلاحيات');
+ const current=await client.auth.getUser();if(current.error||current.data?.user?.id!==userId)throw Error('تغير حساب الاتصال أثناء القراءة');
+ return {projects:result.data};
+}
+
+
+</script>
+<script src="safety.js?v=20261109-fix1"></script>
+<script src="app.js?v=20261109-fix1" data-nitaq-source="../../src/crm.jsx"></script>
+<div style="text-align:center;padding:14px;font-size:11px;color:#8A8578" class="no-print">INFO@NITAQ.AE · +971 56 816 6402 · SHARJAH–UAE · نصنع الحيّز ليبقى الأثر</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {sourceOf} from './source-tools.mjs';
+const require=createRequire(import.meta.url),ExcelJS=require('../public/vendor/exceljs-4.4.0.min.js');
+const source=await sourceOf('public/crm/index.html');let resultBlob,clicked=false;
+const db={users:[{id:'u',name:'Test engineer'}],clients:[{id:'c',name:'Test client',phone:'0500123456'}],leads:[{id:'l',clientId:'c',ownerId:'u',engineerId:'u',projectNo:'105',createdAt:'2026-11-09',grade:'active',nextDate:'2026-11-23'}]};
+const c=vm.createContext({console,Date,Intl,Math,Map,Set,JSON,Blob,db,window:{ExcelJS},toast:()=>{},URL:{createObjectURL:b=>{resultBlob=b;return 'blob:test-only'}},document:{createElement:()=>({click:()=>{clicked=true}})},todayISO:()=> '2026-11-09'});
+vm.runInContext(['GRADES','_GM','_byId','idxById','uIdx','uName','gradeOf','MONTHS_EN','akF','alF','amF','exportXLSX'].map(n=>source.extract(n)).join('\n'),c);
+await vm.runInContext('exportXLSX()',c);assert.equal(clicked,true);assert.ok(resultBlob);
+const wb=new ExcelJS.Workbook();await wb.xlsx.load(Buffer.from(await resultBlob.arrayBuffer()));
+assert.equal(wb.worksheets.length,1);const ws=wb.getWorksheet('سجل العملاء');assert.equal(ws.rowCount,2);
+assert.equal(ws.getRow(2).getCell(11).value,'Test client');assert.equal(ws.getRow(2).getCell(12).value,'0500123456');
+assert.equal(ws.getRow(2).getCell(27).value.toISOString().slice(0,10),'2026-11-23');assert.ok(ws.getRow(2).getCell(37).value.formula);
+console.log('PASS real Excel export: only current rows, no embedded workbook, phone text and typed dates preserved');
