@@ -5,6 +5,7 @@ revoke all on schema nitaq_crm_private from public,anon,authenticated;
 create table if not exists nitaq_crm_private.receipts(
  actor uuid not null,operation uuid not null,request jsonb not null,result jsonb not null,
  created_at timestamptz not null default clock_timestamp(),primary key(actor,operation));
+alter table nitaq_crm_private.receipts enable row level security;
 create table if not exists public.nitaq_crm_audit_v2(
  id bigint generated always as identity primary key,at timestamptz not null default clock_timestamp(),
  actor uuid,operation text not null,entity text not null,record_id text not null,before_data jsonb,after_data jsonb);
