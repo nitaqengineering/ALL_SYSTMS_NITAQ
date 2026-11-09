@@ -1,0 +1,18 @@
+{
+  "name": "nitaq-company-systems",
+  "version": "2026.11.9",
+  "private": true,
+  "scripts": {
+    "check": "node scripts/build-frontends.mjs --check && node scripts/check-package.mjs && node scripts/check-invitation.cjs && node scripts/check-business.mjs && node scripts/check-safety.mjs && node scripts/check-excel-export.mjs",
+    "start": "node scripts/serve.mjs",
+    "build": "node scripts/build-frontends.mjs",
+    "check:database": "node scripts/check-database.mjs"
+  },
+  "devDependencies": {
+    "@babel/parser": "^8.1.0",
+    "pg": "^8.16.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  }
+}
