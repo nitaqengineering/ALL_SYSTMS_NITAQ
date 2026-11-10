@@ -5030,11 +5030,14 @@ function salaryPaidForEmp(data, empId, ym, net) {
 function paidMonthsForAdvance(a, data, upToYM) {
   const start = a.startMonth || monthKey(a.date);
   const set = new Set();
+  // القسط يُعدّ مخصومًا فقط في شهر صُرف فيه راتب صاحب السلفة نفسه (لا راتب موظف آخر)
+  const runCovers = run => !Array.isArray(run.lines) || run.lines.some(l => l && l.employeeId === a.employeeId);
   (data.officeExpenses || []).forEach(e => {
-    if ((e.kind === 'رواتب' || e.kind === SALARY_PART_KIND) && e.month) set.add(e.month);
+    if (isArchived(e) || !e.month) return;
+    if (e.kind === 'رواتب' ? runCovers(e) : e.kind === SALARY_PART_KIND && e.employeeId === a.employeeId) set.add(e.month);
   });
   (data.treasury || []).forEach(t => {
-    if (t.kind === 'رواتب' && t.month) set.add(t.month);
+    if (!isArchived(t) && t.kind === 'رواتب' && t.month && runCovers(t)) set.add(t.month);
   });
   return [...set].filter(mm => mm >= start && (!upToYM || mm <= upToYM)).sort();
 }
@@ -5145,6 +5148,8 @@ function computePayroll(data, ym) {
     const installments = empAdvances.reduce((s, a) => s + installmentForMonth(a, ym, data), 0);
     const deductions = data.advances.filter(a => a.employeeId === emp.id && a.type === 'خصم' && monthKey(a.date) === ym).reduce((s, a) => s + (Number(a.amount) || 0), 0);
     const net = gross - absenceDeduction + ot - advances - deductions - installments; // الصافي يبدأ من الإجمالي
+    // تكلفة الراتب على المكتب: قبل استقطاع السلف وأقساطها (السلفة ذمة على الموظف وليست تخفيضًا للمصروف)
+    const cost = gross - absenceDeduction + ot - deductions;
     return {
       emp,
       base: sal.base,
@@ -5158,12 +5163,14 @@ function computePayroll(data, ym) {
       advances,
       installments,
       deductions,
-      net
+      net,
+      cost
     };
   });
   return {
     rows,
-    totalNet: rows.reduce((s, r) => s + r.net, 0)
+    totalNet: rows.reduce((s, r) => s + r.net, 0),
+    totalCost: rows.reduce((s, r) => s + r.cost, 0)
   };
 }
 
@@ -14119,7 +14126,7 @@ function ReportsView({
   const otherIncomeM = (data.otherIncome || []).filter(r => !isArchived(r) && inRange(r.date)).reduce((s, r) => s + (r.amount || 0), 0);
   const projCostsM = data.projectCosts.filter(e => !isArchived(e) && inRange(e.date)).reduce((s, e) => s + (e.amount || 0), 0);
   const officeM = officeExpNoPayroll(data).filter(e => inRange(e.date)).reduce((s, e) => s + (e.amount || 0), 0); // بدون قيود الرواتب (تُحتسب في payrollCost) وبدون المؤرشف
-  const payrollCost = monthsInRange.reduce((s, m) => s + computePayroll(data, m).totalNet, 0);
+  const payrollCost = monthsInRange.reduce((s, m) => s + computePayroll(data, m).totalCost, 0);
   const gross = designRev + supervRev + otherRev + otherIncomeM - projCostsM;
   const net = gross - officeM - payrollCost;
   const rangeLabel = fromYm === toYm ? fmtMonth(fromYm) : 'من ' + fmtMonth(fromYm) + ' إلى ' + fmtMonth(toYm);
@@ -14242,7 +14249,7 @@ function ReportsView({
     style: {
       textAlign: 'left'
     }
-  }, "\u2212", money(officeM))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", null, "\u0635\u0627\u0641\u064A \u0627\u0644\u0631\u0648\u0627\u062A\u0628 \u0644\u0644\u0641\u062A\u0631\u0629 (\u0648\u0641\u0642 \u0643\u0634\u0641 \u0627\u0644\u0631\u0648\u0627\u062A\u0628 \u0627\u0644\u0641\u0639\u0644\u064A)"), /*#__PURE__*/React.createElement("td", {
+  }, "\u2212", money(officeM))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", null, "\u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0631\u0648\u0627\u062A\u0628 \u0644\u0644\u0641\u062A\u0631\u0629 (\u0642\u0628\u0644 \u0627\u0633\u062A\u0642\u0637\u0627\u0639 \u0627\u0644\u0633\u0644\u0641 \u2014 \u0648\u0641\u0642 \u0643\u0634\u0641 \u0627\u0644\u0631\u0648\u0627\u062A\u0628)"), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: 'left'
     }
@@ -15651,7 +15658,10 @@ function PayrollView({
   // تصدير ملف WPS (نظام حماية الأجور) بصيغة CSV
   const exportWPS = () => {
     const header = ['Employee ID', 'Employee Name', 'IBAN', 'Salary Month', 'Basic', 'Gross', 'Overtime', 'Deductions', 'Net Salary'];
-    const lines = wpsRows.map(r => [r.emp.id, r.emp.name, r.emp.iban || '', ym, fmt(r.base), fmt(r.gross), fmt(r.ot), fmt(r.absenceDeduction + r.advances + r.deductions + (r.installments || 0)), fmt(r.net)].join(','));
+    // أرقام بلا فواصل آلاف ونصوص بين علامات اقتباس — حتى لا تنكسر أعمدة الملف
+    const num = n => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+    const cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = wpsRows.map(r => [cell(r.emp.id), cell(r.emp.name), cell(r.emp.iban || ''), ym, num(r.base), num(r.gross), num(r.ot), num(r.absenceDeduction + r.advances + r.deductions + (r.installments || 0)), num(r.net)].join(','));
     const csv = '\uFEFF' + header.join(',') + '\n' + lines.join('\n');
     const blob = new Blob([csv], {
       type: 'text/csv;charset=utf-8;'
