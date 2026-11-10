@@ -1,7 +1,14 @@
 name: Publish frontend to GitHub Pages
 # Manual: GitHub Pages may make frontend assets publicly accessible, even for a private repository.
+# Repository Settings > Pages > Source must be "GitHub Actions". With "Deploy from a branch" the
+# automatic Jekyll build of the repository root replaces this deployment seconds after it finishes.
 on:
   workflow_dispatch:
+    inputs:
+      allow_fallback:
+        description: 'Publish although an optional database function is missing (frontend uses its declared fallback)'
+        type: boolean
+        default: false
 permissions:
   contents: read
   pages: write
@@ -19,6 +26,13 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm run check
+      - name: Live database must provide everything this frontend calls
+        run: node scripts/check-live-contract.mjs --live ${{ inputs.allow_fallback && '--allow-fallback' || '' }}
+        env:
+          NITAQ_CONTRACT_ACCOUNTING_EMAIL: ${{ secrets.NITAQ_CONTRACT_ACCOUNTING_EMAIL }}
+          NITAQ_CONTRACT_ACCOUNTING_PASSWORD: ${{ secrets.NITAQ_CONTRACT_ACCOUNTING_PASSWORD }}
+          NITAQ_CONTRACT_CRM_EMAIL: ${{ secrets.NITAQ_CONTRACT_CRM_EMAIL }}
+          NITAQ_CONTRACT_CRM_PASSWORD: ${{ secrets.NITAQ_CONTRACT_CRM_PASSWORD }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -33,3 +47,21 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Published site must be the portal, not the repository
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          base="${PAGE_URL%/}"
+          for attempt in $(seq 1 18); do
+            sleep 10
+            ok=1
+            curl -fsS "$base/?t=$attempt$RANDOM" | grep -q 'NITAQ-Logo-gold.svg' || ok=0
+            for page in accounting crm engineering studio; do
+              curl -fsS -o /dev/null "$base/$page/index.html?t=$attempt$RANDOM" || ok=0
+            done
+            # The repository root (README, SQL, sources) must not be what is served.
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/README.md?t=$attempt$RANDOM")" = "404" ] || ok=0
+            [ "$ok" = 1 ] && echo "Portal and four systems are served from $base" && exit 0
+          done
+          echo "The address still does not serve the portal. Check Settings > Pages > Source = GitHub Actions and rerun."
+          exit 1

@@ -11,6 +11,17 @@ export async function testOtherSafeDB(c){
  const failed=Array.from({length:100},(_,i)=>({id:'rolled-back-'+i,before:null,after:project('rolled-back-'+i)}));failed.push({id:many[0].id,before:null,after:many[0].after});
  assert.equal((await batch(failed)).result,'conflict');assert.equal(Number((await c.query("select count(*) n from nitaq_engineering.projects where id like 'rolled-back-%'")).rows[0].n),0);
  console.log('PASS engineering: 150-project atomic save, replay and rollback of prior chunks on late conflict');
+ // Frontend fallback path when save_v2 is not deployed: save_v1 directly with the same request shape.
+ const direct=(changes,operation=randomUUID())=>authenticated(async()=> (await c.query('select public.nitaq_engineering_workspace_save_v1($1,$2::jsonb) r',[operation,JSON.stringify(changes)])).rows[0].r);
+ const count=async prefix=>Number((await c.query('select count(*) n from nitaq_engineering.projects where id like $1',[prefix+'%'])).rows[0].n);
+ const hundred=Array.from({length:100},(_,i)=>({id:'fallback-ok-'+i,before:null,after:project('fallback-ok-'+i)}));
+ const directOp=randomUUID();assert.equal((await direct(hundred,directOp)).result,'saved');assert.equal(await count('fallback-ok-'),100);
+ assert.equal((await direct(hundred,directOp)).result,'already_saved');assert.equal(await count('fallback-ok-'),100);
+ const tooMany=Array.from({length:101},(_,i)=>({id:'fallback-over-'+i,before:null,after:project('fallback-over-'+i)}));
+ await assert.rejects(direct(tooMany),e=>e.code==='22023');assert.equal(await count('fallback-over-'),0);
+ const late=Array.from({length:99},(_,i)=>({id:'fallback-late-'+i,before:null,after:project('fallback-late-'+i)}));late.push({id:hundred[0].id,before:null,after:hundred[0].after});
+ assert.equal((await direct(late)).result,'conflict');assert.equal(await count('fallback-late-'),0);
+ console.log('PASS engineering fallback: save_v1 saves 100 projects, rejects 101 and a late conflict without partial rows');
  assert.equal((await c.query(`select nitaq_engineering.latest_submission_v2('[{"submitted":"2026-11-07","outcome":"approved"},{"submitted":"2026-11-01","outcome":"comments"}]')->>'outcome' x`)).rows[0].x,'approved');
  const initial=project('safe-submission');await batch([{id:initial.id,before:null,after:initial}]);
  const designApproved=structuredClone(initial);designApproved.stages.design.status='OK';await batch([{id:initial.id,before:initial,after:designApproved}]);

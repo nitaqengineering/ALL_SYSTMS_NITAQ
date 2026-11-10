@@ -147,7 +147,11 @@ async function saveSharedWorkspace() {
     let result=await client.rpc('nitaq_engineering_workspace_save_v2',pending.request);
     // القاعدة لم تُحدَّث بعد بدالة الحفظ الجماعي (تحديث 012): الحفظ حتى 100 مشروع
     // يمرّ بالدالة الأصلية v1 بنفس الطلب ونفس فحص التعارض، وهي ذرية لهذا الحجم.
-    if(result.error&&(result.error.code==='PGRST202'||result.status===404)){
+    // المسار البديل يعمل فقط حين يؤكد الخادم أن الدالة نفسها غير موجودة (PGRST202 باسمها).
+    // أخطاء الصلاحيات والتعارض والاتصال تبقى كما هي وتظهر للمستخدم.
+    const saveV2Missing=result.error&&result.error.code==='PGRST202'&&
+      ((result.error.message||'')+' '+(result.error.details||'')).includes('nitaq_engineering_workspace_save_v2');
+    if(saveV2Missing){
       if(pending.request.p_changes.length>100){
         workspaceGate('القاعدة تحتاج تحديث الحفظ الجماعي (012) قبل حفظ أكثر من 100 مشروع دفعة واحدة. لم يُحفظ شيء.',[
           ['تنزيل تعديلاتك',downloadWorkspaceDraft],
