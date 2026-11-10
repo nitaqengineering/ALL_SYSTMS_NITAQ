@@ -144,7 +144,19 @@ async function saveSharedWorkspace() {
     const user=await client.auth.getUser();
     if(user.error||user.data?.user?.id!==sharedWorkspaceActor)throw Error('تغير حساب الاتصال. ارجع لحسابك لتأكيد الحفظ.');
     const pending=sharedWorkspacePending;
-    const result=await client.rpc('nitaq_engineering_workspace_save_v2',pending.request);
+    let result=await client.rpc('nitaq_engineering_workspace_save_v2',pending.request);
+    // القاعدة لم تُحدَّث بعد بدالة الحفظ الجماعي (تحديث 012): الحفظ حتى 100 مشروع
+    // يمرّ بالدالة الأصلية v1 بنفس الطلب ونفس فحص التعارض، وهي ذرية لهذا الحجم.
+    if(result.error&&(result.error.code==='PGRST202'||result.status===404)){
+      if(pending.request.p_changes.length>100){
+        workspaceGate('القاعدة تحتاج تحديث الحفظ الجماعي (012) قبل حفظ أكثر من 100 مشروع دفعة واحدة. لم يُحفظ شيء.',[
+          ['تنزيل تعديلاتك',downloadWorkspaceDraft],
+          ['إلغاء التعديل ومتابعة المشاريع',()=>{sharedWorkspacePending=null;void refreshSharedWorkspace()}]
+        ]);
+        return;
+      }
+      result=await client.rpc('nitaq_engineering_workspace_save_v1',pending.request);
+    }
     if(result.error) {
       if(result.status>=400&&result.status<500&&![408,429].includes(result.status)){
         const message=result.error.code==='42501'?'حسابك لا يملك صلاحية هذا التعديل.'
