@@ -2600,8 +2600,7 @@ function App(){
   if(cloud.status==='idle'||cloud.status==='connecting') return <CloudSplash text="جاري الاتصال بالسحابة…"/>;
   if(cloud.status==='auth') return <><CloudAuth sb={cloud.sb}/>{cloud.err&&<p role="alert">{cloud.err}</p>}</>;
   if(cloud.status==='error') return <CloudError err={cloud.err}
-    onRetry={()=>window.location.reload()}
-    onLocal={()=>setCloud(c=>({...c,status:'local'}))}/>;
+    onRetry={()=>window.location.reload()}/>;
   if(cloud.status==='local'&&!me) return <Login db={db} onPick={pick}/>;
   if(inCloud&&!me) return <CloudSplash text="جاري تجهيز حسابك…"
     hint="لو الشاشة دي فضلت زي ما هي، اطلب من المالك يعمل لك دعوة بنفس الإيميل من شاشة (المستخدمون)."/>;
@@ -2698,7 +2697,7 @@ function CloudSplash({text,hint}){
   </div>;
 }
 
-function CloudError({err,onRetry,onLocal}){
+function CloudError({err,onRetry}){
   return <div style={{minHeight:'100vh',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',
       padding:20,background:'linear-gradient(160deg,var(--abyss),var(--navy))'}}>
     <div className="card" style={{width:'min(430px,100%)'}}>
@@ -2708,9 +2707,9 @@ function CloudError({err,onRetry,onLocal}){
       </div>
       <div style={{padding:18}}>
         <div className="warn" style={{marginBottom:14}}>{err||'خطأ غير معروف'}</div>
+        <p style={{fontSize:12.5,marginBottom:14}}>العمل متوقف حتى يعود الاتصال، حتى لا تُسجَّل بيانات على هذا الجهاز فقط ولا تصل لبقية الفريق.</p>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button className="btn gold" onClick={onRetry}>إعادة المحاولة</button>
-          <button className="btn ghost" onClick={onLocal}>الدخول محلياً (بدون سحابة)</button>
         </div>
       </div>
     </div>

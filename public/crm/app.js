@@ -5904,11 +5904,7 @@ function App() {
   }, cloud.err));
   if (cloud.status === 'error') return /*#__PURE__*/React.createElement(CloudError, {
     err: cloud.err,
-    onRetry: () => window.location.reload(),
-    onLocal: () => setCloud(c => ({
-      ...c,
-      status: 'local'
-    }))
+    onRetry: () => window.location.reload()
   });
   if (cloud.status === 'local' && !me) return /*#__PURE__*/React.createElement(Login, {
     db: db,
@@ -6232,8 +6228,7 @@ function CloudSplash({
 }
 function CloudError({
   err,
-  onRetry,
-  onLocal
+  onRetry
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6278,7 +6273,12 @@ function CloudError({
     style: {
       marginBottom: 14
     }
-  }, err || 'خطأ غير معروف'), /*#__PURE__*/React.createElement("div", {
+  }, err || 'خطأ غير معروف'), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12.5,
+      marginBottom: 14
+    }
+  }, "\u0627\u0644\u0639\u0645\u0644 \u0645\u062A\u0648\u0642\u0641 \u062D\u062A\u0649 \u064A\u0639\u0648\u062F \u0627\u0644\u0627\u062A\u0635\u0627\u0644\u060C \u062D\u062A\u0649 \u0644\u0627 \u062A\u064F\u0633\u062C\u064E\u0651\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u062C\u0647\u0627\u0632 \u0641\u0642\u0637 \u0648\u0644\u0627 \u062A\u0635\u0644 \u0644\u0628\u0642\u064A\u0629 \u0627\u0644\u0641\u0631\u064A\u0642."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -6287,10 +6287,7 @@ function CloudError({
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn gold",
     onClick: onRetry
-  }, "\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629"), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost",
-    onClick: onLocal
-  }, "\u0627\u0644\u062F\u062E\u0648\u0644 \u0645\u062D\u0644\u064A\u0627\u064B (\u0628\u062F\u0648\u0646 \u0633\u062D\u0627\u0628\u0629)")))));
+  }, "\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629")))));
 }
 
 /* تسجيل الدخول / إنشاء حساب — بإيميل وباسورد حقيقيين عبر Supabase Auth.

@@ -57,4 +57,21 @@ r=await run(5,{error:missing,status:404},new Error('Failed to fetch'));
 assert.ok(!r.saved);assert.ok(r.pending);assert.equal(r.pending.request.p_operation,'00000000-0000-4000-8000-000000000001');
 r=await run(5,{error:missing,status:404},{data:{result:'already_saved'}});
 assert.ok(r.saved);
+// Pre-save comparison: cached baseline text must give exactly the same request as a full comparison.
+{
+ const a=source.indexOf('const workspaceBaselineText'),b=source.indexOf('async function saveSharedWorkspace()');
+ assert.ok(a>0&&b>a,'workspaceRequest not found');
+ const ctx=vm.createContext({JSON,Map,Set,WeakMap,crypto:{randomUUID:()=>'op'},workspaceSettings:state=>{const {projects,...rest}=state;return rest;}});
+ vm.runInContext('var sharedWorkspace;'+source.slice(a,b),ctx);
+ const base={custom:{},municipalities:[],projects:Array.from({length:50},(_,i)=>({id:'p'+i,name:'n'+i,stages:{design:{status:'REQ'}}}))};
+ const request=after=>{ctx.after=after;return JSON.parse(vm.runInContext('JSON.stringify(workspaceRequest(after))',ctx));};
+ ctx.sharedWorkspace=base;
+ const same=JSON.parse(JSON.stringify(base));assert.equal(request(same).p_changes.length,0);assert.equal(request(same).p_settings_after,null);
+ const next=JSON.parse(JSON.stringify(base));next.projects[7].name='changed';next.projects.push({id:'new',name:'x',stages:{}});next.projects.splice(3,1);
+ for(let round=0;round<2;round++){const r=request(next);assert.deepEqual(r.p_changes.map(c=>c.id).sort(),['new','p3','p7']);assert.equal(r.p_changes.find(c=>c.id==='p3').after,null);assert.equal(r.p_changes.find(c=>c.id==='new').before,null);assert.equal(r.p_changes.find(c=>c.id==='p7').before.name,'n7');}
+ // After a save the baseline object is replaced; the cache must not return stale text.
+ ctx.sharedWorkspace=next;assert.equal(request(JSON.parse(JSON.stringify(next))).p_changes.length,0);
+ const settings=JSON.parse(JSON.stringify(next));settings.municipalities=['x'];assert.deepEqual(request(settings).p_settings_after.municipalities,['x']);
+ console.log('PASS engineering pre-save comparison: cached baseline detects edits, additions and removals exactly');
+}
 console.log('PASS engineering save: v1 fallback only on confirmed missing save_v2; 100 saved, 101 refused whole; permission, conflict and network errors stay visible');

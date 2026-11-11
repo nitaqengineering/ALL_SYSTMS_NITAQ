@@ -5,8 +5,17 @@ async function backupSourceJson() {
   if(window.NITAQ_SHARED_ACTIVE){
     if(sharedWorkspacePending||sharedWorkspaceRestorePending||sharedWorkspaceBusy)throw Error('أكد نتيجة الحفظ المعلق قبل أخذ نسخة احتياطية.');
     const latest=await readSharedWorkspace();
+    // سجل التغييرات الخادمي (آخر 100 عملية) يُرفق بالنسخة للمساءلة؛ الاسترجاع يتجاهله ولا يكتبه في الإعدادات.
+    let changeLog=null,changeLogNote='';
+    if(sharedWorkspacePermissions?.manager){
+      try{
+        const audit=await (await loadAccountingCloudClient()).rpc('nitaq_engineering_workspace_audit_v1');
+        if(audit.error)changeLogNote='تعذر إرفاق سجل التغييرات: '+(audit.error.message||audit.error.code||'');else changeLog=audit.data||[];
+      }catch(error){changeLogNote='تعذر إرفاق سجل التغييرات: '+error.message;}
+    }else changeLogNote='سجل التغييرات يُرفق بنسخ المدير فقط.';
     return JSON.stringify({...latest.state,backupMetadata:{
-      source:'nitaq-engineering-supabase',revision:latest.revision,createdAt:new Date().toISOString()
+      source:'nitaq-engineering-supabase',revision:latest.revision,createdAt:new Date().toISOString(),
+      changeLog,changeLogNote
     }});
   }
   return storageReadFailed?loadedStorage:JSON.stringify(db);

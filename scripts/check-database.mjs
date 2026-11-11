@@ -34,6 +34,7 @@ try{
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await accounting.query(await read('database/engineering/'+f+'.sql'));
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
+ for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261111_002_contract_guard.sql'));
  await testOtherSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
  console.log('PASS disposable local SQL integration tests; no private fixtures or production connections');

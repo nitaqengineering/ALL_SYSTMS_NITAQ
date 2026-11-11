@@ -9,6 +9,7 @@
 2. `database/engineering/20261109_011_submission_consistency.sql`
 3. `database/engineering/20261109_012_atomic_large_save.sql`
 4. `database/engineering/20261109_013_verified_membership.sql`
+5. `database/accounting/20261111_002_contract_guard.sql` (يمنع المهندس من تعديل قيم العقد وحالته وربطه بالمشروع ورسوم المشروع؛ المالك والمحاسب بلا تغيير)
 
 على مشروع CRM فقط `hihjleshocaazanwyqdu`:
 - `database/crm/20261109_001_safe_mutations.sql`

@@ -121,13 +121,22 @@ async function refreshSharedWorkspace() {
   }
 }
 
+// نص كل مشروع في النسخة المرجعية يُحسب مرة واحدة ويُعاد استخدامه حتى تُستبدل النسخة بعد حفظ أو قراءة.
+const workspaceBaselineText=new WeakMap();
+function baselineText(project){
+  if(!project)return 'null';
+  let text=workspaceBaselineText.get(project);
+  if(text===undefined){text=JSON.stringify(project);workspaceBaselineText.set(project,text);}
+  return text;
+}
+
 function workspaceRequest(after) {
   const beforeById=new Map(sharedWorkspace.projects.map(project=>[project.id,project]));
   const afterById=new Map(after.projects.map(project=>[project.id,project]));
   const changes=[];
   for(const id of new Set([...beforeById.keys(),...afterById.keys()])){
     const before=beforeById.get(id)||null,next=afterById.get(id)||null;
-    if(JSON.stringify(before)!==JSON.stringify(next))changes.push({id,before,after:next});
+    if(baselineText(before)!==JSON.stringify(next))changes.push({id,before,after:next});
   }
   const beforeSettings=workspaceSettings(sharedWorkspace),afterSettings=workspaceSettings(after);
   const changed=JSON.stringify(beforeSettings)!==JSON.stringify(afterSettings);
