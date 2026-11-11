@@ -1,0 +1,102 @@
+name: Daily encrypted database backup
+# Supabase free plan keeps no downloadable backups, so this is the off-project copy.
+# Every run dumps both databases, proves each dump restores into a new empty database with identical
+# row counts, encrypts it, and stores it in the PRIVATE bucket "nitaq-backups" of the OTHER Supabase
+# project (accounting -> CRM project, CRM -> accounting project). Nothing is attached to this public
+# repository: no artifacts, and logs show table names and row counts only.
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   NITAQ_BACKUP_ACCOUNTING_URL          Session pooler connection string of project kitsnfpgcrsxizzimgwx
+#   NITAQ_BACKUP_CRM_URL                 Session pooler connection string of project hihjleshocaazanwyqdu
+#   NITAQ_BACKUP_ACCOUNTING_SERVICE_KEY  service_role key of project kitsnfpgcrsxizzimgwx (stores the CRM backup)
+#   NITAQ_BACKUP_CRM_SERVICE_KEY         service_role key of project hihjleshocaazanwyqdu (stores the accounting backup)
+#   NITAQ_BACKUP_PASSPHRASE              Long passphrase; without it a backup cannot be opened. Keep a copy off GitHub.
+on:
+  schedule:
+    - cron: '10 22 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nitaq-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: local-test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Backup secrets are configured
+        env:
+          ACCOUNTING_URL: ${{ secrets.NITAQ_BACKUP_ACCOUNTING_URL }}
+          CRM_URL: ${{ secrets.NITAQ_BACKUP_CRM_URL }}
+          ACCOUNTING_KEY: ${{ secrets.NITAQ_BACKUP_ACCOUNTING_SERVICE_KEY }}
+          CRM_KEY: ${{ secrets.NITAQ_BACKUP_CRM_SERVICE_KEY }}
+          PASSPHRASE: ${{ secrets.NITAQ_BACKUP_PASSPHRASE }}
+        run: |
+          missing=0
+          [ -n "$ACCOUNTING_URL" ] || { echo "Missing secret NITAQ_BACKUP_ACCOUNTING_URL"; missing=1; }
+          [ -n "$CRM_URL" ] || { echo "Missing secret NITAQ_BACKUP_CRM_URL"; missing=1; }
+          [ -n "$ACCOUNTING_KEY" ] || { echo "Missing secret NITAQ_BACKUP_ACCOUNTING_SERVICE_KEY"; missing=1; }
+          [ -n "$CRM_KEY" ] || { echo "Missing secret NITAQ_BACKUP_CRM_SERVICE_KEY"; missing=1; }
+          [ "${#PASSPHRASE}" -ge 20 ] || { echo "Secret NITAQ_BACKUP_PASSPHRASE is missing or shorter than 20 characters"; missing=1; }
+          [ "$missing" = 0 ] || { echo "No backup was taken."; exit 1; }
+      - name: Install PostgreSQL 17 client
+        run: bash scripts/install-postgres-client.sh
+      - name: Dump accounting and project tracking
+        env:
+          DATABASE_URL: ${{ secrets.NITAQ_BACKUP_ACCOUNTING_URL }}
+        run: bash scripts/backup.sh accounting "$DATABASE_URL" backup-accounting
+      - name: Dump CRM
+        env:
+          DATABASE_URL: ${{ secrets.NITAQ_BACKUP_CRM_URL }}
+        run: bash scripts/backup.sh crm "$DATABASE_URL" backup-crm
+      - name: Restore both dumps into new empty databases and compare row counts
+        run: |
+          bash scripts/backup-verify.sh accounting backup-accounting
+          bash scripts/backup-verify.sh crm backup-crm
+      - name: Encrypt
+        env:
+          PASSPHRASE: ${{ secrets.NITAQ_BACKUP_PASSPHRASE }}
+        run: |
+          stamp="$(TZ=Asia/Dubai date +%Y%m%d-%H%M)"
+          for name in accounting crm; do
+            git rev-parse HEAD > "backup-$name/source-commit.txt"
+            bash scripts/backup-crypt.sh encrypt "backup-$name" "nitaq-backup-$name-$stamp.tar.gz.gpg"
+            rm -rf "backup-$name"
+          done
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+      - name: Store the accounting backup privately in the CRM project
+        env:
+          STORAGE_URL: https://hihjleshocaazanwyqdu.supabase.co
+          STORAGE_KEY: ${{ secrets.NITAQ_BACKUP_CRM_SERVICE_KEY }}
+        run: node scripts/backup-store.mjs "nitaq-backup-accounting-$STAMP.tar.gz.gpg" accounting
+      - name: Store the CRM backup privately in the accounting project
+        env:
+          STORAGE_URL: https://kitsnfpgcrsxizzimgwx.supabase.co
+          STORAGE_KEY: ${{ secrets.NITAQ_BACKUP_ACCOUNTING_SERVICE_KEY }}
+        run: node scripts/backup-store.mjs "nitaq-backup-crm-$STAMP.tar.gz.gpg" crm
+      - name: Remove local copies
+        if: always()
+        run: rm -rf backup-accounting backup-crm nitaq-backup-*.tar.gz.gpg

@@ -30,3 +30,22 @@
 `npm ci` ثم `npm run build` و`npm run check`. لتجربة SQL استخدم PostgreSQL محليًا مع مستخدم يستطيع إنشاء قواعد مؤقتة، واضبط NITAQ_TEST_DATABASE_URL وNITAQ_TEST_ALLOW_DISPOSABLE=1 ثم npm run check:database. الاختبار يرفض المضيف غير المحلي، وينشئ ويحذف قواعد بأسماء عشوائية تخصه. GitHub CI يجهز PostgreSQL 17؛ لم يُشغّل هذا الـworkflow على GitHub أثناء تجهيز الحزمة.
 
 عند الرجوع لإصدار سابق، لا تعكس SQL أو تستعد نسخة قديمة فوق تعديلات جديدة دون خطة حفظ ومطابقة. احتفظ بنسخة الواجهة السابقة ونسخة القاعدة قبل التحديث.
+
+## 6. النسخ الاحتياطي اليومي والاسترجاع
+
+خطة Supabase المجانية لا تحتفظ بنسخ قابلة للتنزيل، فالنسخة خارج المشروع هي workflow «Daily encrypted database backup». يعمل يوميًا 02:10 بتوقيت دبي ويمكن تشغيله يدويًا. في كل تشغيل: ينسخ قاعدتي الحسابات/المشاريع وCRM (البيانات والجداول والصلاحيات وحسابات الدخول)، يسترجع كل نسخة إلى قاعدة جديدة فارغة ويقارن عدد صفوف كل جدول بالأصل، يشفّرها AES-256، ثم يحفظها في الحاوية الخاصة `nitaq-backups` داخل المشروع الآخر: نسخة الحسابات في مشروع CRM ونسخة CRM في مشروع الحسابات. لا يُرفق شيء بالمستودع العام. تُحذف النسخ الأقدم من 90 يومًا مع إبقاء أحدث 14 دائمًا. أي خلل (سرّ ناقص، اختلاف عدد الصفوف، نسخة مخزنة لا تطابق المرفوعة) يُفشل التشغيل ويصل بريد من GitHub.
+
+الأسرار المطلوبة في GitHub (Settings > Secrets and variables > Actions):
+- `NITAQ_BACKUP_ACCOUNTING_URL` و`NITAQ_BACKUP_CRM_URL`: من لوحة Supabase > Connect > **Session pooler** لكل مشروع، مع كلمة مرور القاعدة. الاتصال المباشر لا يعمل من GitHub لأنه IPv6 فقط.
+- `NITAQ_BACKUP_ACCOUNTING_SERVICE_KEY` و`NITAQ_BACKUP_CRM_SERVICE_KEY`: مفتاح service_role لكل مشروع من Settings > API Keys. لا يوضع في أي ملف.
+- `NITAQ_BACKUP_PASSPHRASE`: عبارة سرية من 20 حرفًا على الأقل. احتفظ بنسخة منها خارج GitHub وSupabase؛ بدونها لا تُفتح أي نسخة.
+
+حدود هذه الحماية: المشروعان تحت حساب Supabase واحد؛ فقدان الحساب نفسه يفقد النسخ. نزّل نسخة دوريًا من Storage > nitaq-backups إلى مكان تملكه.
+
+فتح نسخة واسترجاعها (PostgreSQL 17 وgpg على جهاز موثوق):
+1. نزّل الملف من لوحة Supabase > Storage > nitaq-backups، ثم: `PASSPHRASE="..." bash scripts/backup-crypt.sh decrypt nitaq-backup-accounting-YYYYMMDD-HHMM.tar.gz.gpg` فينتج مجلد `backup-accounting`.
+2. للتأكد دون مساس بالإنتاج: `bash scripts/backup-verify.sh accounting backup-accounting` على خادم PostgreSQL محلي.
+3. للاسترجاع إلى مشروع Supabase جديد: `pg_restore --no-owner --dbname="<رابط المشروع الجديد>" backup-accounting/accounting.dump` ثم `accounting-auth.dump` لحسابات الدخول، ثم نفّذ `accounting-auth-triggers.sql`. كرّر لـCRM. لا تسترجع فوق قاعدة قائمة فيها بيانات أحدث.
+4. حدّث عنوان المشروع ومفتاحه العام في الواجهة ثم شغّل `npm run check:live` قبل النشر.
+
+`scripts/backup-selftest.sh` يثبت السلسلة على قاعدة تجريبية في كل دفع: النسخة لا تُفتح بعبارة خاطئة، تُسترجع بعدد صفوف مطابق، ونسخة ناقصة الصفوف تُرفض. `scripts/check-backup-store.mjs` يثبت الرفع والمطابقة والحذف الدوري.
