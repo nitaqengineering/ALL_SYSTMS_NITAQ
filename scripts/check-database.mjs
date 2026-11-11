@@ -21,12 +21,12 @@ try{
  await accounting.query('set row_security=on');
  await accounting.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[actor,'engineering-owner@example.invalid']);
  await accounting.query(await read('database/history/20261107_001_engineering_staging.sql'));
- const settings={custom:{},municipalities:['الشارقة'],users:[],tasks:[]};
+ const settings={custom:{},municipalities:['Ø§Ù„Ø´Ø§Ø±Ù‚Ø©'],users:[],tasks:[]};
  await accounting.query('insert into nitaq_engineering.import_batches(id,source_sha256,source_document) values($1,$2,$3)',[randomUUID(),'0'.repeat(64),{...settings,projects:[]}]);
  for(const f of ['20261107_003_engineering_stage_summary','20261107_004_engineering_coordination_save','20261107_005_shared_workspace','20261108_006_owner_role','20261108_007_workspace_invites','20261108_008_workspace_restore','20261108_009_accounting_identity','20261108_010_issued_permit_updates'])await accounting.query(await read('database/history/'+f+'.sql'));
  await accounting.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[actor]);
  const stages=Object.fromEntries(['design','planning','coordination','electric','water','gas','telecom','civil','struct','sanitary','munArch','munStruct','munSanitary','tender'].map(k=>[k,{status:'REQ',engineer:'',date:'',note:''}]));
- const base={id:'synthetic-base',name:'Synthetic project',service:'SEWA',contract:false,permit:'بانتظار المتطلبات',supervision:{status:'لم يبدأ',engineer:'',note:''},workflow:{},history:[],info:{}};
+ const base={id:'synthetic-base',name:'Synthetic project',service:'SEWA',contract:false,permit:'Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ù…ØªØ·Ù„Ø¨Ø§Øª',supervision:{status:'Ù„Ù… ÙŠØ¨Ø¯Ø£',engineer:'',note:''},workflow:{},history:[],info:{}};
  await accounting.query('insert into nitaq_engineering.projects(id,import_id,data) select $1,id,$2 from nitaq_engineering.import_batches limit 1',[base.id,base]);
  for(const [key,value] of Object.entries(stages))await accounting.query('insert into nitaq_engineering.stages(project_id,stage_key,data) values($1,$2,$3)',[base.id,key,value]);
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
@@ -35,6 +35,8 @@ try{
  for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await accounting.query(await read('database/engineering/'+f+'.sql'));
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261111_002_contract_guard.sql'));
+ await accounting.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
+ await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
  await testOtherSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
  console.log('PASS disposable local SQL integration tests; no private fixtures or production connections');

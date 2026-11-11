@@ -12,7 +12,7 @@ const live=process.argv.includes('--live'),allowFallback=process.argv.includes('
 const contract=JSON.parse(await readFile('database/frontend-contract.json','utf8'));
 
 // 1) Static: every rpc(), from() and functions.invoke() in the shipped sources is declared.
-const sources={accounting:['src/accounting.jsx',...(await readdir('public/engineering')).filter(f=>f.endsWith('.js')&&!f.startsWith('fflate')).map(f=>'public/engineering/'+f)],crm:['src/crm.jsx','public/crm/safety.js']};
+const sources={accounting:['src/accounting.jsx','public/crm/index.html',...(await readdir('public/engineering')).filter(f=>f.endsWith('.js')&&!f.startsWith('fflate')).map(f=>'public/engineering/'+f)],crm:['src/crm.jsx','public/crm/safety.js']};
 const used={};
 for(const [project,files] of Object.entries(sources)){
  used[project]={functions:new Set(),tables:new Set(),edgeFunctions:new Set()};
@@ -35,11 +35,18 @@ if(!live)process.exit(0);
 // 2) Live: ask each project.
 function classify(kind,status,body){
  const code=body?.code||'',message=body?.message||'';
- if(kind==='edge')return status===404?'missing':'present';
+ if(kind==='edge'){
+  if(status===404)return 'missing';
+  if(status>=200&&status<300||status===400&&body?.error==='A valid email is required'||status===401&&body?.error==='Sign in first')return 'present';
+  return 'unknown';
+ }
  if(code==='PGRST202'||code==='PGRST205'||code==='42883'||code==='42P01')return 'missing';
  if(status>=500||status===0)return 'unknown';
  if(code==='42501'&&/permission denied for (function|table|schema)/.test(message))return 'present-denied';
- return 'present-executable';
+ if(status>=200&&status<300)return 'present-executable';
+ if(status===400&&['22023','22P02','23502'].includes(code))return 'present-executable';
+ if(['42501','P0001','28000'].includes(code)&&message)return 'present-denied';
+ return 'unknown';
 }
 async function ask(url,init){
  try{const response=await fetch(url,{...init,signal:AbortSignal.timeout(20000)});let body=null;try{body=await response.json();}catch{}return {status:response.status,body};}
@@ -71,7 +78,7 @@ for(const [project,spec] of Object.entries(contract.projects)){
   if(state==='present-executable'&&/42501|P0001|22023|28000/.test(anon.body?.code||'')===false&&anon.status<300)warnings.push(`${project}: function "${item.name}" answered an anonymous caller (HTTP ${anon.status}); review its grants`);
   if(token&&state!=='missing'&&state!=='unknown'){
    const signed=await ask(base+'/rest/v1/rpc/'+item.name,{method:'POST',headers:{...headers,Authorization:'Bearer '+token},body});
-   if(classify('function',signed.status,signed.body)==='present-denied')problems.push(`${project}: signed-in test account may not execute "${item.name}" (EXECUTE not granted to authenticated). Re-apply: ${item.migration}`);
+   if(classify('function',signed.status,signed.body)!=='present-executable')problems.push(`${project}: signed-in test account executable access to "${item.name}" was not confirmed (HTTP ${signed.status}). Review role, service health and: ${item.migration}`);
   }
  }
  for(const item of spec.functions)if(item.fallback&&missing.has(item.name)&&missing.has(item.fallback))problems.push(`${project}: both "${item.name}" and its fallback "${item.fallback}" are missing`);
@@ -80,7 +87,7 @@ for(const [project,spec] of Object.entries(contract.projects)){
   record(item,'table',classify('table',reply.status,reply.body));
  }
  for(const item of spec.edgeFunctions){
-  const reply=await ask(base+'/functions/v1/'+item.name,{method:'POST',headers,body:'{}'});
+  const reply=await ask(base+'/functions/v1/'+item.name,{method:'POST',headers:token?{...headers,Authorization:'Bearer '+token}:headers,body:'{}'});
   record(item,'edge function',reply.status===0||reply.status>=500?'unknown':classify('edge',reply.status,reply.body));
  }
 }

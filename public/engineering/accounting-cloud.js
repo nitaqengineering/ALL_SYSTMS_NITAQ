@@ -1,4 +1,5 @@
 let accountingCloudClient;
+const accountingIdentityCache=new WeakMap();
 let accountingCloudLoading;
 let accountingCloudBusy = false;
 let accountingCloudGeneration = 0;
@@ -74,6 +75,35 @@ async function readAccountingCloudProjects(client, userId) {
     }
     throw Error('تجاوز تحميل المشاريع الحد المسموح.');
   }
+  async function revision() {
+    const result=await client.rpc('nitaq_accounting_project_identity_revision_v1');
+    if(result.error){
+      if(result.error.code==='PGRST202'&&String(result.error.message||'').includes('nitaq_accounting_project_identity_revision_v1'))return null;
+      throw Error('تعذر التحقق من تحديث بيانات الحسابات');
+    }
+    if(typeof result.data!=='string'||!/^[a-f0-9]{32}$/.test(result.data))throw Error('إصدار بيانات الحسابات غير صالح');
+    return result.data;
+  }
+  let beforeRevision=await revision();
+  if(beforeRevision!==null){
+    const cached=accountingIdentityCache.get(client);
+    if(cached?.userId===userId&&cached.revision===beforeRevision){
+      const current=await client.auth.getUser();
+      if(current.error||current.data?.user?.id!==userId)throw Error('تغير حساب الاتصال أثناء القراءة');
+      return structuredClone(cached.data);
+    }
+    for(let attempt=0;attempt<3;attempt++){
+      const data={projects:await scan()},afterRevision=await revision();
+      const current=await client.auth.getUser();
+      if(current.error||current.data?.user?.id!==userId)throw Error('تغير حساب الاتصال أثناء القراءة');
+      if(afterRevision!==null&&beforeRevision===afterRevision){
+        accountingIdentityCache.set(client,{userId,revision:afterRevision,data:structuredClone(data)});return data;
+      }
+      beforeRevision=afterRevision;
+    }
+    throw Error('بيانات الحسابات تغيرت أثناء القراءة؛ أعد المحاولة');
+  }
+  // Older databases retain the conservative double-scan until migration 004 is applied.
   let previous = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const data = {projects:await scan()};
@@ -128,7 +158,14 @@ function commitAccountingCloudData(data, approvedInitialMatches = false) {
   return rows.length;
 }
 
+function accountingCloudScreenActive() {
+  if(document.hidden)return false;
+  try { if(window.frameElement?.closest('[hidden]'))return false; } catch {}
+  return true;
+}
+
 async function syncAccountingCloud() {
+  if(!accountingCloudScreenActive())return;
   if(window.NITAQ_REQUIRE_SHARED&&!window.NITAQ_SHARED_ACTIVE)return;
   const userId = accountingCloudEnabledUser();
   if (!userId || accountingCloudBusy || !managerPreview()) return;
@@ -253,5 +290,7 @@ function initAccountingCloud() {
   setInterval(()=>void syncAccountingCloud(),60000);
   window.addEventListener('online',()=>void syncAccountingCloud());
   window.addEventListener('focus',()=>void syncAccountingCloud());
+  document.addEventListener('visibilitychange',()=>{if(accountingCloudScreenActive())void syncAccountingCloud();});
+  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.parent&&event.data?.type==='nitaq-section-active'&&event.data.section==='engineering')void syncAccountingCloud();});
   if(accountingCloudEnabledUser())void syncAccountingCloud();
 }

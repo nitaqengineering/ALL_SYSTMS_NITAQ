@@ -1,5 +1,30 @@
 
 
+// Reconcile approved stable IDs only; never merge clients or change ownership links.
+function reconcileAccountingMaster(db, projects) {
+ const byId=new Map(projects.map(p=>[String(p.id),p])), owners=new Map(), blocked=new Set(),issues=[];
+ const leads=db.leads.map(lead=>{
+  if(!lead.accountingId)return lead;
+  const row=byId.get(String(lead.accountingId));
+  if(!row||String(row.projectNo??'').trim()!==String(lead.projectNo??'').trim()||!String(row.owner||'').trim()){
+   blocked.add(lead.clientId);issues.push(lead.id);return lead;
+  }
+  const owner=String(row.owner).trim();
+  if(!owners.has(lead.clientId))owners.set(lead.clientId,new Set());
+  owners.get(lead.clientId).add(owner);
+  const patch={accountingOwner:owner,accountingPlotGovernment:String(row.plotNumber??''),accountingPlotPrivate:String(row.ownershipNumber??'')};
+  return Object.entries(patch).every(([k,v])=>lead[k]===v)?lead:{...lead,...patch};
+ });
+ const clients=db.clients.map(client=>{
+  const names=owners.get(client.id);
+  if(blocked.has(client.id)||!names||names.size!==1){if(names?.size>1)issues.push(client.id);return client;}
+  const name=[...names][0];return client.name===name?client:{...client,name};
+ });
+ const changed=leads.some((l,i)=>l!==db.leads[i])||clients.some((c,i)=>c!==db.clients[i]);
+ return {db:changed?{...db,leads,clients}:db,changed,issues};
+}
+
+
 function CrmAccountingProject({lead, me, onLink}) {
   const [row, setRow] = useState(null);
   const [message, setMessage] = useState('');
@@ -25,6 +50,7 @@ function CrmAccountingProject({lead, me, onLink}) {
       const userId = session.data?.session?.user?.id;
       if (!userId) { setNeedsLogin(true); return; }
       setNeedsLogin(false);
+      window.dispatchEvent(new Event('nitaq-accounting-connected'));
       const data = await readAccountingCloudProjects(client,userId,number,lead.accountingId);
       const matches = data.projects.filter(item => lead.accountingId ? String(item.id)===lead.accountingId : String(item.projectNo ?? '').trim() === number);
       if (matches.length !== 1) throw Error(matches.length ? 'رقم المشروع مكرر في الحسابات.' : 'رقم المشروع غير موجود في الحسابات.');
@@ -2423,6 +2449,32 @@ function App(){
   const me=inCloud
     ? (db.users||[]).find(u=>u.id===(cloud.profile&&cloud.profile.id))||null
     : (db.users||[]).find(u=>u.id===meId&&u.active!==false)||null;
+  useEffect(()=>{
+    if(!inCloud||me?.role!=='owner')return;
+    let cancelled=false,busy=false;
+    const actor=cloud.profile?.auth_user_id||cloud.session?.user?.id;
+    const sync=async()=>{
+      if(cancelled||busy||document.hidden||window.frameElement?.closest('[hidden]')||pendingRef.current.size||drawer)return;
+      const snapshot=dbRef.current,ids=snapshot.leads.filter(l=>l.accountingId).map(l=>l.accountingId);
+      if(!ids.length)return;
+      busy=true;
+      try{
+        const client=getCrmAccountingClient(),identity=await client.auth.getUser();
+        if(identity.error||!identity.data?.user?.id)return;
+        const rows=await readLinkedAccountingMasters(client,identity.data.user.id,ids);
+        const currentActor=cloudRef.current.profile?.auth_user_id||cloudRef.current.session?.user?.id;
+        if(cancelled||actor!==currentActor||cloudRef.current.status!=='ready'||dbRef.current!==snapshot||pendingRef.current.size)return;
+        const result=reconcileAccountingMaster(snapshot,rows);
+        if(result.changed)commit(result.db,'تحديث بيانات المالك والأرض من الحسابات',true,true);
+        if(result.issues.length)toast('تحتاج مطابقة الحسابات مراجعة لـ '+result.issues.length+' سجل؛ لم تُدمج بيانات العملاء المختلفة');
+      }catch(error){if(!cancelled)toast(error.message);}
+      finally{busy=false;}
+    };
+    const onMessage=e=>{if(e.origin===location.origin&&e.source===window.parent&&e.data?.type==='nitaq-section-active'&&e.data.section==='crm')void sync();};
+    const timer=setInterval(sync,60000);void sync();
+    window.addEventListener('nitaq-accounting-connected',sync);window.addEventListener('focus',sync);window.addEventListener('message',onMessage);
+    return ()=>{cancelled=true;clearInterval(timer);window.removeEventListener('nitaq-accounting-connected',sync);window.removeEventListener('focus',sync);window.removeEventListener('message',onMessage);};
+  },[inCloud,me?.id,me?.role,drawer,cloud.session?.user?.id]);
   const myLeads=useMemo(()=>me?db.leads.filter(l=>isMine(me,l)):[],[db.leads,me]);
   const scoped={...db,leads:myLeads};
   const pick=u=>{setMeId(u.id);setDb({...db,ui:{...(db.ui||{}),me:u.id}});setView('today')};
@@ -2618,7 +2670,7 @@ function App(){
         <p>الاستشارات الهندسية · الشارقة</p>
       </div>
       <nav className="nav">{nav.map((n,i)=>n.g?<b key={i}>{n.g}</b>
-        :<a key={n.id} className={view===n.id?'on':''} onClick={()=>setView(n.id)}>
+        :<a href={'#'+n.id} key={n.id} className={view===n.id?'on':''} onClick={e=>{e.preventDefault();setView(n.id)}}>
           <span className="ic">{n.ic}</span>{n.l}
           {n.id==='today'&&late>0&&<span className="pill">{late}</span>}
           {n.id==='today'&&!late&&(tod+deliv)>0&&<span className="pill q">{tod+deliv}</span>}

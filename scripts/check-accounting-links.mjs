@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {sourceOf} from './source-tools.mjs';
+const crm=await sourceOf('public/crm/index.html'),ctx=vm.createContext({Map,Set});
+vm.runInContext(crm.extract('reconcileAccountingMaster'),ctx);
+ctx.db={clients:[{id:'c',name:'Old owner',phone:'keep'}],leads:[{id:'l',clientId:'c',accountingId:'a',projectNo:'105',accountingOwner:'Old owner'}]};
+ctx.rows=[{id:'a',projectNo:'105',owner:'New owner',plotNumber:'007',ownershipNumber:'09'}];
+const reconcile=()=>vm.runInContext('reconcileAccountingMaster(db,rows)',ctx);
+let result=reconcile();assert.equal(result.db.clients[0].name,'New owner');assert.equal(result.db.clients[0].phone,'keep');assert.equal(result.db.leads[0].accountingPlotGovernment,'007');assert.equal(ctx.db.clients[0].name,'Old owner');
+ctx.db=result.db;assert.equal(reconcile().changed,false);
+ctx.rows[0].projectNo='999';result=reconcile();assert.equal(result.changed,false);assert.equal(result.issues.length,1);
+ctx.rows=[];assert.equal(reconcile().changed,false);
+ctx.db={clients:[{id:'c',name:'Do not merge'}],leads:[{id:'l',clientId:'c',accountingId:'a',projectNo:'105'},{id:'l2',clientId:'c',accountingId:'b',projectNo:'106'}]};
+ctx.rows=[{id:'a',projectNo:'105',owner:'Owner A'},{id:'b',projectNo:'106',owner:'Owner B'}];result=reconcile();assert.equal(result.db.clients[0].name,'Do not merge');assert.equal(result.db.leads[1].accountingOwner,'Owner B');assert.ok(result.issues.length);
+ctx.db.leads[1].accountingId='unmatched';result=reconcile();assert.equal(result.db.clients[0].name,'Do not merge');
+console.log('PASS approved accounting identity sync: stable IDs, leading-zero plots, idempotence, missing/renumbered source and multiple owners never merge client identities');
+
+// External scripts are loaded separately by sourceOf, so parse the shipped file as a function body.
+const {readFile}=await import('node:fs/promises');
+const code=await readFile('public/engineering/accounting-cloud.js','utf8');
+const start=code.indexOf('async function readAccountingCloudProjects('),end=code.indexOf('\nfunction validateAccountingCloudApply',start);
+const sync=vm.createContext({WeakMap,structuredClone,accountingCloudFields:'id',accountingIdentityCache:new WeakMap()});vm.runInContext(code.slice(start,end),sync);
+let pages=0,revision='a'.repeat(32),missing=false,user='u';
+sync.client={auth:{getUser:async()=>({data:{user:{id:user}}})},rpc:async()=>missing?{error:{code:'PGRST202',message:'missing nitaq_accounting_project_identity_revision_v1'}}:{data:revision},from:()=>({select(){return this},eq(){return this},order(){return this},gt(){return this},limit(){pages++;return Promise.resolve({data:[{id:'a'}],count:1})}})};
+await vm.runInContext("readAccountingCloudProjects(client,'u')",sync);assert.equal(pages,1);
+await vm.runInContext("readAccountingCloudProjects(client,'u')",sync);assert.equal(pages,1,'unchanged revision must not read project pages');
+revision='b'.repeat(32);await vm.runInContext("readAccountingCloudProjects(client,'u')",sync);assert.equal(pages,2);
+user='other';await assert.rejects(vm.runInContext("readAccountingCloudProjects(client,'u')",sync));assert.equal(pages,2);
+user='u';missing=true;await vm.runInContext("readAccountingCloudProjects(client,'u')",sync);assert.equal(pages,4,'old DB must use full consistency fallback');
+console.log('PASS accounting reconciliation: one scan on change, no project pages when unchanged, actor mismatch denied, old database fallback retained');

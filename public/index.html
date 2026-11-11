@@ -62,6 +62,7 @@ function selectSystem(name){
     system.panel.hidden=!selected;
   }
   const current=systems[name];
+  if(location.protocol!=='file:'&&current.frame.hasAttribute('src'))current.frame.contentWindow.postMessage({type:'nitaq-section-active',section:name},location.origin);
   if (!current.frame.hasAttribute('src')) {
     const suffix = name === 'engineering' ? '#portal-embedded' : '';
     current.frame.src = current.frame.dataset.src + suffix;

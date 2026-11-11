@@ -79,7 +79,7 @@ try{
  out.searchNoMatch=timeIt("projects.filter(p=>projectMatchesSearch(p,'لا يوجد')).length");
  out.filterStageAndEngineer=timeIt("projects.filter(p=>p.stages.planning.status==='REQ'&&p.stages.planning.engineer==='Engineer 3').length");
  const shared=await read('public/engineering/shared-workspace.js');
- vm.runInContext('var sharedWorkspace;'+grab(shared,'workspaceSettings')+grab(shared,'workspaceRequest'),Object.assign(ctx,{crypto:{randomUUID}}));
+ vm.runInContext('var sharedWorkspace;const workspaceBaselineText=new WeakMap();'+grab(shared,'baselineText')+grab(shared,'workspaceSettings')+grab(shared,'workspaceRequest'),Object.assign(ctx,{crypto:{randomUUID}}));
  ctx.sharedWorkspace={...solo.settings,projects:solo.projects};const edited=structuredClone(solo.projects);edited[2500].stages.planning.note='x';ctx.afterState={...solo.settings,projects:edited};
  out.diffBeforeEachSave=timeIt('workspaceRequest(afterState).p_changes.length');
  out.snapshotStringify=timeIt('JSON.stringify(afterState).length',3);

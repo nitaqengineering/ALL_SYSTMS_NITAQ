@@ -47,6 +47,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci
       - name: Backup secrets are configured
         env:
           ACCOUNTING_URL: ${{ secrets.NITAQ_BACKUP_ACCOUNTING_URL }}

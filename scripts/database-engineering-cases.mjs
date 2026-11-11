@@ -80,12 +80,17 @@ export async function testOtherSafeDB(c){
  const guardProject={id:'guard-project',projectNo:'G-1',name:'Guard project',owner:'Owner',designFee:1000,supervisionMonthly:100,supervisionMonths:6};
  const guardContract={id:'guard-contract',projectId:'guard-project',type:'تصميم واعتماد',value:50000,status:'سارٍ',description:'first'};
  await moneyAs(financialOwner,()=>c.query("insert into public.nitaq_records(id,entity,data) values('guard-project','projects',$1),('guard-contract','contracts',$2)",[guardProject,guardContract]));
+ await assert.rejects(moneyAs(moneyEngineer,()=>c.query("insert into public.nitaq_records(id,entity,data) values('engineer-new-contract','contracts',$1)",[{...guardContract,id:'engineer-new-contract',value:999999}])),e=>e.code==='42501'&&e.message==='NITAQ_CONTRACT_FINANCIAL_CREATE_DENIED');
+ await assert.rejects(moneyAs(moneyEngineer,()=>c.query("insert into public.nitaq_records(id,entity,data) values('engineer-fee-project','projects',$1)",[{id:'engineer-fee-project',designFee:500}])),e=>e.code==='42501');
+ await moneyAs(moneyEngineer,()=>c.query("insert into public.nitaq_records(id,entity,data) values('engineer-draft-project','projects',$1)",[{id:'engineer-draft-project',name:'Draft',designFee:0}]));
+ const identityRevision=async()=>moneyAs(financialOwner,()=>c.query('select public.nitaq_accounting_project_identity_revision_v1() revision'));
+ const beforeIdentityRevision=(await identityRevision()).rows[0].revision;
  const setField=(user,id,field,value)=>moneyAs(user,()=>c.query('update public.nitaq_records set data=jsonb_set(data,$2::text[],$3::jsonb) where id=$1',[id,[field],JSON.stringify(value)]));
  const stored=async(id,field)=>(await c.query('select data->>$2 v from public.nitaq_records where id=$1',[id,field])).rows[0].v;
  await setField(moneyEngineer,'guard-contract','description','engineer note');assert.equal(await stored('guard-contract','description'),'engineer note');
  for(const [field,value] of [['value',1],['status','ملغى'],['projectId','other'],['supervisionMonthly',5]])await assert.rejects(setField(moneyEngineer,'guard-contract',field,value),e=>e.code==='42501'&&e.message==='NITAQ_CONTRACT_FINANCIAL_CHANGE_DENIED',field);
  assert.equal(await stored('guard-contract','value'),'50000');
- await setField(moneyEngineer,'guard-project','name','Renamed by engineer');await assert.rejects(setField(moneyEngineer,'guard-project','designFee',1),e=>e.code==='42501');
+ await setField(moneyEngineer,'guard-project','name','Renamed by engineer');assert.notEqual((await identityRevision()).rows[0].revision,beforeIdentityRevision);await assert.rejects(setField(moneyEngineer,'guard-project','designFee',1),e=>e.code==='42501');
  await setField(accountant,'guard-contract','value',60000);await setField(financialOwner,'guard-project','designFee',2000);
  assert.equal(await stored('guard-contract','value'),'60000');assert.equal(await stored('guard-project','designFee'),'2000');
  await c.query("update public.nitaq_records set data=jsonb_set(data,'{value}','70000') where id='guard-contract'");

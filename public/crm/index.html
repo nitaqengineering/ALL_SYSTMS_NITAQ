@@ -440,6 +440,18 @@ function getCrmAccountingClient() {
     auth:{storageKey:'nitaq-crm-accounting-reader',persistSession:false,autoRefreshToken:true}
   });
 }
+async function readLinkedAccountingMasters(client,userId,ids) {
+ const rows=[],unique=[...new Set(ids.map(String))];
+ for(let i=0;i<unique.length;i+=100){
+  const result=await client.from('nitaq_records').select(accountingCloudFields).eq('entity','projects').in('id',unique.slice(i,i+100)).limit(100);
+  if(result.error||!Array.isArray(result.data))throw Error('تعذر تحديث بيانات الملاك من الحسابات');
+  rows.push(...result.data);
+ }
+ const current=await client.auth.getUser();
+ if(current.error||current.data?.user?.id!==userId)throw Error('تغير حساب الحسابات أثناء التحديث');
+ return rows;
+}
+
 async function readAccountingCloudProjects(client,userId,number,accountingId){
  const identity=await client.auth.getUser();if(identity.error||identity.data?.user?.id!==userId)throw Error('تغير حساب الاتصال؛ سجل الدخول مجددًا');
  if(!accountingId&&!String(number||'').trim())throw Error('رقم المشروع مطلوب للمطابقة');

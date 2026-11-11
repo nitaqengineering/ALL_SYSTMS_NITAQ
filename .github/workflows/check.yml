@@ -41,6 +41,10 @@ jobs:
         env:
           NITAQ_TEST_DATABASE_URL: postgresql://postgres:local-test-only@127.0.0.1:5432/postgres
           NITAQ_TEST_ALLOW_DISPOSABLE: '1'
+      - run: npm run simulate:office-day
+        env:
+          NITAQ_TEST_DATABASE_URL: postgresql://postgres:local-test-only@127.0.0.1:5432/postgres
+          NITAQ_TEST_ALLOW_DISPOSABLE: '1'
   backup-selftest:
     runs-on: ubuntu-latest
     timeout-minutes: 10

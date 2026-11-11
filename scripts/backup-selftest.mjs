@@ -16,22 +16,25 @@ await c.query(`create schema auth;create table auth.users(id uuid primary key,em
 await c.query((await read('database/schema-reference/accounting-public.sql')).replace(/^\\.*$/gm,''));
 await c.query('set row_security=on');
 await c.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[actor,'owner@example.invalid']);
+await c.query('insert into auth.identities(id,user_id) values($1,$2)',[randomUUID(),actor]);
 await c.query("insert into public.nitaq_profiles(user_id,email,name,role) values($1,'owner@example.invalid','Owner','owner')",[actor]);
 await c.query(await read('database/history/20261107_001_engineering_staging.sql'));
-await c.query('insert into nitaq_engineering.import_batches(id,source_sha256,source_document) values($1,$2,$3)',[randomUUID(),'0'.repeat(64),{custom:{},municipalities:['الشارقة'],users:[],tasks:[],projects:[]}]);
+await c.query('insert into nitaq_engineering.import_batches(id,source_sha256,source_document) values($1,$2,$3)',[randomUUID(),'0'.repeat(64),{custom:{},municipalities:['Ø§Ù„Ø´Ø§Ø±Ù‚Ø©'],users:[],tasks:[],projects:[]}]);
 for(const f of ['20261107_003_engineering_stage_summary','20261107_004_engineering_coordination_save','20261107_005_shared_workspace','20261108_006_owner_role','20261108_007_workspace_invites','20261108_008_workspace_restore','20261108_009_accounting_identity','20261108_010_issued_permit_updates'])await c.query(await read('database/history/'+f+'.sql'));
 await c.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[actor]);
 await c.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
 for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await c.query(await read('database/engineering/'+f+'.sql'));
 await c.query(await read('database/accounting/20261111_002_contract_guard.sql'));
+ await c.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
+ await c.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
 await c.query('create trigger on_auth_user_created after insert on auth.users for each row execute function public.nitaq_handle_new_user()');
 // Synthetic business rows through the same guarded paths the application uses.
 const stages=Object.fromEntries(['design','planning','coordination','electric','water','gas','telecom','civil','struct','sanitary','munArch','munStruct','munSanitary','tender'].map(k=>[k,{status:'REQ',engineer:'',date:'',note:''}]));
-const projects=Array.from({length:40},(_,i)=>({id:'S'+(100+i),name:'مالك تجريبي '+i,service:'SEWA',contract:false,permit:'بانتظار المتطلبات',supervision:{status:'لم يبدأ',engineer:'',note:''},workflow:{},history:[],info:{},stages}));
+const projects=Array.from({length:40},(_,i)=>({id:'S'+(100+i),name:'Ù…Ø§Ù„Ùƒ ØªØ¬Ø±ÙŠØ¨ÙŠ '+i,service:'SEWA',contract:false,permit:'Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ù…ØªØ·Ù„Ø¨Ø§Øª',supervision:{status:'Ù„Ù… ÙŠØ¨Ø¯Ø£',engineer:'',note:''},workflow:{},history:[],info:{},stages}));
 await c.query('grant select,insert,update on public.nitaq_records to authenticated');
 await c.query('begin;set local role authenticated');await c.query("select set_config('request.jwt.claim.sub',$1,true)",[actor]);
 await c.query('select public.nitaq_engineering_workspace_save_v2($1,$2::jsonb)',[randomUUID(),JSON.stringify(projects.map(p=>({id:p.id,before:null,after:p})))]);
-for(let i=0;i<25;i++)await c.query("insert into public.nitaq_records(id,entity,data) values($1,'projects',$2)",['acc-'+i,{id:'acc-'+i,projectNo:String(500+i),name:'مشروع '+i,owner:'مالك '+i}]);
+for(let i=0;i<25;i++)await c.query("insert into public.nitaq_records(id,entity,data) values($1,'projects',$2)",['acc-'+i,{id:'acc-'+i,projectNo:String(500+i),name:'Ù…Ø´Ø±ÙˆØ¹ '+i,owner:'Ù…Ø§Ù„Ùƒ '+i}]);
 for(let i=0;i<10;i++)await c.query("insert into public.nitaq_records(id,entity,data) values($1,'otherIncome',$2)",['inc-'+i,{id:'inc-'+i,amount:100+i,category:'Other',vatable:'No',account:'Bank',date:'2026-11-10',payer:'Test',note:''}]);
 await c.query('commit');
 const counts=(await c.query("select (select count(*) from public.nitaq_records)::int records,(select count(*) from nitaq_engineering.projects)::int projects,(select count(*) from nitaq_engineering.stages)::int stages,(select count(*) from public.nitaq_financial_audit_v1)::int audit")).rows[0];
