@@ -7,7 +7,8 @@
     "check:live": "node scripts/check-live-contract.mjs --live",
     "start": "node scripts/serve.mjs",
     "build": "node scripts/build-frontends.mjs",
-    "check:database": "node scripts/check-database.mjs"
+    "check:database": "node scripts/check-database.mjs",
+    "simulate:office-day": "node scripts/office-day-simulation.mjs"
   },
   "devDependencies": {
     "@babel/parser": "^8.1.0",
