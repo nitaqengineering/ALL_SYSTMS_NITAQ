@@ -1,8 +1,10 @@
 name: Publish frontend to GitHub Pages
-# Manual: GitHub Pages may make frontend assets publicly accessible, even for a private repository.
+# Runs on every push to main and on demand. GitHub Pages may make frontend assets publicly accessible, even for a private repository.
 # Repository Settings > Pages > Source must be "GitHub Actions". With "Deploy from a branch" the
 # automatic Jekyll build of the repository root replaces this deployment seconds after it finishes.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       allow_fallback:
