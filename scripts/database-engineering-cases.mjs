@@ -11,6 +11,16 @@ export async function testOtherSafeDB(c){
  const failed=Array.from({length:100},(_,i)=>({id:'rolled-back-'+i,before:null,after:project('rolled-back-'+i)}));failed.push({id:many[0].id,before:null,after:many[0].after});
  assert.equal((await batch(failed)).result,'conflict');assert.equal(Number((await c.query("select count(*) n from nitaq_engineering.projects where id like 'rolled-back-%'")).rows[0].n),0);
  console.log('PASS engineering: 150-project atomic save, replay and rollback of prior chunks on late conflict');
+ const paged=[];let cursor=null,readPages=0;
+ do{
+  const r=await authenticated(async()=> (await c.query('select public.nitaq_engineering_workspace_read_v2($1) r',[cursor])).rows[0].r);
+  assert.ok(r.projects.length<=500);if(cursor!==null)assert.equal(r.settings,null);else assert.ok(r.settings);
+  paged.push(...r.projects);cursor=r.next_after;readPages++;
+ }while(cursor!==null);
+ const originalDocs=(await c.query('select nitaq_engineering.project_document(id) p from nitaq_engineering.projects order by id')).rows.map(x=>x.p);
+ assert.deepEqual(paged,originalDocs);assert.equal(readPages,Math.ceil(originalDocs.length/500));
+ console.log('PASS engineering read_v2: complete documents match the original reader; bounded pages and first-page settings');
+
  // Frontend fallback path when save_v2 is not deployed: save_v1 directly with the same request shape.
  const direct=(changes,operation=randomUUID())=>authenticated(async()=> (await c.query('select public.nitaq_engineering_workspace_save_v1($1,$2::jsonb) r',[operation,JSON.stringify(changes)])).rows[0].r);
  const count=async prefix=>Number((await c.query('select count(*) n from nitaq_engineering.projects where id like $1',[prefix+'%'])).rows[0].n);

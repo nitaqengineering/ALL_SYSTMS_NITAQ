@@ -30,6 +30,7 @@ async function build(suffix){
  await c.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[M1]);
  await c.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await c.query(await read('database/engineering/'+f+'.sql'));
+ await c.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
  return {name,c};
 }
 // One signed-in session = one connection; every call is its own transaction as PostgREST does.
@@ -63,10 +64,26 @@ try{
  const users=[{uid:M1,manager:true},{uid:M2,manager:true},...engineers.map(e=>({uid:e.uid,name:e.name}))];
  for(const u of users)u.c=await connect(name);
  // 1) Opening the system: full paged read of 5000 projects.
- async function load(u){const t0=performance.now();let after=null,projects=[],bytes=0,pages=0,settings;for(;;){const r=await call(u.c,u.uid,'select public.nitaq_engineering_workspace_read_v1($1)::text r',[after]);bytes+=r.r.length;const page=JSON.parse(r.r);settings=page.settings;pages++;projects.push(...page.projects);if(page.projects.length<100)break;after=page.projects.at(-1).id;}return {ms:ms(t0),projects,bytes,pages,settings};}
+ const readerSource=await read('public/engineering/shared-workspace.js');
+ const readerBody=readerSource.slice(readerSource.indexOf('async function readSharedWorkspace()'),readerSource.indexOf('\nfunction applySharedWorkspace'));
+ async function load(u,version=2){
+  const t0=performance.now();let bytes=0,pages=0;
+  const client={rpc:async(name,args)=>{
+   assert.ok(['nitaq_engineering_workspace_read_v1','nitaq_engineering_workspace_read_v2'].includes(name));
+   const r=await call(u.c,u.uid,'select public.'+name+'($1)::text r',[args.p_after]);
+   bytes+=Buffer.byteLength(r.r,'utf8');pages++;return {data:JSON.parse(r.r)};
+  }};
+  const reader=vm.createContext({loadAccountingCloudClient:async()=>client});vm.runInContext(readerBody.replace('let readVersion=2','let readVersion='+version),reader);
+  const result=await vm.runInContext('readSharedWorkspace()',reader);
+  return {ms:ms(t0),projects:result.state.projects,bytes,pages,settings:Object.fromEntries(Object.entries(result.state).filter(([key])=>key!=='projects'))};
+ }
  const solo=await load(users[0]);assert.equal(solo.projects.length,5000);
- out.loadAlone={ms:solo.ms,pages:solo.pages,megabytes:Math.round(solo.bytes/1e5)/10};
- const together=await Promise.all(users.map(load));out.loadTenAtOnce=stats(together.map(x=>x.ms));
+ out.loadAlone={ms:solo.ms,pages:solo.pages,uncompressedMegabytes:Math.round(solo.bytes/1e5)/10};
+ // Same dataset and process, alternate order to avoid attributing host load or warming to the new reader.
+ const comparisons=[];
+ for(const version of [1,2,2,1]){const sample=await load(users[0],version);comparisons.push({version,ms:sample.ms,requests:sample.pages,uncompressedBytes:sample.bytes});}
+ out.readerComparison=comparisons;
+ const together=await Promise.all(users.map(u=>load(u)));out.loadTenAtOnce=stats(together.map(x=>x.ms));
  // 2) Background "did anything change" poll.
  const polls=[];await Promise.all(users.map(async u=>{for(let i=0;i<50;i++){const t0=performance.now();await call(u.c,u.uid,'select public.nitaq_engineering_workspace_revision_v1() r');polls.push(ms(t0));}}));out.revisionPoll=stats(polls);
  // 3) Browser-side work on 5000 loaded projects, using the shipped functions.

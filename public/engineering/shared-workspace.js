@@ -54,24 +54,39 @@ function workspaceSettings(state) {
 
 async function readSharedWorkspace() {
   const client=await loadAccountingCloudClient();
+  let readVersion=2;
   for(let attempt=0;attempt<3;attempt++){
-    let after=null,revision=null,settings=null;
-    const all=[];
+    let after=null,revision=null,settings=null,permissions=null;
+    const all=[],seen=new Set();
     let consistent=true;
     for(let page=0;page<10000;page++){
-      const result=await client.rpc('nitaq_engineering_workspace_read_v1',{p_after:after});
+      let result=readVersion===2
+        ?await client.rpc('nitaq_engineering_workspace_read_v2',{p_after:after})
+        :await client.rpc('nitaq_engineering_workspace_read_v1',{p_after:after});
+      if(readVersion===2&&result.error?.code==='PGRST202'&&String(result.error.message||'').includes('nitaq_engineering_workspace_read_v2')){
+        readVersion=1;result=await client.rpc('nitaq_engineering_workspace_read_v1',{p_after:after});
+      }
       if(result.error)throw Error(result.error.code==='42501'
         ?'حسابك يحتاج تفعيل صلاحية مساحة المشاريع المشتركة.'
         :'تعذرت قراءة المشاريع المشتركة. راجع الاتصال وتسجيل الدخول.');
       const data=result.data;
       if(!data||!Array.isArray(data.projects)||!Number.isSafeInteger(data.revision))
         throw Error('رد خدمة المشاريع غير صالح.');
-      if(revision===null){revision=data.revision;settings=data.settings}
+      if(revision===null){revision=data.revision;settings=data.settings;permissions=data.permissions}
       if(revision!==data.revision){consistent=false;break}
+      let previous=after;
+      for(const project of data.projects){
+        if(typeof project?.id!=='string'||seen.has(project.id))throw Error('صفحة المشاريع تحتوي معرفًا غير صالح أو مكررًا.');
+        seen.add(project.id);previous=project.id;
+      }
       all.push(...data.projects);
-      if(data.projects.length<100)return {state:{...settings,projects:all},revision,permissions:data.permissions};
-      const next=data.projects.at(-1).id;
-      if(after!==null&&next<=after)throw Error('تعذرت قراءة بقية المشاريع.');
+      if(readVersion===2){
+        if(data.projects.length>500||!(data.next_after===null||typeof data.next_after==='string'))throw Error('مؤشر صفحات المشاريع غير صالح.');
+        if(data.next_after===null)return {state:{...settings,projects:all},revision,permissions};
+        if(!data.projects.length||data.next_after!==previous)throw Error('مؤشر صفحات المشاريع غير متسق.');
+      }else if(data.projects.length<100)return {state:{...settings,projects:all},revision,permissions};
+      const next=previous;
+      if(after!==null&&next===after)throw Error('تعذرت قراءة بقية المشاريع.');
       after=next;
     }
     if(consistent)throw Error('عدد صفحات المشاريع تجاوز الحد المسموح.');

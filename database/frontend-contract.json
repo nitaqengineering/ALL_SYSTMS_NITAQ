@@ -4,6 +4,7 @@
     "accounting": {
       "config": "public/accounting-cloud-config.js",
       "functions": [
+        {"name": "nitaq_engineering_workspace_read_v2", "params": ["p_after"], "migration": "database/engineering/20261112_014_workspace_read_pages.sql", "fallback": "nitaq_engineering_workspace_read_v1"},
         {"name": "nitaq_accounting_project_identity_revision_v1", "params": [], "migration": "database/accounting/20261112_004_project_identity_revision.sql"},
         {"name": "nitaq_sync_capabilities_v1", "params": [], "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"},
         {"name": "nitaq_sync_apply_v1", "params": ["p_operation_id", "p_kind", "p_id", "p_entity", "p_data", "p_expected"], "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"},

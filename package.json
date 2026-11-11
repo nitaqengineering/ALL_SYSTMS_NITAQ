@@ -3,7 +3,7 @@
   "version": "2026.11.9",
   "private": true,
   "scripts": {
-    "check": "node scripts/build-frontends.mjs --check && node scripts/check-package.mjs && node scripts/check-invitation.cjs && node scripts/check-business.mjs && node scripts/check-safety.mjs && node scripts/check-excel-export.mjs && node scripts/check-engineering-save.mjs && node scripts/check-accounting-links.mjs && node scripts/check-live-contract.mjs && node scripts/check-contract-gate.mjs && node scripts/check-backup-store.mjs",
+    "check": "node scripts/build-frontends.mjs --check && node scripts/check-package.mjs && node scripts/check-invitation.cjs && node scripts/check-business.mjs && node scripts/check-safety.mjs && node scripts/check-excel-export.mjs && node scripts/check-engineering-save.mjs && node scripts/check-accounting-links.mjs && node scripts/check-workspace-read.mjs && node scripts/check-live-contract.mjs && node scripts/check-contract-gate.mjs && node scripts/check-backup-store.mjs",
     "check:live": "node scripts/check-live-contract.mjs --live",
     "start": "node scripts/serve.mjs",
     "build": "node scripts/build-frontends.mjs",

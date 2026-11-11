@@ -1,0 +1,45 @@
+{
+  "environment": "Local Windows PostgreSQL; 5000 synthetic projects; not production HTTPS timings",
+  "comparisonOrder": "v1,v2,v2,v1",
+  "readerComparison": [
+    {
+      "version": 1,
+      "ms": 2523.2,
+      "requests": 51,
+      "uncompressedBytes": 35024015
+    },
+    {
+      "version": 2,
+      "ms": 2124,
+      "requests": 10,
+      "uncompressedBytes": 34951481
+    },
+    {
+      "version": 2,
+      "ms": 2194.8,
+      "requests": 10,
+      "uncompressedBytes": 34951481
+    },
+    {
+      "version": 1,
+      "ms": 2445.4,
+      "requests": 51,
+      "uncompressedBytes": 35024015
+    }
+  ],
+  "loadTenAtOnce": {
+    "n": 10,
+    "p50": 5560.5,
+    "p95": 5676.7,
+    "max": 5676.7
+  },
+  "sameProjectTwoEditors": {
+    "rounds": 30,
+    "outcomes": {
+      "conflict+saved": 30
+    },
+    "winnerStoredExactly": 30,
+    "loserSavedAfterReload": 30
+  },
+  "projectsIdenticalAfterRestore": true
+}

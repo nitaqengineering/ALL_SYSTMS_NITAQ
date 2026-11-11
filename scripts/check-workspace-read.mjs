@@ -1,0 +1,26 @@
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';import assert from 'node:assert/strict';
+const source=await readFile('public/engineering/shared-workspace.js','utf8');
+const body=source.slice(source.indexOf('async function readSharedWorkspace()'),source.indexOf('\nfunction applySharedWorkspace'));
+const projects=Array.from({length:5000},(_,i)=>({id:String(10000+i),history:[{text:'Keep this history'}],stages:{design:{status:'REQ'}}}));
+let mode='v2',calls=0;
+const client={rpc:async(name,{p_after})=>{
+ calls++;
+ if(mode==='denied')return {error:{code:'42501',message:'Permission denied'}};
+ if(name.endsWith('v2')&&mode==='old')return {error:{code:'PGRST202',message:'missing nitaq_engineering_workspace_read_v2'}};
+ const start=p_after?projects.findIndex(p=>p.id===p_after)+1:0,size=name.endsWith('v2')?500:100,rows=projects.slice(start,start+size);
+ const data={revision:7,settings:p_after?null:{users:[],tasks:[{id:'keep-task'}]},permissions:{manager:true},projects:rows};
+ if(name.endsWith('v2'))data.next_after=start+size<projects.length?rows.at(-1).id:null;
+ if(mode==='changing')data.revision=p_after?8:7;
+ if(mode==='duplicate'&&p_after)data.projects=[projects[0]];
+ if(mode==='badcursor')data.next_after='wrong';
+ return {data};
+}};
+const ctx=vm.createContext({loadAccountingCloudClient:async()=>client});vm.runInContext(body,ctx);
+let result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,10);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));assert.equal(result.state.tasks[0].id,'keep-task');assert.equal(result.permissions.manager,true);
+mode='old';calls=0;result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,52);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));
+mode='denied';calls=0;await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));assert.equal(calls,1,'never fall back on permission failures');
+mode='duplicate';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
+mode='changing';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
+mode='badcursor';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
+console.log('PASS shared reader: 5000 complete documents in 10 requests, first-page settings retained, exact missing-function fallback, permission/duplicate/cursor failures rejected');

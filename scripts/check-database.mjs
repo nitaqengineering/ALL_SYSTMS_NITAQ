@@ -37,6 +37,7 @@ try{
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261111_002_contract_guard.sql'));
  await accounting.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
  await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
+ await accounting.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
  await testOtherSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
  console.log('PASS disposable local SQL integration tests; no private fixtures or production connections');
