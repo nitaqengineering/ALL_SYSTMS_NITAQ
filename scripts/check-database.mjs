@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {testCrmSafeDB} from './database-crm-cases.mjs';
 import {testOtherSafeDB} from './database-engineering-cases.mjs';
+import {testTimerSafeDB} from './database-timer-cases.mjs';
 const connection=process.env.NITAQ_TEST_DATABASE_URL;
 if(!connection||process.env.NITAQ_TEST_ALLOW_DISPOSABLE!=='1')throw Error('Set local NITAQ_TEST_DATABASE_URL and NITAQ_TEST_ALLOW_DISPOSABLE=1');
 const url=new URL(connection);
@@ -38,7 +39,9 @@ try{
  await accounting.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
  await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
  await accounting.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
+ for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261112_015_project_time_logs.sql'));
  await testOtherSafeDB(accounting);
+ await testTimerSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
  console.log('PASS disposable local SQL integration tests; no private fixtures or production connections');
 }finally{

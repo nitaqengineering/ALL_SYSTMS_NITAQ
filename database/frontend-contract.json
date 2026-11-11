@@ -4,39 +4,219 @@
     "accounting": {
       "config": "public/accounting-cloud-config.js",
       "functions": [
-        {"name": "nitaq_engineering_workspace_read_v2", "params": ["p_after"], "migration": "database/engineering/20261112_014_workspace_read_pages.sql", "fallback": "nitaq_engineering_workspace_read_v1"},
-        {"name": "nitaq_accounting_project_identity_revision_v1", "params": [], "migration": "database/accounting/20261112_004_project_identity_revision.sql"},
-        {"name": "nitaq_sync_capabilities_v1", "params": [], "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"},
-        {"name": "nitaq_sync_apply_v1", "params": ["p_operation_id", "p_kind", "p_id", "p_entity", "p_data", "p_expected"], "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"},
-        {"name": "nitaq_engineering_workspace_read_v1", "params": ["p_after"], "migration": "database/history/20261107_005_shared_workspace.sql"},
-        {"name": "nitaq_engineering_workspace_revision_v1", "params": [], "migration": "database/history/20261107_005_shared_workspace.sql"},
-        {"name": "nitaq_engineering_workspace_audit_v1", "params": [], "migration": "database/history/20261107_005_shared_workspace.sql"},
-        {"name": "nitaq_engineering_workspace_save_v1", "params": ["p_operation", "p_changes", "p_settings_before", "p_settings_after"], "migration": "database/history/20261107_005_shared_workspace.sql"},
-        {"name": "nitaq_engineering_workspace_save_v2", "params": ["p_operation", "p_changes", "p_settings_before", "p_settings_after"], "migration": "database/engineering/20261109_012_atomic_large_save.sql", "fallback": "nitaq_engineering_workspace_save_v1"},
-        {"name": "nitaq_engineering_workspace_restore_v1", "params": ["p_operation", "p_expected_revision", "p_document"], "migration": "database/history/20261108_008_workspace_restore.sql"},
-        {"name": "nitaq_engineering_save_coordination_v1", "params": ["p_project", "p_version", "p_status", "p_operation"], "migration": "database/history/20261107_004_engineering_coordination_save.sql"},
-        {"name": "nitaq_engineering_stage_summary_v1", "params": ["p_after", "p_limit"], "migration": "database/history/20261107_003_engineering_stage_summary.sql"},
-        {"name": "nitaq_engineering_invite_target_v1", "params": ["p_email"], "migration": "database/history/20261108_007_workspace_invites.sql", "frontend": false}
+        {
+          "name": "nitaq_engineering_workspace_read_v2",
+          "params": [
+            "p_after"
+          ],
+          "migration": "database/engineering/20261112_014_workspace_read_pages.sql",
+          "fallback": "nitaq_engineering_workspace_read_v1"
+        },
+        {
+          "name": "nitaq_accounting_project_identity_revision_v1",
+          "params": [],
+          "migration": "database/accounting/20261112_004_project_identity_revision.sql"
+        },
+        {
+          "name": "nitaq_sync_capabilities_v1",
+          "params": [],
+          "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"
+        },
+        {
+          "name": "nitaq_sync_apply_v1",
+          "params": [
+            "p_operation_id",
+            "p_kind",
+            "p_id",
+            "p_entity",
+            "p_data",
+            "p_expected"
+          ],
+          "migration": "existing accounting schema (database/schema-reference/accounting-public.sql)"
+        },
+        {
+          "name": "nitaq_engineering_workspace_read_v1",
+          "params": [
+            "p_after"
+          ],
+          "migration": "database/history/20261107_005_shared_workspace.sql"
+        },
+        {
+          "name": "nitaq_engineering_workspace_revision_v1",
+          "params": [],
+          "migration": "database/history/20261107_005_shared_workspace.sql"
+        },
+        {
+          "name": "nitaq_engineering_workspace_audit_v1",
+          "params": [],
+          "migration": "database/history/20261107_005_shared_workspace.sql"
+        },
+        {
+          "name": "nitaq_engineering_workspace_save_v1",
+          "params": [
+            "p_operation",
+            "p_changes",
+            "p_settings_before",
+            "p_settings_after"
+          ],
+          "migration": "database/history/20261107_005_shared_workspace.sql"
+        },
+        {
+          "name": "nitaq_engineering_workspace_save_v2",
+          "params": [
+            "p_operation",
+            "p_changes",
+            "p_settings_before",
+            "p_settings_after"
+          ],
+          "migration": "database/engineering/20261109_012_atomic_large_save.sql",
+          "fallback": "nitaq_engineering_workspace_save_v1"
+        },
+        {
+          "name": "nitaq_engineering_workspace_restore_v1",
+          "params": [
+            "p_operation",
+            "p_expected_revision",
+            "p_document"
+          ],
+          "migration": "database/history/20261108_008_workspace_restore.sql"
+        },
+        {
+          "name": "nitaq_engineering_save_coordination_v1",
+          "params": [
+            "p_project",
+            "p_version",
+            "p_status",
+            "p_operation"
+          ],
+          "migration": "database/history/20261107_004_engineering_coordination_save.sql"
+        },
+        {
+          "name": "nitaq_engineering_stage_summary_v1",
+          "params": [
+            "p_after",
+            "p_limit"
+          ],
+          "migration": "database/history/20261107_003_engineering_stage_summary.sql"
+        },
+        {
+          "name": "nitaq_engineering_invite_target_v1",
+          "params": [
+            "p_email"
+          ],
+          "migration": "database/history/20261108_007_workspace_invites.sql",
+          "frontend": false
+        },
+        {
+          "name": "nitaq_engineering_timer_start_v1",
+          "params": [
+            "p_project",
+            "p_stage",
+            "p_note"
+          ],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_timer_stop_v1",
+          "params": [
+            "p_id"
+          ],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_timer_current_v1",
+          "params": [],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_timer_adjust_v1",
+          "params": [
+            "p_id",
+            "p_started",
+            "p_ended",
+            "p_note"
+          ],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_timer_delete_v1",
+          "params": [
+            "p_id"
+          ],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_time_report_v1",
+          "params": [
+            "p_project",
+            "p_from",
+            "p_to"
+          ],
+          "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        }
       ],
       "tables": [
-        {"name": "nitaq_records", "column": "id", "migration": "existing accounting schema"},
-        {"name": "nitaq_profiles", "column": "user_id", "migration": "existing accounting schema"}
+        {
+          "name": "nitaq_records",
+          "column": "id",
+          "migration": "existing accounting schema"
+        },
+        {
+          "name": "nitaq_profiles",
+          "column": "user_id",
+          "migration": "existing accounting schema"
+        }
       ],
       "edgeFunctions": [
-        {"name": "invite-workspace-user", "migration": "supabase/functions/invite-workspace-user (Deploy Supabase backend workflow)"}
+        {
+          "name": "invite-workspace-user",
+          "migration": "supabase/functions/invite-workspace-user (Deploy Supabase backend workflow)"
+        }
       ]
     },
     "crm": {
       "config": "src/crm.jsx",
       "functions": [
-        {"name": "nitaq_crm_capabilities_v2", "params": [], "migration": "database/crm/20261109_001_safe_mutations.sql"},
-        {"name": "nitaq_crm_apply_v2", "params": ["p_operation", "p_changes", "p_insert_only"], "migration": "database/crm/20261109_001_safe_mutations.sql"},
-        {"name": "nitaq_crm_merge_profile_v2", "params": ["p_legacy", "p_real"], "migration": "database/crm/20261109_001_safe_mutations.sql"}
+        {
+          "name": "nitaq_crm_capabilities_v2",
+          "params": [],
+          "migration": "database/crm/20261109_001_safe_mutations.sql"
+        },
+        {
+          "name": "nitaq_crm_apply_v2",
+          "params": [
+            "p_operation",
+            "p_changes",
+            "p_insert_only"
+          ],
+          "migration": "database/crm/20261109_001_safe_mutations.sql"
+        },
+        {
+          "name": "nitaq_crm_merge_profile_v2",
+          "params": [
+            "p_legacy",
+            "p_real"
+          ],
+          "migration": "database/crm/20261109_001_safe_mutations.sql"
+        }
       ],
       "tables": [
-        {"name": "nitaq_crm_records", "column": "id", "migration": "existing CRM schema", "frontend": false},
-        {"name": "nitaq_crm_profiles", "column": "id", "migration": "existing CRM schema"},
-        {"name": "nitaq_crm_audit_v2", "column": "id", "migration": "database/crm/20261109_001_safe_mutations.sql"}
+        {
+          "name": "nitaq_crm_records",
+          "column": "id",
+          "migration": "existing CRM schema",
+          "frontend": false
+        },
+        {
+          "name": "nitaq_crm_profiles",
+          "column": "id",
+          "migration": "existing CRM schema"
+        },
+        {
+          "name": "nitaq_crm_audit_v2",
+          "column": "id",
+          "migration": "database/crm/20261109_001_safe_mutations.sql"
+        }
       ],
       "edgeFunctions": []
     }
