@@ -2038,7 +2038,7 @@ function Data({db,setDb,toast,mode,badKeys,flush,inCloud,sbCfg,setSbCfg,cloudSb}
 
 /* ============ التطبيق ============ */
 const NAV=[{g:'التشغيل اليومي'},
- {id:'today',l:'يومي',ic:'◈'},{id:'records',l:'سجل العملاء',ic:'▤'},{id:'archive',l:'الأرشيف',ic:'⛃'},{id:'clients',l:'العملاء',ic:'◎',p:'clients'},{id:'tasks',l:'المهام',ic:'✓'},
+ {id:'today',l:'يومي',ic:'◈'},{id:'records',l:'سجل العملاء',ic:'▤'},{id:'archive',l:'الأرشيف',ic:'⛃'},{id:'clients',l:'العملاء',ic:'◎',p:'clients'},{id:'tasks',l:'المهام',ic:'✓'},{id:'timer',l:'أوقات العمل',ic:'⏱',cloud:true},
  {g:'القرار'},{id:'dash',l:'لوحة التحكم',ic:'◆',p:'dash'},{id:'reports',l:'التقارير',ic:'◇',p:'reports'},
  {g:'الإعداد'},{id:'groups',l:'ربط الجروبات',ic:'✆',p:'groups'},{id:'users',l:'المستخدمون',ic:'◍',owner:true},
  {id:'audit',l:'سجل التغييرات',ic:'⟲'},{id:'lookups',l:'القوائم',ic:'≡',p:'lookups'},{id:'data',l:'البيانات والنسخ',ic:'⇪',p:'data'}];
@@ -2050,7 +2050,175 @@ const TITLES={today:['يومي','المتأخر · اليوم · التسليم�
  users:['المستخدمون والصلاحيات','مين يشوف إيه ومين يعمل إيه'],reports:['التقارير','الشغل بيتحوّل فين وبيضيع فين'],
  groups:['ربط الجروبات','اربط كل عميل بجروب الواتساب بتاعه مرة واحدة'],
  audit:['سجل التغييرات','كل خانة اتغيّرت — مين ومتى وإيه كانت قبل كده'],
- lookups:['القوائم','قيم كل الاختيارات'],data:['البيانات والنسخ','تصدير واسترجاع']};
+ lookups:['القوائم','قيم كل الاختيارات'],data:['البيانات والنسخ','تصدير واسترجاع'],
+ timer:['أوقات العمل','كل مهندس اشتغل قد إيه وعلى أنهي عميل']};
+
+/* ================= تتبّع وقت العمل (عدّاد CRM) =================
+   ساعة الخادم هي المرجع، وجلسة واحدة شغّالة لكل مستخدم بحدّ أقصى 12 ساعة.
+   العدّاد معزول تمامًا عن مسار حفظ السجلات (nitaq_crm_apply_v2) فلا يتعارض أبدًا مع تعديلات العملاء. */
+const CRM_TIMER_KINDS=['عمل','اتصال','زيارة','عمل مكتبي','متابعة'];
+const crmDur=sec=>{sec=Math.max(0,Math.floor(sec||0));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;const p=n=>String(n).padStart(2,'0');return (h?h+':':'')+(h?p(m):String(m))+':'+p(s);};
+const crmHours=sec=>(Math.max(0,sec||0)/3600).toFixed(2);
+const crmTimerErr=e=>{const m=((e&&(e.message||e.hint))||'')+'';
+ if(/No running timer/.test(m))return 'مفيش عدّاد شغّال';
+ if(/Lead access denied/.test(m))return 'مش مصرّح لك بتتبّع السجل ده';
+ if(/Lead not found/.test(m))return 'السجل مش موجود';
+ if(/CRM access denied|Authentication/.test(m))return 'الدخول غير مصرّح';
+ if(/exceed the cap/.test(m))return 'المدة أطول من الحد المسموح (12 ساعة)';
+ if(/future/.test(m))return 'الوقت لا يصح أن يكون في المستقبل';
+ if(/Invalid times|Invalid timer|Note too long/.test(m))return 'بيانات غير صحيحة';
+ return 'تعذّرت العملية — جرّب تاني';};
+
+// Shared timer state (current running session, elapsed, start/stop). Server clock is authoritative.
+function useCrmTimer(sb){
+ const [cur,setCur]=useState(undefined);            // undefined=loading · null=none · object=running
+ const skewRef=useRef(0);                           // server_now − client_now (ms)
+ const [,setTick]=useState(0);
+ const liveRef=useRef(true), sbRef=useRef(sb); sbRef.current=sb;
+ useEffect(()=>()=>{liveRef.current=false;},[]);
+ // mk builds the request so the RPC name literal stays inside .rpc('...') for the deployment contract scanner.
+ const call=mk=>{const client=sbRef.current;if(!client)return Promise.reject(new Error('no cloud'));
+   return mk(client).then(({data,error})=>{if(error)throw error;return data;});};
+ const reload=()=>call(c=>c.rpc('nitaq_crm_timer_current_v1',{})).then(d=>{if(!liveRef.current)return;
+     if(d&&d.server_now)skewRef.current=new Date(d.server_now).getTime()-Date.now();setCur(d||null);})
+   .catch(()=>{if(liveRef.current)setCur(null);});
+ useEffect(()=>{reload();},[sb]);
+ useEffect(()=>{const t=setInterval(()=>setTick(x=>x+1),1000);
+   const r=setInterval(()=>{if(!document.hidden)reload();},60000);
+   return()=>{clearInterval(t);clearInterval(r);};},[sb]);
+ const elapsed=cur?Math.max(0,(Date.now()+skewRef.current-new Date(cur.started_at).getTime())/1000):0;
+ const start=(leadId,kind)=>call(c=>c.rpc('nitaq_crm_timer_start_v1',{p_lead:leadId,p_kind:kind||'عمل',p_note:null})).then(d=>{skewRef.current=0;setCur(d);return d;});
+ const stop=()=>call(c=>c.rpc('nitaq_crm_timer_stop_v1',{p_id:null})).then(()=>{setCur(null);});
+ return {cur,elapsed,start,stop,reload,call};
+}
+
+// Floating banner (portal) visible across every view while a session runs.
+function CrmTimerBanner({timer,go}){
+ const l=timer.cur; if(!l)return null;
+ return ReactDOM.createPortal(
+  <div style={{position:'fixed',insetInlineStart:16,bottom:16,zIndex:60,display:'flex',alignItems:'center',gap:10,
+     background:'#1a7f37',color:'#fff',borderRadius:12,padding:'10px 14px',boxShadow:'0 6px 24px rgba(0,0,0,.25)'}}>
+    <span style={{fontSize:18}}>⏱</span>
+    <div style={{lineHeight:1.25}}>
+      <div style={{fontWeight:700,fontVariantNumeric:'tabular-nums',fontSize:16,direction:'ltr',textAlign:'right'}}>{crmDur(timer.elapsed)}</div>
+      <div style={{fontSize:11,opacity:.9}}>{(l.client_name||l.lead_name||'سجل')+' · '+(l.kind||'عمل')}</div>
+    </div>
+    <button onClick={()=>go('timer')} style={{background:'rgba(255,255,255,.18)',color:'#fff',border:0,borderRadius:8,padding:'6px 10px',cursor:'pointer',font:'inherit'}}>فتح</button>
+    <button onClick={()=>timer.stop().catch(()=>{})} style={{background:'#fff',color:'#1a7f37',border:0,borderRadius:8,padding:'6px 10px',cursor:'pointer',fontWeight:700,font:'inherit'}}>إيقاف</button>
+  </div>, document.body);
+}
+
+// Full timer screen: start controls, live session, and the per-engineer × client/lead report.
+function CrmTimerPanel({timer,me,db,toast}){
+ const [leadId,setLeadId]=useState('');
+ const [kind,setKind]=useState('عمل');
+ const [report,setReport]=useState(null);
+ const [busy,setBusy]=useState(false);
+ const [from,setFrom]=useState(''),[to,setTo]=useState('');
+ const liveRef=useRef(true);
+ useEffect(()=>()=>{liveRef.current=false;},[]);
+
+ const leads=(db.leads||[]).filter(l=>me&&isMine(me,l)).map(l=>({l,label:(((db.clients||[]).find(c=>c.id===l.clientId)||{}).name||'—')+' · '+(l.projectNo?'مشروع '+l.projectNo:'اسكتش '+l.sketchNo)})).sort((a,b)=>a.label.localeCompare(b.label,'ar'));
+
+ const loadReport=()=>{setBusy(true);
+   timer.call(c=>c.rpc('nitaq_crm_time_report_v1',{p_lead:null,p_from:from||null,p_to:to||null}))
+     .then(d=>{if(liveRef.current)setReport(d);}).catch(e=>toast(crmTimerErr(e)))
+     .then(()=>{if(liveRef.current)setBusy(false);});};
+ useEffect(()=>{loadReport();},[]);
+
+ const doStart=()=>{ if(!leadId)return toast('اختر السجل الأول');
+   timer.start(leadId,kind).then(()=>toast('بدأ العدّاد')).catch(e=>toast(crmTimerErr(e))); };
+ const doStop=()=>timer.stop().then(()=>{toast('اتوقف العدّاد');loadReport();}).catch(e=>toast(crmTimerErr(e)));
+ const del=id=>{ if(!window.confirm('حذف هذه الجلسة نهائيًا؟'))return;
+   timer.call(c=>c.rpc('nitaq_crm_timer_delete_v1',{p_id:id})).then(()=>{toast('اتحذفت');loadReport();}).catch(e=>toast(crmTimerErr(e))); };
+ const pad=n=>String(n).padStart(2,'0');
+ const localStr=d=>{d=new Date(d);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());};
+ const adjust=r=>{
+   const s=window.prompt('بداية الجلسة (YYYY-MM-DD HH:MM)',localStr(r.started_at)); if(s===null)return;
+   const en=window.prompt('نهاية الجلسة (YYYY-MM-DD HH:MM)',localStr(r.ended_at||Date.now())); if(en===null)return;
+   const ps=new Date(s.replace(' ','T')),pe=new Date(en.replace(' ','T'));
+   if(isNaN(ps.getTime())||isNaN(pe.getTime()))return toast('صيغة وقت غير صحيحة');
+   timer.call(c=>c.rpc('nitaq_crm_timer_adjust_v1',{p_id:r.id,p_started:ps.toISOString(),p_ended:pe.toISOString(),p_note:null}))
+     .then(()=>{toast('اتعدّلت');loadReport();}).catch(e=>toast(crmTimerErr(e)));
+ };
+ const totals=report?report.totals:[];
+ const seeAll=!!(report&&report.see_all);
+ const grand=totals.reduce((a,t)=>a+Number(t.seconds||0),0);
+ const running=timer.cur;
+ const exportCsv=()=>{
+   const head=(seeAll?['المهندس']:[]).concat(['العميل','المشروع','النوع','جلسات','ساعات']);
+   const rows=totals.map(t=>(seeAll?[t.engineer_name]:[]).concat([t.client_name||'',t.lead_name||'',t.kind,t.sessions,crmHours(t.seconds)]));
+   const csv='﻿'+[head].concat(rows).map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+   const a=document.createElement('a');a.href=url;a.download='اوقات-العمل.csv';a.click();URL.revokeObjectURL(url);
+ };
+
+ return <>
+   <div className="card" style={{marginBottom:14}}><div style={{padding:16}}>
+     {running
+      ? <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <span className="num" style={{fontSize:24,fontVariantNumeric:'tabular-nums'}}>{crmDur(timer.elapsed)}</span>
+          <span>شغّال على <b>{running.client_name||running.lead_name||'سجل'}</b> · {running.kind}</span>
+          <span className="grow"/>
+          <button className="btn" onClick={doStop}>■ إيقاف العدّاد</button>
+        </div>
+      : <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
+          <label>السجل (العميل / المشروع)<br/>
+            <select className="in" value={leadId} onChange={e=>setLeadId(e.target.value)} style={{minWidth:260}}>
+              <option value="">— اختر —</option>
+              {leads.map(x=><option key={x.l.id} value={x.l.id}>{x.label}</option>)}
+            </select></label>
+          <label>نوع العمل<br/>
+            <select className="in" value={kind} onChange={e=>setKind(e.target.value)}>
+              {CRM_TIMER_KINDS.map(k=><option key={k} value={k}>{k}</option>)}
+            </select></label>
+          <button className="btn gold" onClick={doStart}>▶ ابدأ العمل</button>
+        </div>}
+   </div></div>
+
+   <div className="card"><div style={{padding:16}}>
+     <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:10}}>
+       <h3 style={{margin:0}}>{seeAll?'أوقات كل المهندسين':'أوقاتي'}</h3><span className="grow"/>
+       <label style={{fontSize:12}}>من <input className="in" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+       <label style={{fontSize:12}}>إلى <input className="in" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+       <button className="btn ghost sm" onClick={loadReport} disabled={busy}>تحديث</button>
+       <button className="btn ghost sm" onClick={exportCsv} disabled={!totals.length}>CSV</button>
+     </div>
+     <div className="scroll"><table><thead><tr>
+       {seeAll&&<th>المهندس</th>}<th>العميل / المشروع</th><th>النوع</th><th>جلسات</th><th>ساعات</th>
+     </tr></thead><tbody>
+       {totals.length?totals.map((t,i)=><tr key={i}>
+         {seeAll&&<td>{t.engineer_name}</td>}
+         <td>{(t.client_name||'—')+(t.lead_name&&t.lead_name!==t.client_name?' · '+t.lead_name:'')}</td>
+         <td>{t.kind}{t.running&&<span className="pill"> شغّال</span>}</td>
+         <td className="num">{t.sessions}</td>
+         <td className="num">{crmHours(t.seconds)}</td>
+       </tr>):<tr><td colSpan={seeAll?5:4} className="empty">مفيش أوقات مسجّلة بعد</td></tr>}
+     </tbody>{totals.length?<tfoot><tr>
+       <td colSpan={seeAll?4:3}><b>الإجمالي</b></td><td className="num"><b>{crmHours(grand)} ساعة</b></td>
+     </tr></tfoot>:null}</table></div>
+   </div></div>
+
+   {report&&report.recent&&report.recent.length>0&&<div className="card" style={{marginTop:14}}><div style={{padding:16}}>
+     <h3 style={{marginTop:0}}>آخر الجلسات</h3>
+     <div className="scroll"><table><thead><tr>
+       {seeAll&&<th>المهندس</th>}<th>العميل / المشروع</th><th>النوع</th><th>البداية</th><th>المدة</th><th></th>
+     </tr></thead><tbody>
+       {report.recent.slice(0,80).map(r=><tr key={r.id}>
+         {seeAll&&<td>{r.engineer_name}</td>}
+         <td>{(r.client_name||'—')+(r.lead_name&&r.lead_name!==r.client_name?' · '+r.lead_name:'')}</td>
+         <td>{r.kind}{r.auto_closed&&<span className="rsmall"> (أُغلق تلقائيًا)</span>}</td>
+         <td className="rsmall">{new Date(r.started_at).toLocaleString('ar-EG')}</td>
+         <td className="num">{crmDur(r.seconds)}</td>
+         <td style={{whiteSpace:'nowrap'}}>
+           <button className="btn ghost sm" onClick={()=>adjust(r)}>تعديل</button>
+           <button className="btn ghost sm" onClick={()=>del(r.id)}>حذف</button>
+         </td>
+       </tr>)}
+     </tbody></table></div>
+   </div></div>}
+ </>;
+}
 
 function App(){
   /* ============ حالة الربط السحابي ============
@@ -2072,6 +2240,7 @@ function App(){
   const [db,setDb]=useState(()=>boot.current.db||seed());
   const [meId,setMeId]=useState(()=>{const d=boot.current.db;return (d&&d.ui&&d.ui.me)||null});
   const [view,setView]=useState('today');
+  const timer=useCrmTimer(cloud.status==='ready'?cloud.sb:null);
   const [drawer,setDrawer]=useState(null),[call,setCall]=useState(null);
   const [msg,setMsg]=useState(null);
   /* 'saved' | 'saving' | 'fail'  ·  fail = أسماء الشرائح اللي فشلت */
@@ -2657,7 +2826,7 @@ function App(){
   if(inCloud&&!me) return <CloudSplash text="جاري تجهيز حسابك…"
     hint="لو الشاشة دي فضلت زي ما هي، اطلب من المالك يعمل لك دعوة بنفس الإيميل من شاشة (المستخدمون)."/>;
 
-  const allow=n=>n.owner?me.role==='owner':(n.p?can(me,n.p):true);
+  const allow=n=>n.owner?me.role==='owner':n.cloud?inCloud:(n.p?can(me,n.p):true);
   const nav=NAV.filter(n=>n.g||allow(n));
   if(!nav.some(n=>n.id===view)) { if(view!=='today') setTimeout(()=>setView('today'),0); }
 
@@ -2706,6 +2875,7 @@ function App(){
       {view==='archive'&&<Records db={scoped} me={me} open={setDrawer} add={()=>setDrawer(blank())} logCall={setCall} patchLead={patchLead} patchClient={patchClient} cols={cols} setCols={setCols} onPrint={p=>setPRec(p)} toast={toast} recF={archF} setRecF={setArchF} archived done={done}/>}
       {view==='clients'&&<Clients db={scoped} open={setDrawer} addFor={c=>setDrawer(blank(c))} onPrint={p=>setPCli(p)}/>}
       {view==='tasks'&&<Tasks db={db} me={me} addTask={addTask} patchTask={patchTask} delTask={delTask} taskDone={taskDone} taskReopen={taskReopen} toast={toast}/>}
+      {view==='timer'&&inCloud&&<CrmTimerPanel timer={timer} me={me} db={db} toast={toast}/>}
       {view==='dash'&&<Dashboard db={scoped} all={db} me={me} go={setView}/>}
       {view==='reports'&&<Reports db={scoped}/>}
       {view==='audit'&&<>{inCloud&&me.role==='owner'&&<ServerAudit sb={cloud.sb} users={db.users}/>}<Audit db={db} me={me} revert={revert} open={setDrawer}/></>}
@@ -2717,6 +2887,7 @@ function App(){
         badKeys={badKeys} flush={()=>flush(true)}
         inCloud={inCloud} sbCfg={sbCfg} setSbCfg={c=>{saveSbConfig(c);setSbCfg(c);}} cloudSb={cloud.sb}/>}
     </div>
+    {inCloud&&<CrmTimerBanner timer={timer} go={setView}/>}
     {drawer&&<LeadDrawer db={db} me={me} lead={drawer} close={()=>setDrawer(null)} save={save} del={del} logCall={setCall} revert={revert}/>}
     {call&&<CallModal db={db} lead={call} close={()=>setCall(null)} submit={submitCall}/>}
     {pDlg&&<PrintDialog db={db} me={me} close={()=>setPDlg(false)}

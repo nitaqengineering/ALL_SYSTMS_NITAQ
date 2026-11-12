@@ -4708,6 +4708,11 @@ const NAV = [{
   l: 'المهام',
   ic: '✓'
 }, {
+  id: 'timer',
+  l: 'أوقات العمل',
+  ic: '⏱',
+  cloud: true
+}, {
   g: 'القرار'
 }, {
   id: 'dash',
@@ -4758,8 +4763,419 @@ const TITLES = {
   groups: ['ربط الجروبات', 'اربط كل عميل بجروب الواتساب بتاعه مرة واحدة'],
   audit: ['سجل التغييرات', 'كل خانة اتغيّرت — مين ومتى وإيه كانت قبل كده'],
   lookups: ['القوائم', 'قيم كل الاختيارات'],
-  data: ['البيانات والنسخ', 'تصدير واسترجاع']
+  data: ['البيانات والنسخ', 'تصدير واسترجاع'],
+  timer: ['أوقات العمل', 'كل مهندس اشتغل قد إيه وعلى أنهي عميل']
 };
+
+/* ================= تتبّع وقت العمل (عدّاد CRM) =================
+   ساعة الخادم هي المرجع، وجلسة واحدة شغّالة لكل مستخدم بحدّ أقصى 12 ساعة.
+   العدّاد معزول تمامًا عن مسار حفظ السجلات (nitaq_crm_apply_v2) فلا يتعارض أبدًا مع تعديلات العملاء. */
+const CRM_TIMER_KINDS = ['عمل', 'اتصال', 'زيارة', 'عمل مكتبي', 'متابعة'];
+const crmDur = sec => {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600),
+    m = Math.floor(sec % 3600 / 60),
+    s = sec % 60;
+  const p = n => String(n).padStart(2, '0');
+  return (h ? h + ':' : '') + (h ? p(m) : String(m)) + ':' + p(s);
+};
+const crmHours = sec => (Math.max(0, sec || 0) / 3600).toFixed(2);
+const crmTimerErr = e => {
+  const m = (e && (e.message || e.hint) || '') + '';
+  if (/No running timer/.test(m)) return 'مفيش عدّاد شغّال';
+  if (/Lead access denied/.test(m)) return 'مش مصرّح لك بتتبّع السجل ده';
+  if (/Lead not found/.test(m)) return 'السجل مش موجود';
+  if (/CRM access denied|Authentication/.test(m)) return 'الدخول غير مصرّح';
+  if (/exceed the cap/.test(m)) return 'المدة أطول من الحد المسموح (12 ساعة)';
+  if (/future/.test(m)) return 'الوقت لا يصح أن يكون في المستقبل';
+  if (/Invalid times|Invalid timer|Note too long/.test(m)) return 'بيانات غير صحيحة';
+  return 'تعذّرت العملية — جرّب تاني';
+};
+
+// Shared timer state (current running session, elapsed, start/stop). Server clock is authoritative.
+function useCrmTimer(sb) {
+  const [cur, setCur] = useState(undefined); // undefined=loading · null=none · object=running
+  const skewRef = useRef(0); // server_now − client_now (ms)
+  const [, setTick] = useState(0);
+  const liveRef = useRef(true),
+    sbRef = useRef(sb);
+  sbRef.current = sb;
+  useEffect(() => () => {
+    liveRef.current = false;
+  }, []);
+  // mk builds the request so the RPC name literal stays inside .rpc('...') for the deployment contract scanner.
+  const call = mk => {
+    const client = sbRef.current;
+    if (!client) return Promise.reject(new Error('no cloud'));
+    return mk(client).then(({
+      data,
+      error
+    }) => {
+      if (error) throw error;
+      return data;
+    });
+  };
+  const reload = () => call(c => c.rpc('nitaq_crm_timer_current_v1', {})).then(d => {
+    if (!liveRef.current) return;
+    if (d && d.server_now) skewRef.current = new Date(d.server_now).getTime() - Date.now();
+    setCur(d || null);
+  }).catch(() => {
+    if (liveRef.current) setCur(null);
+  });
+  useEffect(() => {
+    reload();
+  }, [sb]);
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 1000);
+    const r = setInterval(() => {
+      if (!document.hidden) reload();
+    }, 60000);
+    return () => {
+      clearInterval(t);
+      clearInterval(r);
+    };
+  }, [sb]);
+  const elapsed = cur ? Math.max(0, (Date.now() + skewRef.current - new Date(cur.started_at).getTime()) / 1000) : 0;
+  const start = (leadId, kind) => call(c => c.rpc('nitaq_crm_timer_start_v1', {
+    p_lead: leadId,
+    p_kind: kind || 'عمل',
+    p_note: null
+  })).then(d => {
+    skewRef.current = 0;
+    setCur(d);
+    return d;
+  });
+  const stop = () => call(c => c.rpc('nitaq_crm_timer_stop_v1', {
+    p_id: null
+  })).then(() => {
+    setCur(null);
+  });
+  return {
+    cur,
+    elapsed,
+    start,
+    stop,
+    reload,
+    call
+  };
+}
+
+// Floating banner (portal) visible across every view while a session runs.
+function CrmTimerBanner({
+  timer,
+  go
+}) {
+  const l = timer.cur;
+  if (!l) return null;
+  return ReactDOM.createPortal( /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      insetInlineStart: 16,
+      bottom: 16,
+      zIndex: 60,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      background: '#1a7f37',
+      color: '#fff',
+      borderRadius: 12,
+      padding: '10px 14px',
+      boxShadow: '0 6px 24px rgba(0,0,0,.25)'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18
+    }
+  }, "\u23F1"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      lineHeight: 1.25
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontVariantNumeric: 'tabular-nums',
+      fontSize: 16,
+      direction: 'ltr',
+      textAlign: 'right'
+    }
+  }, crmDur(timer.elapsed)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      opacity: .9
+    }
+  }, (l.client_name || l.lead_name || 'سجل') + ' · ' + (l.kind || 'عمل'))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => go('timer'),
+    style: {
+      background: 'rgba(255,255,255,.18)',
+      color: '#fff',
+      border: 0,
+      borderRadius: 8,
+      padding: '6px 10px',
+      cursor: 'pointer',
+      font: 'inherit'
+    }
+  }, "\u0641\u062A\u062D"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => timer.stop().catch(() => {}),
+    style: {
+      background: '#fff',
+      color: '#1a7f37',
+      border: 0,
+      borderRadius: 8,
+      padding: '6px 10px',
+      cursor: 'pointer',
+      fontWeight: 700,
+      font: 'inherit'
+    }
+  }, "\u0625\u064A\u0642\u0627\u0641")), document.body);
+}
+
+// Full timer screen: start controls, live session, and the per-engineer × client/lead report.
+function CrmTimerPanel({
+  timer,
+  me,
+  db,
+  toast
+}) {
+  const [leadId, setLeadId] = useState('');
+  const [kind, setKind] = useState('عمل');
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [from, setFrom] = useState(''),
+    [to, setTo] = useState('');
+  const liveRef = useRef(true);
+  useEffect(() => () => {
+    liveRef.current = false;
+  }, []);
+  const leads = (db.leads || []).filter(l => me && isMine(me, l)).map(l => ({
+    l,
+    label: (((db.clients || []).find(c => c.id === l.clientId) || {}).name || '—') + ' · ' + (l.projectNo ? 'مشروع ' + l.projectNo : 'اسكتش ' + l.sketchNo)
+  })).sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+  const loadReport = () => {
+    setBusy(true);
+    timer.call(c => c.rpc('nitaq_crm_time_report_v1', {
+      p_lead: null,
+      p_from: from || null,
+      p_to: to || null
+    })).then(d => {
+      if (liveRef.current) setReport(d);
+    }).catch(e => toast(crmTimerErr(e))).then(() => {
+      if (liveRef.current) setBusy(false);
+    });
+  };
+  useEffect(() => {
+    loadReport();
+  }, []);
+  const doStart = () => {
+    if (!leadId) return toast('اختر السجل الأول');
+    timer.start(leadId, kind).then(() => toast('بدأ العدّاد')).catch(e => toast(crmTimerErr(e)));
+  };
+  const doStop = () => timer.stop().then(() => {
+    toast('اتوقف العدّاد');
+    loadReport();
+  }).catch(e => toast(crmTimerErr(e)));
+  const del = id => {
+    if (!window.confirm('حذف هذه الجلسة نهائيًا؟')) return;
+    timer.call(c => c.rpc('nitaq_crm_timer_delete_v1', {
+      p_id: id
+    })).then(() => {
+      toast('اتحذفت');
+      loadReport();
+    }).catch(e => toast(crmTimerErr(e)));
+  };
+  const pad = n => String(n).padStart(2, '0');
+  const localStr = d => {
+    d = new Date(d);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  };
+  const adjust = r => {
+    const s = window.prompt('بداية الجلسة (YYYY-MM-DD HH:MM)', localStr(r.started_at));
+    if (s === null) return;
+    const en = window.prompt('نهاية الجلسة (YYYY-MM-DD HH:MM)', localStr(r.ended_at || Date.now()));
+    if (en === null) return;
+    const ps = new Date(s.replace(' ', 'T')),
+      pe = new Date(en.replace(' ', 'T'));
+    if (isNaN(ps.getTime()) || isNaN(pe.getTime())) return toast('صيغة وقت غير صحيحة');
+    timer.call(c => c.rpc('nitaq_crm_timer_adjust_v1', {
+      p_id: r.id,
+      p_started: ps.toISOString(),
+      p_ended: pe.toISOString(),
+      p_note: null
+    })).then(() => {
+      toast('اتعدّلت');
+      loadReport();
+    }).catch(e => toast(crmTimerErr(e)));
+  };
+  const totals = report ? report.totals : [];
+  const seeAll = !!(report && report.see_all);
+  const grand = totals.reduce((a, t) => a + Number(t.seconds || 0), 0);
+  const running = timer.cur;
+  const exportCsv = () => {
+    const head = (seeAll ? ['المهندس'] : []).concat(['العميل', 'المشروع', 'النوع', 'جلسات', 'ساعات']);
+    const rows = totals.map(t => (seeAll ? [t.engineer_name] : []).concat([t.client_name || '', t.lead_name || '', t.kind, t.sessions, crmHours(t.seconds)]));
+    const csv = '﻿' + [head].concat(rows).map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], {
+      type: 'text/csv;charset=utf-8'
+    }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'اوقات-العمل.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16
+    }
+  }, running ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      fontSize: 24,
+      fontVariantNumeric: 'tabular-nums'
+    }
+  }, crmDur(timer.elapsed)), /*#__PURE__*/React.createElement("span", null, "\u0634\u063A\u0651\u0627\u0644 \u0639\u0644\u0649 ", /*#__PURE__*/React.createElement("b", null, running.client_name || running.lead_name || 'سجل'), " \xB7 ", running.kind), /*#__PURE__*/React.createElement("span", {
+    className: "grow"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: doStop
+  }, "\u25A0 \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0639\u062F\u0651\u0627\u062F")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 12,
+      alignItems: 'flex-end',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("label", null, "\u0627\u0644\u0633\u062C\u0644 (\u0627\u0644\u0639\u0645\u064A\u0644 / \u0627\u0644\u0645\u0634\u0631\u0648\u0639)", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("select", {
+    className: "in",
+    value: leadId,
+    onChange: e => setLeadId(e.target.value),
+    style: {
+      minWidth: 260
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "\u2014 \u0627\u062E\u062A\u0631 \u2014"), leads.map(x => /*#__PURE__*/React.createElement("option", {
+    key: x.l.id,
+    value: x.l.id
+  }, x.label)))), /*#__PURE__*/React.createElement("label", null, "\u0646\u0648\u0639 \u0627\u0644\u0639\u0645\u0644", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("select", {
+    className: "in",
+    value: kind,
+    onChange: e => setKind(e.target.value)
+  }, CRM_TIMER_KINDS.map(k => /*#__PURE__*/React.createElement("option", {
+    key: k,
+    value: k
+  }, k)))), /*#__PURE__*/React.createElement("button", {
+    className: "btn gold",
+    onClick: doStart
+  }, "\u25B6 \u0627\u0628\u062F\u0623 \u0627\u0644\u0639\u0645\u0644")))), /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0
+    }
+  }, seeAll ? 'أوقات كل المهندسين' : 'أوقاتي'), /*#__PURE__*/React.createElement("span", {
+    className: "grow"
+  }), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12
+    }
+  }, "\u0645\u0646 ", /*#__PURE__*/React.createElement("input", {
+    className: "in",
+    type: "date",
+    value: from,
+    onChange: e => setFrom(e.target.value)
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12
+    }
+  }, "\u0625\u0644\u0649 ", /*#__PURE__*/React.createElement("input", {
+    className: "in",
+    type: "date",
+    value: to,
+    onChange: e => setTo(e.target.value)
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost sm",
+    onClick: loadReport,
+    disabled: busy
+  }, "\u062A\u062D\u062F\u064A\u062B"), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost sm",
+    onClick: exportCsv,
+    disabled: !totals.length
+  }, "CSV")), /*#__PURE__*/React.createElement("div", {
+    className: "scroll"
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, seeAll && /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0645\u0647\u0646\u062F\u0633"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0639\u0645\u064A\u0644 / \u0627\u0644\u0645\u0634\u0631\u0648\u0639"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0646\u0648\u0639"), /*#__PURE__*/React.createElement("th", null, "\u062C\u0644\u0633\u0627\u062A"), /*#__PURE__*/React.createElement("th", null, "\u0633\u0627\u0639\u0627\u062A"))), /*#__PURE__*/React.createElement("tbody", null, totals.length ? totals.map((t, i) => /*#__PURE__*/React.createElement("tr", {
+    key: i
+  }, seeAll && /*#__PURE__*/React.createElement("td", null, t.engineer_name), /*#__PURE__*/React.createElement("td", null, (t.client_name || '—') + (t.lead_name && t.lead_name !== t.client_name ? ' · ' + t.lead_name : '')), /*#__PURE__*/React.createElement("td", null, t.kind, t.running && /*#__PURE__*/React.createElement("span", {
+    className: "pill"
+  }, " \u0634\u063A\u0651\u0627\u0644")), /*#__PURE__*/React.createElement("td", {
+    className: "num"
+  }, t.sessions), /*#__PURE__*/React.createElement("td", {
+    className: "num"
+  }, crmHours(t.seconds)))) : /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: seeAll ? 5 : 4,
+    className: "empty"
+  }, "\u0645\u0641\u064A\u0634 \u0623\u0648\u0642\u0627\u062A \u0645\u0633\u062C\u0651\u0644\u0629 \u0628\u0639\u062F"))), totals.length ? /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: seeAll ? 4 : 3
+  }, /*#__PURE__*/React.createElement("b", null, "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A")), /*#__PURE__*/React.createElement("td", {
+    className: "num"
+  }, /*#__PURE__*/React.createElement("b", null, crmHours(grand), " \u0633\u0627\u0639\u0629")))) : null)))), report && report.recent && report.recent.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      marginTop: 0
+    }
+  }, "\u0622\u062E\u0631 \u0627\u0644\u062C\u0644\u0633\u0627\u062A"), /*#__PURE__*/React.createElement("div", {
+    className: "scroll"
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, seeAll && /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0645\u0647\u0646\u062F\u0633"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0639\u0645\u064A\u0644 / \u0627\u0644\u0645\u0634\u0631\u0648\u0639"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0646\u0648\u0639"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0628\u062F\u0627\u064A\u0629"), /*#__PURE__*/React.createElement("th", null, "\u0627\u0644\u0645\u062F\u0629"), /*#__PURE__*/React.createElement("th", null))), /*#__PURE__*/React.createElement("tbody", null, report.recent.slice(0, 80).map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.id
+  }, seeAll && /*#__PURE__*/React.createElement("td", null, r.engineer_name), /*#__PURE__*/React.createElement("td", null, (r.client_name || '—') + (r.lead_name && r.lead_name !== r.client_name ? ' · ' + r.lead_name : '')), /*#__PURE__*/React.createElement("td", null, r.kind, r.auto_closed && /*#__PURE__*/React.createElement("span", {
+    className: "rsmall"
+  }, " (\u0623\u064F\u063A\u0644\u0642 \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627)")), /*#__PURE__*/React.createElement("td", {
+    className: "rsmall"
+  }, new Date(r.started_at).toLocaleString('ar-EG')), /*#__PURE__*/React.createElement("td", {
+    className: "num"
+  }, crmDur(r.seconds)), /*#__PURE__*/React.createElement("td", {
+    style: {
+      whiteSpace: 'nowrap'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost sm",
+    onClick: () => adjust(r)
+  }, "\u062A\u0639\u062F\u064A\u0644"), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost sm",
+    onClick: () => del(r.id)
+  }, "\u062D\u0630\u0641"))))))))));
+}
 function App() {
   /* ============ حالة الربط السحابي ============
      status: idle → connecting → (auth | ready | local | error) */
@@ -4798,6 +5214,7 @@ function App() {
     return d && d.ui && d.ui.me || null;
   });
   const [view, setView] = useState('today');
+  const timer = useCrmTimer(cloud.status === 'ready' ? cloud.sb : null);
   const [drawer, setDrawer] = useState(null),
     [call, setCall] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -6008,7 +6425,7 @@ function App() {
     text: "\u062C\u0627\u0631\u064A \u062A\u062C\u0647\u064A\u0632 \u062D\u0633\u0627\u0628\u0643\u2026",
     hint: "\u0644\u0648 \u0627\u0644\u0634\u0627\u0634\u0629 \u062F\u064A \u0641\u0636\u0644\u062A \u0632\u064A \u0645\u0627 \u0647\u064A\u060C \u0627\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0645\u0627\u0644\u0643 \u064A\u0639\u0645\u0644 \u0644\u0643 \u062F\u0639\u0648\u0629 \u0628\u0646\u0641\u0633 \u0627\u0644\u0625\u064A\u0645\u064A\u0644 \u0645\u0646 \u0634\u0627\u0634\u0629 (\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646)."
   });
-  const allow = n => n.owner ? me.role === 'owner' : n.p ? can(me, n.p) : true;
+  const allow = n => n.owner ? me.role === 'owner' : n.cloud ? inCloud : n.p ? can(me, n.p) : true;
   const nav = NAV.filter(n => n.g || allow(n));
   if (!nav.some(n => n.id === view)) {
     if (view !== 'today') setTimeout(() => setView('today'), 0);
@@ -6154,6 +6571,11 @@ function App() {
     taskDone: taskDone,
     taskReopen: taskReopen,
     toast: toast
+  }), view === 'timer' && inCloud && /*#__PURE__*/React.createElement(CrmTimerPanel, {
+    timer: timer,
+    me: me,
+    db: db,
+    toast: toast
   }), view === 'dash' && /*#__PURE__*/React.createElement(Dashboard, {
     db: scoped,
     all: db,
@@ -6199,7 +6621,10 @@ function App() {
       setSbCfg(c);
     },
     cloudSb: cloud.sb
-  })), drawer && /*#__PURE__*/React.createElement(LeadDrawer, {
+  })), inCloud && /*#__PURE__*/React.createElement(CrmTimerBanner, {
+    timer: timer,
+    go: setView
+  }), drawer && /*#__PURE__*/React.createElement(LeadDrawer, {
     db: db,
     me: me,
     lead: drawer,
