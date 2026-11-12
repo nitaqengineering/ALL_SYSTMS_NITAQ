@@ -443,9 +443,18 @@ document.addEventListener('click',event=>{
       const result=await client.functions.invoke('invite-workspace-user',{body:{email:user.email}});
       if(result.error)throw Error('تعذر إرسال الدعوة. تحقق من الاتصال، ولو أرسلت دعوة حالًا انتظر دقيقة.');
       if(result.data?.error)throw Error(result.data.error);
-      toast(result.data?.result==='already_registered'
-        ?'حساب الدخول موجود بالفعل. يمكن للمستخدم الدخول ببريده وكلمة مروره.'
-        :'تم إرسال الدعوة. يفتح المستخدم الرسالة ويختار كلمة مرور حسابه.');
+      if(result.data?.result==='already_registered'){
+        toast('حساب الدخول موجود بالفعل على نظام متابعة المشاريع. يدخل المستخدم ببريده وكلمة مروره.');
+      }else if(result.data?.link&&typeof show==='function'){
+        show('رابط دعوة المهندس','ابعت الرابط للمهندس — '+esc(user.email),
+          '<p>انسخ الرابط وابعته للمهندس (واتساب أو إيميل). يفتحه ويختار كلمة مرور حسابه على نظام متابعة المشاريع، وبعدها يدخل بإيميله وكلمة المرور.</p>'+
+          '<input id="inviteLinkBox" readonly value="'+esc(result.data.link)+'" style="width:100%;direction:ltr;font-size:12px" onclick="this.select()">'+
+          '<p><button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById(\'inviteLinkBox\').value).then(function(){toast(\'اتنسخ الرابط\')})">نسخ الرابط</button></p>'+
+          '<p class="sub">الرابط صالح لفترة محدودة؛ لو انتهت اعمل دعوة جديدة.</p>','documentHub');
+        setTimeout(function(){var el=document.getElementById('inviteLinkBox');if(el){el.focus();el.select();}},60);
+      }else{
+        toast('تم إنشاء الدعوة.');
+      }
     }catch(error){toast(error.message)}
     finally{workspaceInviteBusy=false;button.disabled=false}
   })();
