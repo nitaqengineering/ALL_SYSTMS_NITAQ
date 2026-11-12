@@ -31,7 +31,7 @@
    cItem:{ar:'البند',en:'Item'},cStatus:{ar:'الحالة',en:'Status'},
    tStatus:{ar:'حالة المناقصة',en:'Tender status'},tType:{ar:'نوع التعاقد',en:'Contract type'},
    tContractor:{ar:'المقاول',en:'Contractor'},tOffers:{ar:'العروض / ملاحظات',en:'Offers / notes'},
-   main:{ar:'مقاول رئيسي',en:'Main contractor'},
+   main:{ar:'مقاول رئيسي',en:'Main contractor'},sub:{ar:'مقاول باطن',en:'Subcontractor'},
    footer:{ar:'نطاق للاستشارات الهندسية · الشارقة — الإمارات',en:'NITAQ Engineering Consultancy · Sharjah — UAE'},
    waTitle:{ar:'تحديث حالة المشروع — نطاق للاستشارات الهندسية',en:'Project Status Update — NITAQ Engineering Consultancy'},
    waProject:{ar:'المشروع',en:'Project'},
@@ -163,8 +163,9 @@
  .nreport .next b{color:var(--gold)}
  .nreport h3{margin:16px 22px 12px;font-size:16px;color:var(--navy);text-align:center;font-weight:800;position:relative;padding-bottom:9px}
  .nreport h3::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:56px;height:3px;background:var(--gold);border-radius:2px}
- .nreport table{width:calc(100% - 44px);margin:0 22px 16px;border-collapse:collapse;font-size:13px}
- .nreport th,.nreport td{border:1px solid var(--line);padding:8px 10px;text-align:right}
+ .nreport table{width:calc(100% - 44px);margin:0 22px 16px;border-collapse:collapse;font-size:13px;table-layout:fixed}
+ .nreport th:first-child,.nreport td:first-child{width:56%}
+ .nreport th,.nreport td{border:1px solid var(--line);padding:8px 10px;text-align:right;overflow-wrap:break-word}
  .nreport th{background:var(--soft);color:var(--muted);font-size:11px;font-weight:700}
  .nreport td.rl{font-weight:600}
  .nreport .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid transparent;white-space:nowrap}
@@ -174,6 +175,23 @@
  .nreport .pill.s-work{background:#eef1f4;color:#4b5563;border-color:#dde2e8}
  .nreport .pill.s-hold{background:#fde8e3;color:#9a3412;border-color:#f3c7ba}
  .nreport .pill.s-na{background:#f2f4f6;color:#8a95a1;border-color:#e2e6ea}
+ .nreport .stsel{font:inherit;font-weight:700;font-size:12px;border:1px solid transparent;border-radius:999px;padding:3px 26px 3px 10px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%239aa4b0' stroke-width='1.5'/></svg>");background-repeat:no-repeat;background-position:left 9px center;max-width:100%}
+ .nreport .stsel.s-ok{background-color:#e6f4ea;color:#1a7f37;border-color:#bfe3c9}
+ .nreport .stsel.s-sub{background-color:#e8f0fe;color:#1f6feb;border-color:#c6dafc}
+ .nreport .stsel.s-com{background-color:#fdf0e3;color:#b26a00;border-color:#f3d9b5}
+ .nreport .stsel.s-work{background-color:#eef1f4;color:#4b5563;border-color:#dde2e8}
+ .nreport .stsel.s-hold{background-color:#fde8e3;color:#9a3412;border-color:#f3c7ba}
+ .nreport .stsel.s-na{background-color:#f2f4f6;color:#8a95a1;border-color:#e2e6ea}
+ .nreport .selplain{font:inherit;font-weight:600;font-size:12.5px;border:1px solid #dde2e8;border-radius:7px;padding:3px 10px;cursor:pointer;background:#fff;max-width:100%}
+ .toolbar .legendbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;width:100%;border-top:1px solid #eef1f4;margin-top:4px;padding-top:8px}
+ .toolbar .legendbar .klbl{font-size:12px;color:#6a7684;font-weight:700}
+ .toolbar .legendbar .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid transparent}
+ .toolbar .legendbar .s-ok{background:#e6f4ea;color:#1a7f37;border-color:#bfe3c9}
+ .toolbar .legendbar .s-sub{background:#e8f0fe;color:#1f6feb;border-color:#c6dafc}
+ .toolbar .legendbar .s-com{background:#fdf0e3;color:#b26a00;border-color:#f3d9b5}
+ .toolbar .legendbar .s-work{background:#eef1f4;color:#4b5563;border-color:#dde2e8}
+ .toolbar .legendbar .s-hold{background:#fde8e3;color:#9a3412;border-color:#f3c7ba}
+ .toolbar .legendbar .s-na{background:#f2f4f6;color:#8a95a1;border-color:#e2e6ea}
  .nreport .exec{margin:14px 22px 6px;padding:12px 15px;background:#f3f6fb;border:1px solid #e1e8f2;border-radius:8px;font-size:13.5px;line-height:1.7;text-align:center;color:var(--ink)}
  .nreport .exec b{color:var(--navy)}
  .nreport .timeline{display:flex;gap:0;padding:10px 22px 4px;overflow:hidden}
@@ -210,26 +228,30 @@
    const dir=lang==='en'?'ltr':'rtl';
    const d=m[lang];
    const descVal=lang==='en'?(p.descEn||p.desc):p.desc;
-   const sline=r=>`<span class="pill ${(STATUS[r.st]||{}).c||'s-work'}">${ICON[r.st]||'•'} ${id((STATUS[r.st]||{})[lang]||r.st)}</span>`;
-   const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl">${id(r.label[lang])}</td><td class="rs"${ed}>${sline(r)}</td></tr>`).join('');
+   const SORD=['OK','SUB','COM','REQ','READY','HOLD','N/A','DONE'];
+   const sopt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${ICON[c]} ${id(STATUS[c][lang])}</option>`;
+   const ssel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${SORD.map(c=>sopt(c,cur)).join('')}</select>`;
+   const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl">${id(r.label[lang])}</td><td class="rs">${ssel(r.st)}</td></tr>`).join('');
+   const TORD=['REQ','COM','READY','SUB','OK','HOLD','DONE','N/A'];
+   const topt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${id((TENDER[c]||{})[lang]||c)}</option>`;
+   const tsel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${TORD.map(c=>topt(c,cur)).join('')}</select>`;
+   const ctypeSel=`<select class="selplain" onchange="syncWA()"><option value="main" selected>${id(T.main[lang])}</option><option value="sub">${id(T.sub[lang])}</option></select>`;
    const secp=pc=>` <span class="secpct pct-only">${pc}%</span>`;
    const sec=(key,secKey,pc,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}${secp(pc)}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
    let tender='';
    if(m.tender.show){
-     const ph=(TENDER[m.tender.status]||{})[lang]||m.tender.status;
      tender=`<div class="sec" data-sec="tender" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}${secp(m.secPct.tender)}</h3><table><tbody>`+
-       `<tr data-row><td class="rl">${id(T.tStatus[lang])}</td><td class="rs"${ed}>${id(ph)}</td></tr>`+
-       `<tr data-row><td class="rl">${id(T.tType[lang])}</td><td class="rs"${ed}>${id(T.main[lang])}</td></tr>`+
+       `<tr data-row><td class="rl">${id(T.tStatus[lang])}</td><td class="rs">${tsel(m.tender.status)}</td></tr>`+
+       `<tr data-row><td class="rl">${id(T.tType[lang])}</td><td class="rs">${ctypeSel}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tContractor[lang])}</td><td class="rs"${ed}>${id(m.tender.contractor)||'—'}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tOffers[lang])}</td><td class="rs"${ed}>${id(m.tender.offers)||'—'}</td></tr>`+
        `</tbody></table></div>`;
    }
    const donut=`<div class="donutwrap"><svg class="donut" viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15.915"/><circle class="prog" cx="18" cy="18" r="15.915" stroke-dasharray="${m.percent} ${100-m.percent}" stroke-dashoffset="25"/><text x="18" y="21" data-f="pct">${m.percent}%</text></svg></div>`;
    const timeline=`<div class="timeline">${m.phases.map(ph=>`<div class="step ${ph.state}"><div class="dot">${ph.state==='done'?'✓':''}</div>${id(PHASE[ph.key][lang])}</div>`).join('')}</div>`;
-   const legend=`<div class="legend">`+['OK','SUB','COM','REQ','HOLD','N/A'].map(k=>`<span class="pill ${STATUS[k].c}">${id(STATUS[k][lang])}</span>`).join('')+`</div>`;
    const summary=lang==='en'
-     ? `Your project is currently in the “<b>${id(d.currentPhase)}</b>” phase at <b>${m.percent}%</b> completion. Next step: ${id(d.nextStep)}.`
-     : `مشروعكم حاليًا في مرحلة «<b>${id(d.currentPhase)}</b>» بنسبة إنجاز <b>${m.percent}%</b>. الخطوة القادمة: ${id(d.nextStep)}.`;
+     ? `Your project is currently in the “<b>${id(d.currentPhase)}</b>” phase<span class="pct-only"> at <b>${m.percent}%</b> completion</span>. Next step: ${id(d.nextStep)}.`
+     : `مشروعكم حاليًا في مرحلة «<b>${id(d.currentPhase)}</b>»<span class="pct-only"> بنسبة إنجاز <b>${m.percent}%</b></span>. الخطوة القادمة: ${id(d.nextStep)}.`;
    return `<div class="nreport${lang==='en'?' hidden':''}" id="report-${lang}" data-lang="${lang}" dir="${dir}">
      <div class="hd"><img src="${logoURL()}" alt="NITAQ"><div class="t"><h2>${id(T.title[lang])}</h2><div class="s">${id(T.subtitle[lang])}</div></div><div class="d">${id(T.date[lang])}<br><b data-f="date"${ed}>${id(m.date)}</b></div></div>
      <div class="idbox">
@@ -249,17 +271,18 @@
        <div class="kpi"><div class="lab">${id(T.contract[lang])}</div><div class="val" data-f="contract"${ed}>${id(p.contract?T.signed[lang]:T.unsigned[lang])}</div></div>
      </div>
      <div class="next">➡️ <b>${id(T.next[lang])}:</b> <span data-f="next"${ed}>${id(d.nextStep)}</span></div>
-     ${legend}
      ${sec('secDraw','draw',m.secPct.draw,rowsOf(m.drawings))}
      ${sec('secApp','app',m.secPct.app,rowsOf(m.approvals))}
      ${tender}
-     <div class="ft"><span><b>${id(T.footer[lang])}</b></span><span>📞 ‎+971 56 816 6402</span></div>
+     <div class="ft"><span><b>${id(T.footer[lang])}</b></span><span>📞 ‎+971 56 629 9449 · +971 54 524 6000 · ✉ INFO@NITAQ.AE</span></div>
    </div>`;
  }
 
  function reportDoc(m){
    const title=esc(T.title.ar.replace(/\s+/g,' '))+' '+esc(m.p.id)+' — '+esc(m.p.name||'');
    const WA=JSON.stringify({ar:{title:T.waTitle.ar,owner:T.owner.ar,project:T.waProject.ar,no:T.projectNo.ar,pct:T.pct.ar,phase:T.phase.ar,permit:T.permit.ar,contract:T.contract.ar,next:T.next.ar,date:T.date.ar,footer:T.footer.ar},en:{title:T.waTitle.en,owner:T.owner.en,project:T.waProject.en,no:T.projectNo.en,pct:T.pct.en,phase:T.phase.en,permit:T.permit.en,contract:T.contract.en,next:T.next.en,date:T.date.en,footer:T.footer.en}});
+   const legData=l=>['OK','SUB','COM','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
+   const LEG=JSON.stringify({ar:legData('ar'),en:legData('en')});
    return `<!doctype html><html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body>
    <div id="flash"></div>
    <div class="toolbar no-print">
@@ -275,14 +298,19 @@
        <button class="chip" onclick="toggleSection(this,'tender')">المناقصات</button>
        <button class="chip" onclick="toggleSection(this,'pct')">نسبة الإنجاز</button>
      </span>
+     <span class="legendbar" id="legendbar"></span>
    </div>
    ${reportBody(m,'ar')}
    ${reportBody(m,'en')}
    <div class="wabox no-print"><label for="wa">نص واتساب جاهز للنسخ والإرسال (يتبع لغة التقرير؛ حدّثه بزرّ «تحديث النص»)</label><textarea id="wa"></textarea></div>
    <script>
-   var WAL=${WA};
+   var WAL=${WA};var LEG=${LEG};
+   var CLS={OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
    function active(){return document.querySelector('.nreport:not(.hidden)');}
    function lang(){var a=active();return a?a.getAttribute('data-lang'):'ar';}
+   function stChange(sel){sel.className='stsel '+(CLS[sel.value]||'s-work');syncWA();}
+   function renderLegend(){var g=lang(),el=document.getElementById('legendbar');if(!el)return;
+     el.innerHTML='<span class="klbl">'+(g==='en'?'Legend:':'مفتاح الألوان:')+'</span>'+LEG[g].map(function(x){return '<span class="pill '+x.c+'">'+x.t+'</span>';}).join('');}
    function val(f){var a=active();var e=a&&a.querySelector('[data-f="'+f+'"]');return e?e.textContent.trim():'';}
    function pctShown(){var a=active();return a&&!a.classList.contains('hide-pct');}
    function syncWA(){
@@ -301,12 +329,14 @@
        if(active().classList.contains('hide-'+s.getAttribute('data-sec')))return;
        L.push('*'+s.getAttribute('data-title')+':*');
        s.querySelectorAll('[data-row]').forEach(function(tr){
-         L.push('• '+tr.querySelector('.rl').textContent.trim()+': '+tr.querySelector('.rs').textContent.trim());
+         var rs=tr.querySelector('.rs'),sel=rs.querySelector('select');
+         var v=sel?sel.options[sel.selectedIndex].text.trim():rs.textContent.trim();
+         L.push('• '+tr.querySelector('.rl').textContent.trim()+': '+v);
        });
        L.push('');
      });
      L.push('📅 '+w.date+': '+val('date'));
-     L.push(w.footer+' · ‎+971 56 816 6402');
+     L.push(w.footer+' · ‎+971 56 629 9449 · +971 54 524 6000 · INFO@NITAQ.AE');
      document.getElementById('wa').value=L.join('\\n');
      return document.getElementById('wa').value;
    }
@@ -320,13 +350,13 @@
      var g=lang();
      document.getElementById('langBtn').textContent=g==='ar'?'English':'عربي';
      document.documentElement.setAttribute('lang',g);
-     syncWA();
+     renderLegend();syncWA();
    }
    function toggleSection(btn,key){var cls='hide-'+key;
      document.querySelectorAll('.nreport').forEach(function(r){r.classList.toggle(cls);});
      btn.classList.toggle('off',active().classList.contains(cls));syncWA();}
    function flash(msg){var f=document.getElementById('flash');f.textContent=msg;f.style.opacity=1;setTimeout(function(){f.style.opacity=0;},1500);}
-   window.addEventListener('load',syncWA);
+   window.addEventListener('load',function(){renderLegend();syncWA();});
    <\/script>
    </body></html>`;
  }
