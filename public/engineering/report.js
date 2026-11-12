@@ -329,6 +329,7 @@
    <div id="flash"></div>
    <div class="toolbar no-print">
      <button class="gold" onclick="exportPDF()">🖨 تصدير PDF</button>
+     <button class="ghost" onclick="saveHTML()">💾 حفظ HTML</button>
      <button onclick="openWA()">📱 إرسال واتساب</button>
      <button class="ghost" onclick="copyWA()">📋 نسخ النص</button>
      <button class="ghost" onclick="syncWA()">↻ تحديث النص من التقرير</button>
@@ -393,6 +394,18 @@
      try{document.execCommand('copy');done();}catch(e){if(navigator.clipboard)navigator.clipboard.writeText(t.value).then(done);}}
    function openWA(){window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('wa').value),'_blank');}
    function exportPDF(){window.print();}
+   function saveHTML(){
+     document.querySelectorAll('select').forEach(function(sel){
+       for(var i=0;i<sel.options.length;i++){if(i===sel.selectedIndex)sel.options[i].setAttribute('selected','selected');else sel.options[i].removeAttribute('selected');}
+     });
+     var html='<!doctype html>\\n'+document.documentElement.outerHTML;
+     var url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+     var a=document.createElement('a');a.href=url;
+     a.download=('تقرير-'+(val('owner')||'')+'-'+(val('projectNo')||'')).replace(/[/:*?"<>|]/g,'_').slice(0,70)+'.html';
+     document.body.appendChild(a);a.click();a.remove();
+     setTimeout(function(){URL.revokeObjectURL(url);},3000);
+     flash('اتحفظ ملف HTML على جهازك');
+   }
    function toggleLang(){
      document.querySelectorAll('.nreport').forEach(function(r){r.classList.toggle('hidden');});
      var g=lang();
