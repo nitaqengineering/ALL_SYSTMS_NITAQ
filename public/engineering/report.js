@@ -190,13 +190,21 @@
  }
 
  // Entry point from the project-actions select (app.js): opens the report in a new tab.
+ // Uses a Blob URL so the tab is a fully-functional standalone document (scripts and buttons
+ // run exactly as in a normal page), with a document.write fallback if Blob URLs are unavailable.
  function openOwnerReport(id){
    const p=(typeof projects!=='undefined'?projects:[]).find(x=>x.id===id);
    if(!p){if(typeof toast==='function')toast('المشروع غير موجود');return;}
-   const m=model(p);
-   const w=window.open('','_blank');
-   if(!w){if(typeof toast==='function')toast('المتصفح منع فتح تاب جديدة — اسمح بالنوافذ المنبثقة ثم جرّب تاني');return;}
-   w.document.open();w.document.write(reportDoc(m));w.document.close();
+   const html=reportDoc(model(p));
+   let url=null;
+   try{url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));}catch(e){url=null;}
+   const w=window.open(url||'','_blank');
+   if(!w){if(url)try{URL.revokeObjectURL(url);}catch(e){}if(typeof toast==='function')toast('المتصفح منع فتح تاب جديدة — اسمح بالنوافذ المنبثقة ثم جرّب تاني');return;}
+   if(!url){ // Fallback for environments without Blob URL support.
+     try{w.document.open();w.document.write(html);w.document.close();}catch(e){}
+   }else{
+     setTimeout(()=>{try{URL.revokeObjectURL(url);}catch(e){}},120000);
+   }
  }
 
  window.openOwnerReport=openOwnerReport;
