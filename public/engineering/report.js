@@ -88,7 +88,18 @@
    else if(pm==='صدرت'){currentPhase=lang==='en'?'Construction & supervision':'التنفيذ والإشراف';nextStep=lang==='en'?'Site supervision after permit issuance':'الإشراف على تنفيذ المشروع بعد صدور الإجازة';}
    else{
      const miss=(typeof missing==='function')?missing(p):[];
-     if(!((typeof ready==='function')&&ready(p))&&miss.length){currentPhase=lang==='en'?'Completing permit requirements':'استكمال متطلبات إجازة البناء';nextStep=(lang==='en'?'Complete: ':'استكمال: ')+miss.join(lang==='en'?', ':'، ');}
+     if(!((typeof ready==='function')&&ready(p))&&miss.length){
+       currentPhase=lang==='en'?'Completing permit requirements':'استكمال متطلبات إجازة البناء';
+       let list;
+       if(lang==='en'){
+         list=miss.map(function(item){
+           if(item==='عقد مقاول موقّع')return 'Signed contractor agreement';
+           for(const k in EN_TITLE){const t=columnTitle(k);if(item===t)return EN_TITLE[k];if(item.indexOf(t+' — ')===0)return EN_TITLE[k]+item.slice(t.length);}
+           return item;
+         });
+       }else list=miss;
+       nextStep=(lang==='en'?'Complete: ':'استكمال: ')+list.join(lang==='en'?', ':'، ');
+     }
      else{
        const open=applicable.find(k=>!['OK','N/A','DONE','HOLD'].includes(p.stages[k].status));
        if(open){currentPhase=title(open);nextStep=title(open)+' — '+(STATUS[p.stages[open].status]?STATUS[p.stages[open].status][lang]:'');}
