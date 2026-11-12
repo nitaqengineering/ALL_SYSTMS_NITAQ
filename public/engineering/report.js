@@ -28,7 +28,7 @@
    secDraw:{ar:'حالة المخططات',en:'Drawings Status'},
    secApp:{ar:'الاعتمادات من الدوائر الحكومية',en:'Government Approvals'},
    secTen:{ar:'حالة المناقصات',en:'Tender Status'},
-   cItem:{ar:'البند',en:'Item'},cStatus:{ar:'الحالة',en:'Status'},
+   cItem:{ar:'البند',en:'Item'},cStatus:{ar:'الحالة',en:'Status'},cDate:{ar:'التاريخ',en:'Date'},cNote:{ar:'ملاحظات',en:'Notes'},
    tStatus:{ar:'حالة المناقصة',en:'Tender status'},tType:{ar:'نوع التعاقد',en:'Contract type'},
    tContractor:{ar:'المقاول',en:'Contractor'},tOffers:{ar:'العروض / ملاحظات',en:'Offers / notes'},
    main:{ar:'مقاول رئيسي',en:'Main contractor'},sub:{ar:'مقاول باطن',en:'Subcontractor'},
@@ -102,18 +102,18 @@
    const applicable=keys.filter(k=>!(k==='gas'&&p.service==='FEWA'));
    const doneN=applicable.filter(k=>['OK','N/A','DONE'].includes(p.stages[k].status)).length;
    const percent=applicable.length?Math.round(doneN/applicable.length*100):0;
-   const drawings=[
-     {label:ROW.des,st:stStat(p,['design'])},
-     {label:ROW.str,st:stStat(p,['struct'])},
-     {label:ROW.san,st:stStat(p,['sanitary'])},
-     {label:ROW.coord,st:stStat(p,['coordination'])},
-   ];
+   const meta=ks=>{const a=ks.filter(k=>!(k==='gas'&&p.service==='FEWA'));
+     if(a.length===1)return {date:p.stages[a[0]].date||'',note:p.stages[a[0]].note||''};
+     const dates=a.map(k=>p.stages[k].date).filter(Boolean).sort();
+     const notes=a.map(k=>p.stages[k].note).filter(Boolean);
+     return {date:dates.length?dates[dates.length-1]:'',note:notes.join(' · ')};};
+   const row=(label,ks)=>{const mt=meta(ks);return {label,st:stStat(p,ks),date:mt.date,note:mt.note};};
+   const drawings=[row(ROW.des,['design']),row(ROW.str,['struct']),row(ROW.san,['sanitary']),row(ROW.coord,['coordination'])];
    const approvals=[
-     {label:ROW.plan,st:stStat(p,['planning'])},
-     {label:ROW.civ,st:stStat(p,['civil'])},
-     {label:{ar:'الخدمات ('+(p.service||'—')+')',en:'Utilities ('+(p.service||'—')+')'},st:stStat(p,['electric','water','gas'])},
-     {label:ROW.tel,st:stStat(p,['telecom'])},
-     {label:{ar:'البلدية ('+(p.municipality||'—')+')',en:'Municipality ('+(p.municipality||'—')+')'},st:stStat(p,['munArch','munStruct','munSanitary'])},
+     row(ROW.plan,['planning']),row(ROW.civ,['civil']),
+     row({ar:'الخدمات ('+(p.service||'—')+')',en:'Utilities ('+(p.service||'—')+')'},['electric','water','gas']),
+     row(ROW.tel,['telecom']),
+     row({ar:'البلدية ('+(p.municipality||'—')+')',en:'Municipality ('+(p.municipality||'—')+')'},['munArch','munStruct','munSanitary']),
    ];
    const tStatus=p.stages.tender?p.stages.tender.status:'N/A';
    const tender={show:tStatus!=='N/A',status:tStatus,contractor:(p.tender&&p.tender.contractor)||'',offers:(p.tender&&p.tender.offers)||''};
@@ -164,8 +164,12 @@
  .nreport h3{margin:16px 22px 12px;font-size:16px;color:var(--navy);text-align:center;font-weight:800;position:relative;padding-bottom:9px}
  .nreport h3::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:56px;height:3px;background:var(--gold);border-radius:2px}
  .nreport table{width:calc(100% - 44px);margin:0 22px 16px;border-collapse:collapse;font-size:13px;table-layout:fixed}
- .nreport th:first-child,.nreport td:first-child{width:56%}
+ .nreport .cbnd{width:34%}.nreport .cstat{width:22%}.nreport .cdate{width:18%}.nreport .cnote{width:26%}
+ .nreport .tbnd{width:40%}
+ .nreport.hide-date .cdate{display:none}.nreport.hide-note .cnote{display:none}
  .nreport th,.nreport td{border:1px solid var(--line);padding:8px 10px;text-align:right;overflow-wrap:break-word}
+ .nreport td.rdate{font-size:12px;color:var(--muted);direction:ltr;text-align:center}
+ .nreport td.rnote{font-size:12px;color:var(--ink)}
  .nreport th{background:var(--soft);color:var(--muted);font-size:11px;font-weight:700}
  .nreport td.rl{font-weight:600}
  .nreport .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid transparent;white-space:nowrap}
@@ -231,20 +235,20 @@
    const SORD=['OK','SUB','COM','REQ','READY','HOLD','N/A','DONE'];
    const sopt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${ICON[c]} ${id(STATUS[c][lang])}</option>`;
    const ssel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${SORD.map(c=>sopt(c,cur)).join('')}</select>`;
-   const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl">${id(r.label[lang])}</td><td class="rs">${ssel(r.st)}</td></tr>`).join('');
+   const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl cbnd">${id(r.label[lang])}</td><td class="rs cstat">${ssel(r.st)}</td><td class="rdate cdate"${ed}>${id(r.date)||'—'}</td><td class="rnote cnote"${ed}>${id(r.note)||'—'}</td></tr>`).join('');
    const TORD=['REQ','COM','READY','SUB','OK','HOLD','DONE','N/A'];
    const topt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${id((TENDER[c]||{})[lang]||c)}</option>`;
    const tsel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${TORD.map(c=>topt(c,cur)).join('')}</select>`;
    const ctypeSel=`<select class="selplain" onchange="syncWA()"><option value="main" selected>${id(T.main[lang])}</option><option value="sub">${id(T.sub[lang])}</option></select>`;
    const secp=pc=>` <span class="secpct pct-only">${pc}%</span>`;
-   const sec=(key,secKey,pc,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}${secp(pc)}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+   const sec=(key,secKey,pc,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}${secp(pc)}</h3><table><thead><tr><th class="cbnd">${id(T.cItem[lang])}</th><th class="cstat">${id(T.cStatus[lang])}</th><th class="cdate">${id(T.cDate[lang])}</th><th class="cnote">${id(T.cNote[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
    let tender='';
    if(m.tender.show){
      tender=`<div class="sec" data-sec="tender" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}${secp(m.secPct.tender)}</h3><table><tbody>`+
-       `<tr data-row><td class="rl">${id(T.tStatus[lang])}</td><td class="rs">${tsel(m.tender.status)}</td></tr>`+
-       `<tr data-row><td class="rl">${id(T.tType[lang])}</td><td class="rs">${ctypeSel}</td></tr>`+
-       `<tr data-row><td class="rl">${id(T.tContractor[lang])}</td><td class="rs"${ed}>${id(m.tender.contractor)||'—'}</td></tr>`+
-       `<tr data-row><td class="rl">${id(T.tOffers[lang])}</td><td class="rs"${ed}>${id(m.tender.offers)||'—'}</td></tr>`+
+       `<tr data-row><td class="rl tbnd">${id(T.tStatus[lang])}</td><td class="rs">${tsel(m.tender.status)}</td></tr>`+
+       `<tr data-row><td class="rl tbnd">${id(T.tType[lang])}</td><td class="rs">${ctypeSel}</td></tr>`+
+       `<tr data-row><td class="rl tbnd">${id(T.tContractor[lang])}</td><td class="rs"${ed}>${id(m.tender.contractor)||'—'}</td></tr>`+
+       `<tr data-row><td class="rl tbnd">${id(T.tOffers[lang])}</td><td class="rs"${ed}>${id(m.tender.offers)||'—'}</td></tr>`+
        `</tbody></table></div>`;
    }
    const donut=`<div class="donutwrap"><svg class="donut" viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15.915"/><circle class="prog" cx="18" cy="18" r="15.915" stroke-dasharray="${m.percent} ${100-m.percent}" stroke-dashoffset="25"/><text x="18" y="21" data-f="pct">${m.percent}%</text></svg></div>`;
@@ -297,6 +301,8 @@
        <button class="chip" onclick="toggleSection(this,'app')">الاعتمادات</button>
        <button class="chip" onclick="toggleSection(this,'tender')">المناقصات</button>
        <button class="chip" onclick="toggleSection(this,'pct')">نسبة الإنجاز</button>
+       <button class="chip" onclick="toggleSection(this,'date')">التاريخ</button>
+       <button class="chip" onclick="toggleSection(this,'note')">ملاحظات</button>
      </span>
      <span class="legendbar" id="legendbar"></span>
    </div>
@@ -331,7 +337,11 @@
        s.querySelectorAll('[data-row]').forEach(function(tr){
          var rs=tr.querySelector('.rs'),sel=rs.querySelector('select');
          var v=sel?sel.options[sel.selectedIndex].text.trim():rs.textContent.trim();
-         L.push('• '+tr.querySelector('.rl').textContent.trim()+': '+v);
+         var line='• '+tr.querySelector('.rl').textContent.trim()+': '+v;
+         var a=active(),dc=tr.querySelector('.rdate'),nc=tr.querySelector('.rnote');
+         if(dc&&!a.classList.contains('hide-date')){var dv=dc.textContent.trim();if(dv&&dv!=='—')line+=' · 📅 '+dv;}
+         if(nc&&!a.classList.contains('hide-note')){var nv=nc.textContent.trim();if(nv&&nv!=='—')line+=' · 📝 '+nv;}
+         L.push(line);
        });
        L.push('');
      });
