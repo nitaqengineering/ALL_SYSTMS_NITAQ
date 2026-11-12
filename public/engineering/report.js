@@ -228,7 +228,42 @@
  .wabox{max-width:820px;margin:16px auto 0;background:#fff;border:1px solid #e4e7ec;border-radius:10px;padding:14px;direction:rtl}
  .wabox label{display:block;font-weight:700;margin-bottom:6px}
  .wabox textarea{width:100%;min-height:280px;font:inherit;font-size:13px;line-height:1.7;padding:10px;border:1px solid #e4e7ec;border-radius:8px}
- @media print{body{background:#fff;padding:0}.toolbar,.wabox,#flash,.no-print{display:none !important}.nreport{border:none;border-radius:0;max-width:100%}[contenteditable]:hover,[contenteditable]:focus{box-shadow:none;background:transparent}@page{size:A4;margin:12mm}}`;
+ @media print{
+   @page{size:A4;margin:7mm}
+   html,body{background:#fff;padding:0;margin:0}
+   .toolbar,.wabox,#flash,.no-print{display:none !important}
+   [contenteditable]:hover,[contenteditable]:focus{box-shadow:none !important;background:transparent !important}
+   .nreport{border:none;border-radius:0;max-width:100%;font-size:11px;break-inside:avoid}
+   .nreport .sec,.nreport table,.nreport tr,.nreport thead{break-inside:avoid}
+   .nreport .hd{padding:8px 14px}
+   .nreport .hd img{height:30px}
+   .nreport .hd h2{font-size:15px}
+   .nreport .hd .s{font-size:10px}
+   .nreport .idbox div{padding:3px 10px}
+   .nreport .idbox span{font-size:9px;margin-bottom:1px}
+   .nreport .idbox b{font-size:11px}
+   .nreport .exec{margin:6px 14px 3px;padding:5px 11px;font-size:10.5px;line-height:1.45}
+   .nreport .timeline{padding:4px 14px 1px}
+   .nreport .step{font-size:9px}
+   .nreport .step .dot{width:16px;height:16px;margin-bottom:3px;font-size:9px}
+   .nreport .step::before{top:8px;height:2px}
+   .nreport .kpis{padding:6px 14px;gap:7px}
+   .nreport .kpi{padding:5px}
+   .nreport .kpi .lab{font-size:9px;margin-bottom:2px}
+   .nreport .kpi .val{font-size:11px}
+   .nreport .donut{width:48px;height:48px}
+   .nreport .next{margin:2px 14px 6px;padding:5px 11px;font-size:10.5px}
+   .nreport h3{margin:8px 14px 4px;font-size:12.5px;padding-bottom:5px}
+   .nreport h3::after{width:46px;height:2px}
+   .nreport .secpct{font-size:11px}
+   .nreport table{margin:0 14px 6px;font-size:10px}
+   .nreport th,.nreport td{padding:3px 7px}
+   .nreport th{font-size:9.5px}
+   .nreport .pill{font-size:9.5px;padding:1px 7px}
+   .nreport .stsel{font-size:9.5px;padding:1px 18px 1px 7px}
+   .nreport td.rdate,.nreport td.rnote{font-size:9.5px}
+   .nreport .ft{padding:7px 14px;font-size:9.5px}
+ }`;
 
  function reportBody(m,lang){
    const p=m.p,id=s=>esc(String(s==null?'':s)),ed=' contenteditable="true" spellcheck="false"';
