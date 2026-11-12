@@ -136,9 +136,15 @@
  .nreport .bar{height:12px;background:var(--soft);border:1px solid var(--line);border-radius:999px;overflow:hidden}
  .nreport .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#c6a66f)}
  .nreport.hide-pct .pct-kpi,.nreport.hide-pct .barwrap{display:none}
+ .nreport.hide-draw [data-sec=draw],.nreport.hide-app [data-sec=app],.nreport.hide-tender [data-sec=tender]{display:none}
+ .toolbar .toggles{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;border-top:1px solid #eef1f4;margin-top:4px;padding-top:8px}
+ .toolbar .toggles .lbl{font-size:12px;color:#6a7684;font-weight:700}
+ .toolbar .chip{font:inherit;cursor:pointer;border:1px solid #cdd3da;border-radius:999px;padding:5px 12px;font-weight:700;font-size:12.5px;background:#132a46;color:#fff}
+ .toolbar .chip.off{background:#fff;color:#9aa4b0;text-decoration:line-through}
  .nreport .next{margin:4px 22px 14px;padding:11px 14px;background:#fff7ec;border:1px solid #efd9b5;border-radius:8px;font-size:13px}
  .nreport .next b{color:var(--gold)}
- .nreport h3{margin:6px 22px 8px;font-size:14px;color:var(--navy)}
+ .nreport h3{margin:16px 22px 12px;font-size:16px;color:var(--navy);text-align:center;font-weight:800;position:relative;padding-bottom:9px}
+ .nreport h3::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:56px;height:3px;background:var(--gold);border-radius:2px}
  .nreport table{width:calc(100% - 44px);margin:0 22px 16px;border-collapse:collapse;font-size:13px}
  .nreport th,.nreport td{border:1px solid var(--line);padding:8px 10px;text-align:right}
  .nreport th{background:var(--soft);color:var(--muted);font-size:11px;font-weight:700}
@@ -163,11 +169,11 @@
    const descVal=lang==='en'?(p.descEn||p.desc):p.desc;
    const sline=r=>`<span class="st ${(STATUS[r.st]||{}).c||'s-work'}">${ICON[r.st]||'•'} ${id((STATUS[r.st]||{})[lang]||r.st)}</span>`;
    const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl">${id(r.label[lang])}</td><td class="rs"${ed}>${sline(r)}</td></tr>`).join('');
-   const sec=(key,rows)=>`<div class="sec" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+   const sec=(key,secKey,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
    let tender='';
    if(m.tender.show){
      const ph=(TENDER[m.tender.status]||{})[lang]||m.tender.status;
-     tender=`<div class="sec" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}</h3><table><tbody>`+
+     tender=`<div class="sec" data-sec="tender" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}</h3><table><tbody>`+
        `<tr data-row><td class="rl">${id(T.tStatus[lang])}</td><td class="rs"${ed}>${id(ph)}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tType[lang])}</td><td class="rs"${ed}>${id(T.main[lang])}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tContractor[lang])}</td><td class="rs"${ed}>${id(m.tender.contractor)||'—'}</td></tr>`+
@@ -192,8 +198,8 @@
      </div>
      <div class="barwrap"><div class="bar"><i style="width:${m.percent}%"></i></div></div>
      <div class="next">➡️ <b>${id(T.next[lang])}:</b> <span data-f="next"${ed}>${id(d.nextStep)}</span></div>
-     ${sec('secDraw',rowsOf(m.drawings))}
-     ${sec('secApp',rowsOf(m.approvals))}
+     ${sec('secDraw','draw',rowsOf(m.drawings))}
+     ${sec('secApp','app',rowsOf(m.approvals))}
      ${tender}
      <div class="ft"><span><b>${id(T.footer[lang])}</b></span><span>📞 ‎+971 56 816 6402</span></div>
    </div>`;
@@ -210,8 +216,13 @@
      <button class="ghost" onclick="copyWA()">📋 نسخ النص</button>
      <button class="ghost" onclick="syncWA()">↻ تحديث النص من التقرير</button>
      <button class="ghost" id="langBtn" onclick="toggleLang()">English</button>
-     <button class="ghost" id="pctBtn" onclick="togglePct()">إخفاء نسبة الإنجاز</button>
      <span class="tip">راجع وعدّل أي نص داخل التقرير قبل التصدير.</span>
+     <span class="toggles"><span class="lbl">إظهار / إخفاء الجداول:</span>
+       <button class="chip" onclick="toggleSection(this,'draw')">المخططات</button>
+       <button class="chip" onclick="toggleSection(this,'app')">الاعتمادات</button>
+       <button class="chip" onclick="toggleSection(this,'tender')">المناقصات</button>
+       <button class="chip" onclick="toggleSection(this,'pct')">نسبة الإنجاز</button>
+     </span>
    </div>
    ${reportBody(m,'ar')}
    ${reportBody(m,'en')}
@@ -235,6 +246,7 @@
      L.push('➡️ '+w.next+': '+val('next'));
      L.push('');
      active().querySelectorAll('.sec').forEach(function(s){
+       if(active().classList.contains('hide-'+s.getAttribute('data-sec')))return;
        L.push('*'+s.getAttribute('data-title')+':*');
        s.querySelectorAll('[data-row]').forEach(function(tr){
          L.push('• '+tr.querySelector('.rl').textContent.trim()+': '+tr.querySelector('.rs').textContent.trim());
@@ -258,9 +270,9 @@
      document.documentElement.setAttribute('lang',g);
      syncWA();
    }
-   function togglePct(){var hidden=false;
-     document.querySelectorAll('.nreport').forEach(function(r){r.classList.toggle('hide-pct');if(r===active())hidden=r.classList.contains('hide-pct');});
-     document.getElementById('pctBtn').textContent=hidden?'إظهار نسبة الإنجاز':'إخفاء نسبة الإنجاز';syncWA();}
+   function toggleSection(btn,key){var cls='hide-'+key;
+     document.querySelectorAll('.nreport').forEach(function(r){r.classList.toggle(cls);});
+     btn.classList.toggle('off',active().classList.contains(cls));syncWA();}
    function flash(msg){var f=document.getElementById('flash');f.textContent=msg;f.style.opacity=1;setTimeout(function(){f.style.opacity=0;},1500);}
    window.addEventListener('load',syncWA);
    <\/script>
