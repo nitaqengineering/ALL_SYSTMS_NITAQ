@@ -108,7 +108,10 @@
      const notes=a.map(k=>p.stages[k].note).filter(Boolean);
      return {date:dates.length?dates[dates.length-1]:'',note:notes.join(' · ')};};
    const row=(label,ks)=>{const mt=meta(ks);return {label,st:stStat(p,ks),date:mt.date,note:mt.note};};
-   const drawings=[row(ROW.des,['design']),row(ROW.str,['struct']),row(ROW.san,['sanitary']),row(ROW.coord,['coordination'])];
+   const drawings=[row(ROW.des,['design']),row(ROW.str,['struct']),row(ROW.san,['sanitary']),
+     row({ar:'مخطط الخدمات (كهرباء/مياه)',en:'Services drawings (MEP)'},['electric','water','gas']),
+     row({ar:'مخطط الاتصالات',en:'Telecom drawings'},['telecom']),
+     row({ar:'مخطط الدفاع المدني',en:'Civil Defence drawings'},['civil'])];
    const approvals=[
      row(ROW.plan,['planning']),row(ROW.civ,['civil']),
      row({ar:'الخدمات ('+(p.service||'—')+')',en:'Utilities ('+(p.service||'—')+')'},['electric','water','gas']),
@@ -117,7 +120,7 @@
    ];
    const tStatus=p.stages.tender?p.stages.tender.status:'N/A';
    const tender={show:tStatus!=='N/A',status:tStatus,contractor:(p.tender&&p.tender.contractor)||'',offers:(p.tender&&p.tender.offers)||''};
-   const secPct={draw:pctOf(p,['design','struct','sanitary','coordination']),
+   const secPct={draw:pctOf(p,['design','struct','sanitary','electric','water','gas','telecom','civil']),
      app:pctOf(p,['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary']),
      tender:['OK','N/A','DONE'].includes(tStatus)?100:(['SUB','COM','READY'].includes(tStatus)?50:0)};
    return {p,percent,drawings,approvals,tender,secPct,phases:phases(p),date:today(),ar:derive(p,'ar'),en:derive(p,'en')};
