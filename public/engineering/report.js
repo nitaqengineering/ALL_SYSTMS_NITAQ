@@ -58,6 +58,21 @@
    return 'REQ';
  }
  const stStat=(p,ks)=>ks.length>1?groupStatus(p,ks):p.stages[ks[0]].status;
+ const pctOf=(p,ks)=>{const a=ks.filter(k=>!(k==='gas'&&p.service==='FEWA'));const d=a.filter(k=>['OK','N/A','DONE'].includes(p.stages[k].status)).length;return a.length?Math.round(d/a.length*100):0;};
+ const PHASE={design:{ar:'التصميم',en:'Design'},approvals:{ar:'الاعتمادات',en:'Approvals'},permit:{ar:'إجازة البناء',en:'Permit'},tender:{ar:'المناقصة',en:'Tender'},construction:{ar:'التنفيذ',en:'Construction'}};
+ // Macro project journey: each phase is done / current / upcoming.
+ function phases(p){
+   const allOK=ks=>ks.filter(k=>!(k==='gas'&&p.service==='FEWA')).every(k=>['OK','N/A','DONE'].includes(p.stages[k].status));
+   const order=[
+     {key:'design',done:allOK(['design','struct','sanitary','coordination'])},
+     {key:'approvals',done:allOK(['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary'])},
+     {key:'permit',done:permit(p)==='صدرت'},
+     {key:'tender',done:['OK','N/A','DONE'].includes(p.stages.tender.status)},
+     {key:'construction',done:false},
+   ];
+   let currentSet=false;
+   return order.map(o=>{let state;if(o.done)state='done';else if(!currentSet){state='current';currentSet=true;}else state='upcoming';return {key:o.key,state};});
+ }
 
  function derive(p,lang){
    const pm=permit(p);
@@ -102,7 +117,10 @@
    ];
    const tStatus=p.stages.tender?p.stages.tender.status:'N/A';
    const tender={show:tStatus!=='N/A',status:tStatus,contractor:(p.tender&&p.tender.contractor)||'',offers:(p.tender&&p.tender.offers)||''};
-   return {p,percent,drawings,approvals,tender,date:today(),ar:derive(p,'ar'),en:derive(p,'en')};
+   const secPct={draw:pctOf(p,['design','struct','sanitary','coordination']),
+     app:pctOf(p,['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary']),
+     tender:['OK','N/A','DONE'].includes(tStatus)?100:(['SUB','COM','READY'].includes(tStatus)?50:0)};
+   return {p,percent,drawings,approvals,tender,secPct,phases:phases(p),date:today(),ar:derive(p,'ar'),en:derive(p,'en')};
  }
 
  const CSS=`
@@ -149,9 +167,34 @@
  .nreport th,.nreport td{border:1px solid var(--line);padding:8px 10px;text-align:right}
  .nreport th{background:var(--soft);color:var(--muted);font-size:11px;font-weight:700}
  .nreport td.rl{font-weight:600}
- .nreport .st{font-weight:700}
- .nreport .s-ok{color:#1a7f37}.nreport .s-sub{color:#1f6feb}.nreport .s-com{color:#b26a00}
- .nreport .s-work{color:#6a7684}.nreport .s-hold{color:#9a3412}.nreport .s-na{color:#9aa4b0}
+ .nreport .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid transparent;white-space:nowrap}
+ .nreport .pill.s-ok{background:#e6f4ea;color:#1a7f37;border-color:#bfe3c9}
+ .nreport .pill.s-sub{background:#e8f0fe;color:#1f6feb;border-color:#c6dafc}
+ .nreport .pill.s-com{background:#fdf0e3;color:#b26a00;border-color:#f3d9b5}
+ .nreport .pill.s-work{background:#eef1f4;color:#4b5563;border-color:#dde2e8}
+ .nreport .pill.s-hold{background:#fde8e3;color:#9a3412;border-color:#f3c7ba}
+ .nreport .pill.s-na{background:#f2f4f6;color:#8a95a1;border-color:#e2e6ea}
+ .nreport .exec{margin:14px 22px 6px;padding:12px 15px;background:#f3f6fb;border:1px solid #e1e8f2;border-radius:8px;font-size:13.5px;line-height:1.7;text-align:center;color:var(--ink)}
+ .nreport .exec b{color:var(--navy)}
+ .nreport .timeline{display:flex;gap:0;padding:10px 22px 4px;overflow:hidden}
+ .nreport .step{flex:1;text-align:center;position:relative;font-size:11px;color:var(--muted)}
+ .nreport .step .dot{width:22px;height:22px;border-radius:50%;background:#e4e7ec;color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 5px;font-size:11px;font-weight:800;position:relative;z-index:2}
+ .nreport .step::before{content:'';position:absolute;top:11px;right:50%;width:100%;height:3px;background:#e4e7ec;z-index:1}
+ .nreport[dir=ltr] .step::before{right:auto;left:50%}
+ .nreport .step:first-child::before{display:none}
+ .nreport .step.done .dot{background:var(--gold)}
+ .nreport .step.done::before{background:var(--gold)}
+ .nreport .step.current .dot{background:var(--navy);box-shadow:0 0 0 4px rgba(19,42,70,.15)}
+ .nreport .step.current{color:var(--navy);font-weight:800}
+ .nreport .legend{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;padding:4px 22px 10px}
+ .nreport .legend .pill{font-size:10.5px;padding:2px 9px}
+ .nreport .secpct{font-size:12px;font-weight:800;color:var(--gold);margin-inline-start:6px}
+ .nreport.hide-pct .pct-only{display:none}
+ .nreport .donutwrap{display:flex;justify-content:center;align-items:center}
+ .nreport .donut{width:76px;height:76px}
+ .nreport .donut .track{fill:none;stroke:#eef1f4;stroke-width:3.4}
+ .nreport .donut .prog{fill:none;stroke:var(--gold);stroke-width:3.4;stroke-linecap:round}
+ .nreport .donut text{fill:var(--navy);font-size:9px;font-weight:800;text-anchor:middle}
  .nreport .ft{padding:12px 22px;border-top:1px solid var(--line);background:var(--soft);font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
  .nreport .ft b{color:var(--navy)}
  [contenteditable]{outline:none;border-radius:4px}
@@ -167,19 +210,26 @@
    const dir=lang==='en'?'ltr':'rtl';
    const d=m[lang];
    const descVal=lang==='en'?(p.descEn||p.desc):p.desc;
-   const sline=r=>`<span class="st ${(STATUS[r.st]||{}).c||'s-work'}">${ICON[r.st]||'•'} ${id((STATUS[r.st]||{})[lang]||r.st)}</span>`;
+   const sline=r=>`<span class="pill ${(STATUS[r.st]||{}).c||'s-work'}">${ICON[r.st]||'•'} ${id((STATUS[r.st]||{})[lang]||r.st)}</span>`;
    const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl">${id(r.label[lang])}</td><td class="rs"${ed}>${sline(r)}</td></tr>`).join('');
-   const sec=(key,secKey,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+   const secp=pc=>` <span class="secpct pct-only">${pc}%</span>`;
+   const sec=(key,secKey,pc,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}${secp(pc)}</h3><table><thead><tr><th>${id(T.cItem[lang])}</th><th>${id(T.cStatus[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
    let tender='';
    if(m.tender.show){
      const ph=(TENDER[m.tender.status]||{})[lang]||m.tender.status;
-     tender=`<div class="sec" data-sec="tender" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}</h3><table><tbody>`+
+     tender=`<div class="sec" data-sec="tender" data-title="${id(T.secTen[lang])}"><h3>${id(T.secTen[lang])}${secp(m.secPct.tender)}</h3><table><tbody>`+
        `<tr data-row><td class="rl">${id(T.tStatus[lang])}</td><td class="rs"${ed}>${id(ph)}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tType[lang])}</td><td class="rs"${ed}>${id(T.main[lang])}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tContractor[lang])}</td><td class="rs"${ed}>${id(m.tender.contractor)||'—'}</td></tr>`+
        `<tr data-row><td class="rl">${id(T.tOffers[lang])}</td><td class="rs"${ed}>${id(m.tender.offers)||'—'}</td></tr>`+
        `</tbody></table></div>`;
    }
+   const donut=`<div class="donutwrap"><svg class="donut" viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15.915"/><circle class="prog" cx="18" cy="18" r="15.915" stroke-dasharray="${m.percent} ${100-m.percent}" stroke-dashoffset="25"/><text x="18" y="21" data-f="pct">${m.percent}%</text></svg></div>`;
+   const timeline=`<div class="timeline">${m.phases.map(ph=>`<div class="step ${ph.state}"><div class="dot">${ph.state==='done'?'✓':''}</div>${id(PHASE[ph.key][lang])}</div>`).join('')}</div>`;
+   const legend=`<div class="legend">`+['OK','SUB','COM','REQ','HOLD','N/A'].map(k=>`<span class="pill ${STATUS[k].c}">${id(STATUS[k][lang])}</span>`).join('')+`</div>`;
+   const summary=lang==='en'
+     ? `Your project is currently in the “<b>${id(d.currentPhase)}</b>” phase at <b>${m.percent}%</b> completion. Next step: ${id(d.nextStep)}.`
+     : `مشروعكم حاليًا في مرحلة «<b>${id(d.currentPhase)}</b>» بنسبة إنجاز <b>${m.percent}%</b>. الخطوة القادمة: ${id(d.nextStep)}.`;
    return `<div class="nreport${lang==='en'?' hidden':''}" id="report-${lang}" data-lang="${lang}" dir="${dir}">
      <div class="hd"><img src="${logoURL()}" alt="NITAQ"><div class="t"><h2>${id(T.title[lang])}</h2><div class="s">${id(T.subtitle[lang])}</div></div><div class="d">${id(T.date[lang])}<br><b data-f="date"${ed}>${id(m.date)}</b></div></div>
      <div class="idbox">
@@ -190,16 +240,18 @@
        <div><span>${id(T.service[lang])}</span><b${ed}>${id(p.service)||'—'}</b></div>
        <div><span>${id(T.municipality[lang])}</span><b${ed}>${id(p.municipality)||'—'}</b></div>
      </div>
+     <div class="exec"${ed}>${summary}</div>
+     ${timeline}
      <div class="kpis">
-       <div class="kpi pct-kpi"><div class="lab">${id(T.pct[lang])}</div><div class="big" data-f="pct"${ed}>${m.percent}%</div></div>
+       <div class="kpi pct-kpi"><div class="lab">${id(T.pct[lang])}</div>${donut}</div>
        <div class="kpi"><div class="lab">${id(T.phase[lang])}</div><div class="val" data-f="phase"${ed}>${id(d.currentPhase)}</div></div>
        <div class="kpi"><div class="lab">${id(T.permit[lang])}</div><div class="val" data-f="permit"${ed}>${id(d.permitLabel)}</div></div>
        <div class="kpi"><div class="lab">${id(T.contract[lang])}</div><div class="val" data-f="contract"${ed}>${id(p.contract?T.signed[lang]:T.unsigned[lang])}</div></div>
      </div>
-     <div class="barwrap"><div class="bar"><i style="width:${m.percent}%"></i></div></div>
      <div class="next">➡️ <b>${id(T.next[lang])}:</b> <span data-f="next"${ed}>${id(d.nextStep)}</span></div>
-     ${sec('secDraw','draw',rowsOf(m.drawings))}
-     ${sec('secApp','app',rowsOf(m.approvals))}
+     ${legend}
+     ${sec('secDraw','draw',m.secPct.draw,rowsOf(m.drawings))}
+     ${sec('secApp','app',m.secPct.app,rowsOf(m.approvals))}
      ${tender}
      <div class="ft"><span><b>${id(T.footer[lang])}</b></span><span>📞 ‎+971 56 816 6402</span></div>
    </div>`;
