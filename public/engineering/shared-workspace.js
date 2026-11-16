@@ -145,6 +145,12 @@ function baselineText(project){
   return text;
 }
 
+function stableSettingsJson(value) {
+  if(Array.isArray(value))return '['+value.map(stableSettingsJson).join(',')+']';
+  if(value&&typeof value==='object')
+    return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+stableSettingsJson(value[key])).join(',')+'}';
+  return JSON.stringify(value===undefined?null:value);
+}
 function workspaceRequest(after) {
   const beforeById=new Map(sharedWorkspace.projects.map(project=>[project.id,project]));
   const afterById=new Map(after.projects.map(project=>[project.id,project]));
@@ -154,7 +160,7 @@ function workspaceRequest(after) {
     if(baselineText(before)!==JSON.stringify(next))changes.push({id,before,after:next});
   }
   const beforeSettings=workspaceSettings(sharedWorkspace),afterSettings=workspaceSettings(after);
-  const changed=JSON.stringify(beforeSettings)!==JSON.stringify(afterSettings);
+  const changed=stableSettingsJson(beforeSettings)!==stableSettingsJson(afterSettings);
   return {p_operation:crypto.randomUUID(),p_changes:changes,
     p_settings_before:changed?beforeSettings:null,p_settings_after:changed?afterSettings:null};
 }
