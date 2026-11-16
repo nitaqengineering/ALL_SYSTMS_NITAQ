@@ -41,6 +41,7 @@ try{
  await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
  await accounting.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261112_015_project_time_logs.sql'));
+ for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261116_016_reopen_closed_project.sql'));
  await testOtherSafeDB(accounting);
  await testTimerSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
