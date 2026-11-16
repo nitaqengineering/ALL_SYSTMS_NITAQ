@@ -395,7 +395,7 @@ async function onboardWorkspaceUser(){
   const result=await client.auth.getUser();
   if(result.error||!result.data?.user)return startSharedWorkspace();
   const invitedEmail=new URLSearchParams(location.search).get('email');
-  if(!invitedEmail||result.data.user.email?.toLowerCase()!==invitedEmail.toLowerCase()){
+  if(invitedEmail&&result.data.user.email?.toLowerCase()!==invitedEmail.toLowerCase()){
     return workspaceGate('الحساب المفتوح مختلف عن حساب الدعوة. افتح رابط دعوتك الصحيح أو سجّل الدخول بحسابك.',[
       ['تسجيل الدخول',()=>void startSharedWorkspace()]
     ]);
@@ -461,7 +461,7 @@ document.addEventListener('click',event=>{
 });
 
 if(window.NITAQ_REQUIRE_SHARED){
-  if(new URLSearchParams(location.search).get('onboard')==='1'){
+  if(new URLSearchParams(location.search).get('onboard')==='1'||location.hash.indexOf('type=recovery')>=0){
     void onboardWorkspaceUser().catch(error=>workspaceGate(error.message,[
       ['تسجيل الدخول',()=>void startSharedWorkspace()]
     ]));
