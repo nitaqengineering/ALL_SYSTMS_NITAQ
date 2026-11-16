@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NITAQ — عرض المشروع ثلاثي الأبعاد</title>
+<link rel="icon" href="../NITAQ-Logo-gold.svg">
+<style>
+@font-face{font-family:Tajawal;font-weight:300;src:url(../studio/assets/fonts/tajawal-arabic-300-normal.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:Tajawal;font-weight:400;src:url(../studio/assets/fonts/tajawal-arabic-400-normal.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:Tajawal;font-weight:500;src:url(../studio/assets/fonts/tajawal-arabic-500-normal.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:Tajawal;font-weight:300;src:url(../studio/assets/fonts/tajawal-latin-300-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:Tajawal;font-weight:400;src:url(../studio/assets/fonts/tajawal-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:Tajawal;font-weight:500;src:url(../studio/assets/fonts/tajawal-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F}
+:root{--navy:#101725;--navy2:#172033;--gold:#C9A25D;--white:#fff;--steel:#6E7787;--concrete:#EEEDEA;--line:rgba(255,255,255,.1)}
+*{box-sizing:border-box;margin:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--navy);color:var(--white);font-family:Tajawal,system-ui,sans-serif;font-weight:400;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.app{display:grid;grid-template-rows:auto 1fr;height:100%;min-height:560px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 24px;border-bottom:1px solid var(--line)}
+header img{height:30px;display:block}
+.hd-meta{font-size:12px;letter-spacing:.14em;color:var(--steel);text-transform:uppercase}
+.hd-actions{display:flex;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;transition:.2s}
+.chip:hover{border-color:var(--gold);color:var(--gold)}
+main{display:grid;grid-template-columns:1fr 360px;min-height:0}
+.stage{position:relative;min-height:0;overflow:hidden;background:var(--concrete);transition:background .5s}
+.night .stage{background:#0B101B}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.stage canvas:active{cursor:grabbing}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-50%);text-align:center;white-space:nowrap;font-size:12px;line-height:1.25;color:var(--navy);background:rgba(255,255,255,.86);padding:4px 9px;border-radius:6px;transition:opacity .2s}
+.lbl small{display:block;color:var(--steel);font-size:10.5px}
+.lbl.on{background:var(--gold);color:var(--navy)}
+.lbl.on small{color:var(--navy)}
+.title{position:absolute;top:20px;inset-inline-start:24px;color:var(--navy);pointer-events:none;transition:color .5s}
+.night .title{color:var(--white)}
+.title .k{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}
+.title h1{font-size:26px;font-weight:500;margin-top:4px}
+.title p{font-size:13px;color:var(--steel);margin-top:2px}
+.badge{display:inline-block;margin-top:8px;font-size:11px;border:1px solid var(--gold);color:var(--gold);padding:2px 8px;border-radius:4px}
+.levels{position:absolute;top:20px;inset-inline-end:24px;display:flex;flex-direction:column;gap:6px}
+.dock{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--navy);padding:6px;border-radius:12px;box-shadow:0 8px 30px rgba(16,23,37,.25)}
+.btn{padding:9px 16px;border-radius:8px;font-size:13px;color:#C9CED8;transition:.2s;white-space:nowrap}
+.btn:hover{color:var(--white)}
+.btn.on{background:var(--gold);color:var(--navy);font-weight:500}
+.levels .btn{background:var(--navy);box-shadow:0 4px 16px rgba(16,23,37,.2)}
+.levels .btn.on{background:var(--gold)}
+.hint{position:absolute;bottom:26px;inset-inline-start:24px;font-size:11px;color:var(--steel)}
+aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:22px}
+.sec-k{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase;margin-bottom:10px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fact{background:var(--navy);padding:14px}
+.fact b{display:block;font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
+.fact span{font-size:12px;color:var(--steel)}
+.rooms{list-style:none;padding:0;display:flex;flex-direction:column}
+.rooms li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 10px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px;font-size:14px;transition:.15s}
+.rooms li:hover,.rooms li.on{background:var(--navy2)}
+.rooms li.on{color:var(--gold)}
+.rooms li span{color:var(--steel);font-size:12.5px;font-variant-numeric:tabular-nums}
+.total{display:flex;justify-content:space-between;padding:12px 10px;font-weight:500}
+.total span{color:var(--gold);font-variant-numeric:tabular-nums}
+.cta{display:block;text-align:center;background:var(--gold);color:var(--navy);font-weight:500;padding:13px;border-radius:10px;text-decoration:none;margin-top:auto}
+.foot{font-size:11px;color:var(--steel);line-height:1.6}
+.err{padding:40px;text-align:center;color:var(--steel)}
+@media(max-width:860px){
+  .app{height:auto}
+  main{grid-template-columns:1fr}
+  .stage{height:68vh;min-height:420px}
+  aside{border:0;border-top:1px solid var(--line);padding:20px 16px}
+  header{padding:12px 16px}.hd-meta{display:none}
+  .title{inset-inline-start:16px;top:14px}.title h1{font-size:20px}
+  .levels{inset-inline-end:12px;top:14px}
+  .dock{bottom:12px}.btn{padding:8px 11px;font-size:12px}
+  .hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <img src="../NITAQ-Logo-gold.svg" alt="NITAQ">
+    <div class="hd-meta" id="hdMeta"></div>
+    <div class="hd-actions">
+      <button class="chip" id="btnNight"></button>
+      <button class="chip" id="btnLang"></button>
+    </div>
+  </header>
+  <main>
+    <section class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="title">
+        <div class="k" id="tK"></div>
+        <h1 id="tName"></h1>
+        <p id="tLoc"></p>
+        <span class="badge" id="tSample" hidden></span>
+      </div>
+      <div class="levels" id="levels"></div>
+      <div class="hint" id="hint"></div>
+      <div class="dock">
+        <button class="btn" id="bRotate"></button>
+        <button class="btn on" id="bDoll"></button>
+        <button class="btn" id="bPlan"></button>
+        <button class="btn" id="bWalls"></button>
+        <button class="btn" id="bReset"></button>
+      </div>
+    </section>
+    <aside>
+      <div>
+        <div class="sec-k" id="kFacts"></div>
+        <div class="facts" id="facts"></div>
+      </div>
+      <div>
+        <div class="sec-k" id="kRooms"></div>
+        <ul class="rooms" id="rooms"></ul>
+        <div class="total"><b id="totalK"></b><span id="totalV"></span></div>
+      </div>
+      <a class="cta" id="cta" target="_blank" rel="noopener" href="https://wa.me/971566299449"></a>
+      <p class="foot" id="foot"></p>
+    </aside>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ?p=<project> loads data/<project>.js (letters, digits, dashes only); default: sample villa. */
+(function () {
+  var p = (new URLSearchParams(location.search).get('p') || 'sample-villa').toLowerCase();
+  if (!/^[a-z0-9-]{1,60}$/.test(p)) p = 'sample-villa';
+  function load(src, next) { var s = document.createElement('script'); s.src = src; s.onload = s.onerror = next; document.body.appendChild(s); }
+  load('data/' + p + '.js', function () { load('showcase.js'); });
+})();
+</script>
+</body>
+</html>
