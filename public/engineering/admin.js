@@ -1,13 +1,13 @@
 function engineerPermissions(name) {
   const account=projectUsers().find(user=>user.name===name);
   if(account?.active===false)return {edit:false,assign:false};
-  if(['مدير','مالك'].includes(account?.role))return {edit:true,assign:true};
+  if(['مدير','مالك'].includes(account?.role))return {edit:true,assign:true,editAll:true};
   const saved=account?.permissions ?? db.permissions?.[name];
-  return saved==null ? {edit:true,assign:false} : {edit:saved.edit===true,assign:saved.assign===true};
+  return saved==null ? {edit:true,assign:false,editAll:false} : {edit:saved.edit===true,assign:saved.assign===true,editAll:saved.editAll===true};
 }
 
 function canEditStage(stage) {
-  return managerPreview() || (stage.engineer===previewUser && engineerPermissions(previewUser).edit);
+  return managerPreview() || engineerPermissions(previewUser).editAll || (stage.engineer===previewUser && engineerPermissions(previewUser).edit);
 }
 
 function canAssignStage() {
@@ -76,10 +76,11 @@ function recordChanges(before, after) {
 }
 
 const permissionPresets=[
-  {label:'قراءة فقط',edit:false,assign:false},
-  {label:'مهندس منفذ',edit:true,assign:false},
-  {label:'مسؤول إسناد',edit:false,assign:true},
-  {label:'منسق ومهندس منفذ',edit:true,assign:true}
+  {label:'قراءة فقط',edit:false,assign:false,editAll:false},
+  {label:'مهندس منفذ',edit:true,assign:false,editAll:false},
+  {label:'مسؤول إسناد',edit:false,assign:true,editAll:false},
+  {label:'منسق ومهندس منفذ',edit:true,assign:true,editAll:false},
+  {label:'تعديل كل البنود',edit:true,assign:true,editAll:true}
 ];
 
 function openPermissions() { openUsers(); }

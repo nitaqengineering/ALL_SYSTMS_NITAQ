@@ -476,5 +476,6 @@ engineerPermissions=function(name){
   if(!sharedWorkspace)return localEngineerPermissions(name);
   if(sharedWorkspacePermissions?.manager)return localEngineerPermissions(name);
   return {edit:sharedWorkspacePermissions?.permissions?.edit===true,
-    assign:sharedWorkspacePermissions?.permissions?.assign===true};
+    assign:sharedWorkspacePermissions?.permissions?.assign===true,
+    editAll:sharedWorkspacePermissions?.permissions?.editAll===true};
 };
