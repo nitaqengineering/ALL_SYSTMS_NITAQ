@@ -14,32 +14,40 @@ const localOpenActivity = openActivity;
 let workspaceInviteBusy=false;
 
 function workspaceGate(message,actions=[]) {
-  let panel=document.getElementById('workspaceGate');
-  if(!panel){
-    panel=document.createElement('section');
-    panel.id='workspaceGate';
-    panel.setAttribute('role','dialog');
-    panel.setAttribute('aria-modal','true');
-    panel.style.cssText='position:fixed;inset:0;z-index:10000;background:#eeedeaf5;display:grid;place-content:center;padding:24px;overflow:auto';
-    document.body.append(panel);
+  let overlay=document.getElementById('workspaceGate');
+  if(!overlay){
+    overlay=document.createElement('section');
+    overlay.id='workspaceGate';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-labelledby','workspaceGateTitle');
+    const card=document.createElement('div');
+    card.className='gate-card';
+    overlay.append(card);
+    document.body.append(overlay);
   }
-  panel.replaceChildren();
+  const card=overlay.querySelector('.gate-card');
+  card.replaceChildren();
+  const brand=document.createElement('div');
+  brand.className='gate-brand';
+  brand.innerHTML='نطاق<small>NITAQ ENGINEERING</small>';
   const heading=document.createElement('h2');
+  heading.id='workspaceGateTitle';
   heading.textContent='متابعة المشاريع';
   const text=document.createElement('p');
   text.textContent=message;
   text.setAttribute('role','status');
-  panel.append(heading,text);
+  card.append(brand,heading,text);
   for(const [label,action] of actions){
     const button=document.createElement('button');
     button.className='btn';
     button.type='button';
     button.textContent=label;
     button.onclick=action;
-    panel.append(button);
+    card.append(button);
   }
   document.querySelector('main').inert=true;
-  return panel;
+  return card;
 }
 
 function closeWorkspaceGate() {
@@ -329,9 +337,11 @@ document.getElementById('activity').onclick=()=>openActivity();
 async function startSharedWorkspace() {
   const panel=workspaceGate('سجّل الدخول بحساب نطاق لفتح المشاريع المشتركة.');
   const form=document.createElement('form');
-  form.innerHTML='<label>البريد الإلكتروني<input name="email" type="email" autocomplete="username" required></label>'+
+  form.className='gate-form';
+  form.innerHTML='<label>البريد الإلكتروني<input name="email" type="email" autocomplete="username" placeholder="name@nitaq.ae" required></label>'+
     '<label>كلمة مرور الحساب<input name="password" type="password" autocomplete="current-password" required></label>'+
-    '<button class="btn primary">دخول</button>';
+    '<button class="btn primary">دخول</button>'+
+    '<p class="gate-help">حساب جديد أو نسيت كلمة المرور؟ افتح رابط الدعوة أو الاستعادة من بريدك لضبط كلمة مرور، أو كلّم الإدارة.</p>';
   panel.append(form);
   form.onsubmit=async event=>{
     event.preventDefault();
@@ -408,9 +418,11 @@ async function onboardWorkspaceUser(){
   }
   const panel=workspaceGate('اختر كلمة مرور لحساب '+result.data.user.email+' في نطاق.');
   const form=document.createElement('form');
+  form.className='gate-form';
   form.innerHTML='<label>كلمة المرور الجديدة<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>'+
     '<label>تأكيد كلمة المرور<input name="confirmPassword" type="password" minlength="12" autocomplete="new-password" required></label>'+
-    '<button class="btn primary">حفظ وفتح المشاريع</button>';
+    '<button class="btn primary">حفظ وفتح المشاريع</button>'+
+    '<p class="gate-help">اختر كلمة مرور قوية لا تقل عن 12 حرفًا؛ هتستخدمها كل مرة تدخل فيها.</p>';
   panel.append(form);
   form.onsubmit=async event=>{
     event.preventDefault();
