@@ -8,7 +8,7 @@
 #table thead tr:nth-child(2) th{top:38px;height:28px}
 #table .fixednum{width:76px;min-width:76px;max-width:76px}
 #table .fixedname{right:76px;width:135px;min-width:135px;max-width:135px;white-space:normal;overflow-wrap:anywhere}
-#table .project-details{min-width:155px;max-width:185px;overflow-wrap:anywhere}
+#table .project-details{min-width:140px;max-width:155px;overflow-wrap:anywhere}
 #table .project-details .owner{line-height:1.35}
 #table .sub{margin-top:2px}
 #table .fee-note{margin-top:3px}
@@ -17,6 +17,13 @@
 #table .inline-state select{min-width:50px;max-width:92px}
 #table .detail-btn,#table .btn{padding:3px 4px;line-height:1.4}
 #table .detail-btn{font-size:15px}
+/* On pointer devices the per-cell details (⋯) button is revealed on row hover/focus,
+   so idle rows stay compact; touch devices keep it inline (no hover). */
+@media (hover:hover) and (pointer:fine){
+  #table tbody .inline-state{position:relative}
+  #table tbody .inline-state .detail-btn{position:absolute;inset-inline-start:-3px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;z-index:3;background:#fff;border-radius:4px;box-shadow:0 0 5px 1px rgba(0,0,0,.14)}
+  #table tbody tr:hover .inline-state .detail-btn,#table tbody tr:focus-within .inline-state .detail-btn{opacity:1;pointer-events:auto}
+}
 #table .document-grid-input{width:115px;padding:4px 5px;min-height:27px}
 #table textarea.document-grid-input{width:158px;height:29px;min-height:29px;resize:vertical;vertical-align:middle}
 #table .note{max-width:150px}
