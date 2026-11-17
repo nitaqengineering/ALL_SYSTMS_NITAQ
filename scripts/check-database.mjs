@@ -43,6 +43,7 @@ try{
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261112_015_project_time_logs.sql'));
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261116_016_reopen_closed_project.sql'));
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261116_017_edit_all_items.sql'));
+ for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261117_018_reopen_guard_and_status_list.sql'));
  await testOtherSafeDB(accounting);
  await testTimerSafeDB(accounting);
  const crm=await database('crm');await testCrmSafeDB(crm);
