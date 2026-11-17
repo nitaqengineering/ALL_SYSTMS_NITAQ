@@ -144,10 +144,12 @@ function activityTable(){
 function openLists() {
   if(!managerPreview())return;
   show('القوائم','اختيارات النماذج والجدول',
-    '<div class="column-actions"><button type="button" class="btn" id="listValues">الحالات والبلديات</button>'+
+    '<div class="column-actions"><button type="button" class="btn primary" id="listStatuses">حالات المراحل</button>'+
+    '<button type="button" class="btn" id="listValues">البلديات والحالات القديمة</button>'+
     '<button type="button" class="btn" id="listColumns">إدارة الأعمدة</button>'+
     '<button type="button" class="btn" id="listFilters">الفلاتر المحفوظة</button></div>',
     'documentHub');
+  $('#listStatuses').onclick=openStatusManager;
   $('#listValues').onclick=openLookupSettings;
   $('#listColumns').onclick=()=>openColumns();
   $('#listFilters').onclick=()=>{
