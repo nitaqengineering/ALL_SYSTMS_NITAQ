@@ -113,7 +113,7 @@ function initUsability() {
   document.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button||button.disabled)return;
     if(button.dataset.focusDocumentView)documentView=button.dataset.focusDocumentView;
-    if(button.dataset.reportStage){focusedProjectId='';reportDrill={key:button.dataset.reportStage,bucket:button.dataset.reportBucket};view='projects';onlyMine=false;for(const id of ['search','engineer','stagefilter','statefilter'])$('#'+id).value='';$('#filter').value='all';const group=tableGroups().find(([, ,columns])=>columns.includes(reportDrill.key));if(group)opened.add(group[0]);render();}
+    if(button.dataset.reportStage){focusedProjectId='';reportDrill={key:button.dataset.reportStage,bucket:button.dataset.reportBucket};view='projects';onlyMine=false;for(const id of ['search','engineer','stagefilter','statefilter'])$('#'+id).value='';$('#filter').value='all';const group=tableGroups().find(([, ,columns])=>columns.includes(reportDrill.key));if(group)opened=new Set([group[0]]);render();}
     if(button.dataset.focusProject)focusProject(button.dataset.focusProject,button.dataset.focusView || 'projects');
     if(button.dataset.documentView){documentView=button.dataset.documentView;render();}
     if(button.id==='saveAllFollowup')saveAllFollowupDrafts();
