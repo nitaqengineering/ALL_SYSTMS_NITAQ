@@ -23,9 +23,16 @@ jobs:
       - name: Portal and the four systems open
         run: |
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          curl -fsS --retry 3 --retry-delay 10 "$base/" | grep -q 'NITAQ-Logo-gold.svg'
+          # --retry-all-errors so a transient GitHub Pages hiccup (e.g. a brief 404
+          # during a deploy or CDN refresh) is retried instead of failing the run.
+          curl -fsS --retry 6 --retry-delay 15 --retry-all-errors "$base/" | grep -q 'NITAQ-Logo-gold.svg'
           for page in accounting crm engineering studio; do
-            curl -fsS --retry 3 --retry-delay 10 -o /dev/null "$base/$page/index.html"
+            curl -fsS --retry 6 --retry-delay 15 --retry-all-errors -o /dev/null "$base/$page/index.html"
           done
-          [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/README.md")" = "404" ]
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "$base/README.md")"
+            [ "$code" = "404" ] && break
+            [ "$attempt" = 6 ] && { echo "README.md returned $code, expected 404 after retries"; exit 1; }
+            sleep 15
+          done
           echo "Portal healthy at $base"
