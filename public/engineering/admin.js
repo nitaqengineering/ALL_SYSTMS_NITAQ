@@ -14,6 +14,20 @@ function canAssignStage() {
   return managerPreview() || engineerPermissions(previewUser).assign;
 }
 
+// Human-readable reason a stage edit/assign was refused, so the user knows the
+// cause (whose stage it is, which permission is missing) and how to recover.
+function stageEditDenial(stage) {
+  const perms=engineerPermissions(previewUser);
+  if(stage && stage.engineer && stage.engineer!==previewUser && !perms.editAll)
+    return 'هذا البند مُسند إلى «'+stage.engineer+'». التعديل متاح للمهندس المسؤول عنه أو للمدير. لو محتاج تعدّل بنودًا مُسندة لغيرك، اطلب من المدير تفعيل صلاحية «تعديل كل البنود» لحسابك.';
+  if(!perms.edit && !perms.editAll)
+    return 'حسابك لا يملك صلاحية تعديل بنود المشاريع. راجع صلاحياتك مع المدير.';
+  return 'تعذّر تعديل هذا البند الآن. راجع صلاحياتك وحالة المشروع مع المدير.';
+}
+function stageAssignDenial() {
+  return 'إسناد البنود للمهندسين متاح للمدير أو لحساب لديه صلاحية الإسناد. اطلب من المدير إسناد البند أو منحك صلاحية الإسناد.';
+}
+
 function trimActivity() {
   if(db.activity?.length>500) db.activity.splice(0,db.activity.length-500);
 }

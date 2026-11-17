@@ -193,7 +193,7 @@ async function saveSharedWorkspace() {
     }
     if(result.error) {
       if(result.status>=400&&result.status<500&&![408,429].includes(result.status)){
-        const message=result.error.code==='42501'?'حسابك لا يملك صلاحية هذا التعديل.'
+        const message=result.error.code==='42501'?'حسابك لا يملك صلاحية هذا التعديل. تعديل بنود المشاريع متاح للمهندس المسؤول عن البند أو للمدير — وللتعديل على بنود غيرك اطلب من المدير تفعيل صلاحية «تعديل كل البنود» لحسابك.'
           :'رفضت القاعدة التعديل. '+(result.error.message||'راجع بيانات المشروع.');
         workspaceGate(message+' — المشروع '+pending.request.p_changes.map(change=>change.id).join('، '),[
           ['تنزيل تعديلاتك',downloadWorkspaceDraft],
@@ -341,7 +341,7 @@ async function startSharedWorkspace() {
     try {
       const client=await loadAccountingCloudClient();
       const result=await client.auth.signInWithPassword({email,password});
-      if(result.error)throw Error('تعذر الدخول. راجع البريد وكلمة مرور الحساب.');
+      if(result.error)throw Error('تعذر الدخول. تأكد من البريد وكلمة المرور. لو الحساب جديد أو نسيت كلمة المرور، افتح رابط الدعوة أو الاستعادة من بريدك لضبط كلمة مرور جديدة.');
       if(sharedWorkspacePending||sharedWorkspaceRestorePending){
         if(result.data.user.id!==sharedWorkspaceActor)throw Error('ادخل بنفس الحساب الذي أرسل طلب الحفظ المعلق.');
         if(sharedWorkspaceRestorePending)await restoreSharedWorkspace();

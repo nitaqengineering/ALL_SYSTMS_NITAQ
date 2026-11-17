@@ -88,7 +88,7 @@ document.addEventListener('change',event=>{
   if(!tenderProject)return;
   const project=projects.find(p=>p.id===tenderProject);
   if(!project||stopped(project))return;
-  if(tenderField==='engineer'?!canAssignStage():!canEditStage(project.stages.tender)){toast('ليس لديك صلاحية تعديل هذا الحقل');render();return;}
+  if(tenderField==='engineer'?!canAssignStage():!canEditStage(project.stages.tender)){toast(tenderField==='engineer'?stageAssignDenial():stageEditDenial(project.stages.tender));render();return;}
   const value=event.target.value.trim();
   if(['engineer','date','note'].includes(tenderField)){
     project.stages.tender[tenderField]=value;

@@ -69,7 +69,9 @@ function saveAllFollowupDrafts() {
   try {
     for(const [key,draft] of drafts){
       const [,projectId,stageKey]=JSON.parse(key),project=projects.find(item=>item.id===projectId),stage=project?.stages[stageKey];
-      if(!stage||stopped(project)||!canEditStage(stage))throw Error('راجع صلاحية وحالة المشروع '+projectId);
+      if(!stage)throw Error('بند غير موجود في المشروع '+projectId);
+      if(stopped(project))throw Error('العمل متوقف على المشروع '+projectId+' — لا يمكن حفظ تعديلات بنوده.');
+      if(!canEditStage(stage))throw Error(stageEditDenial(stage)+' (المشروع '+projectId+')');
       if(draft.date && (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)||!Number.isFinite(Date.parse(draft.date))||new Date(draft.date).toISOString().slice(0,10)!==draft.date))throw Error('موعد غير صحيح في المشروع '+projectId);
       if(draft.status!==undefined && draft.status!==stage.status)updateStage(project,stageKey,draft.status);
       if(draft.date!==undefined)stage.date=draft.date;
@@ -100,7 +102,8 @@ function initUsability() {
     const project=projects.find(item=>item.id===input.dataset.stageProject),key=input.dataset.stageKey,field=input.dataset.stageField,stage=project?.stages[key];
     try{
       if(!stage||!['engineer','date','note'].includes(field)||stopped(project)||key==='gas'&&project.service==='FEWA')throw Error('البند غير متاح للتعديل');
-      if(field==='engineer'?!canAssignStage():!canEditStage(stage))throw Error('ليس لديك صلاحية تعديل هذا الحقل');
+      if(field==='engineer'){if(!canAssignStage())throw Error(stageAssignDenial());}
+      else if(!canEditStage(stage))throw Error(stageEditDenial(stage));
       if(field==='engineer' && input.value && !people.includes(input.value))throw Error('اختر مسؤولًا نشطًا');
       if(field==='date' && !input.reportValidity())return;
       if(stage[field]===input.value)return;
