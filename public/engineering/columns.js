@@ -1,6 +1,16 @@
 const columnTypes = {text:'نص', number:'رقم', date:'تاريخ'};
 const columnGroups = () => [...groups.map(([id,title])=>[id,title]), ...(db.columnLayout?.groups||[])];
 
+// Per-browser view preference: which column groups the user hid from the grid.
+// It is a display convenience only (never shared, never written to the project data).
+let hiddenColumnGroups;
+try { hiddenColumnGroups = new Set(JSON.parse(localStorage.getItem('nitaq-eng-hidden-cols') || '[]')); }
+catch { hiddenColumnGroups = new Set(); }
+if (!(hiddenColumnGroups instanceof Set)) hiddenColumnGroups = new Set();
+function saveHiddenColumnGroups() {
+  try { localStorage.setItem('nitaq-eng-hidden-cols', JSON.stringify([...hiddenColumnGroups])); } catch {}
+}
+
 function tableGroups() {
   const layout = db.columnLayout || {};
   const columns = [...keys, ...Object.keys(layout.fields||{})];
@@ -8,8 +18,41 @@ function tableGroups() {
   columns.sort((a,b)=>(order.indexOf(a)<0?Infinity:order.indexOf(a))-(order.indexOf(b)<0?Infinity:order.indexOf(b)));
   return columnGroups().map(([id,title])=>[id,title,columns.filter(key=>
     (layout.moves?.[key] ?? layout.fields?.[key]?.group ?? groups.find(g=>g[2].includes(key))?.[0])===id
-  )]).filter(group=>group[2].length);
+  )]).filter(group=>group[2].length && !hiddenColumnGroups.has(group[0]));
 }
+
+function columnVisibilityTitle(id, title) {
+  return String(title).replace('COORDINATION — ', '').trim();
+}
+function openColumnVisibility() {
+  const all = columnGroups();
+  const rows = all.map(([id, title]) =>
+    '<label class="colvis-item"><input type="checkbox" data-colvis="' + esc(id) + '" ' +
+    (hiddenColumnGroups.has(id) ? '' : 'checked') + '> ' + esc(columnVisibilityTitle(id, title)) + '</label>'
+  ).join('');
+  const hiddenCount = all.filter(([id]) => hiddenColumnGroups.has(id)).length;
+  show('إظهار / إخفاء الأعمدة', 'شيل العلامة عن أي مجموعة عشان تخفيها من الجدول وتقلّل التمرير.',
+    '<div class="colvis-actions"><button type="button" class="btn" id="colvisAll">إظهار الكل</button>' +
+    (hiddenCount ? '<span class="sub">مخفي حاليًا: ' + hiddenCount + '</span>' : '') + '</div>' +
+    '<div class="colvis-grid">' + rows + '</div>' +
+    '<p class="sub">ده عرض فقط — مابيأثرش على البيانات، وكل مستخدم ليه إعداده على متصفحه.</p>', 'columnVis');
+  const allBtn = document.getElementById('colvisAll');
+  if (allBtn) allBtn.onclick = () => {
+    hiddenColumnGroups.clear();
+    saveHiddenColumnGroups();
+    render();
+    document.querySelectorAll('[data-colvis]').forEach(cb => { cb.checked = true; });
+    const note = document.querySelector('.colvis-actions .sub');
+    if (note) note.remove();
+  };
+}
+document.addEventListener('change', event => {
+  const id = event.target.dataset?.colvis;
+  if (!id) return;
+  if (event.target.checked) hiddenColumnGroups.delete(id); else hiddenColumnGroups.add(id);
+  saveHiddenColumnGroups();
+  render();
+});
 
 function columnTitle(key) {
   return db.columnLayout?.names?.[key] || db.columnLayout?.fields?.[key]?.title || titles[key];
