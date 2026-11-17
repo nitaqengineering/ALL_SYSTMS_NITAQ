@@ -77,6 +77,8 @@ all_rooms = list(DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.
 all_walls = list(DB.FilteredElementCollector(doc).OfClass(DB.Wall))
 all_floors = list(DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Floors).WhereElementIsNotElementType())
 
+plans = [v for v in DB.FilteredElementCollector(doc).OfClass(DB.ViewPlan)
+         if not v.IsTemplate and v.ViewType == DB.ViewType.FloorPlan]
 out = []
 for i, lv in enumerate(levels):
     nxt = levels[i + 1].Elevation if i + 1 < len(levels) else lv.Elevation + 3.4 / FT
@@ -151,6 +153,16 @@ for i, lv in enumerate(levels):
                 o['sill'] = r3(bip(ins, 'INSTANCE_SILL_HEIGHT_PARAM') or 3)
             rec['openings'].append(o)
         L['walls'].append(rec)
+    # Spaces drawn without a Revit room are often named with Text Notes on the plan
+    # (MAJLIS, LIVING, TERRACE...): take them from the level's floor plan with the most notes.
+    best = []
+    for v in plans:
+        if v.GenLevel is not None and v.GenLevel.Id == lv.Id:
+            notes = list(DB.FilteredElementCollector(doc, v.Id).OfClass(DB.TextNote))
+            if len(notes) > len(best):
+                best = notes
+    L['notes'] = [{'text': ' '.join(t.Text.replace(u'\x0b', ' ').split()), 'x': r3(t.Coord.X), 'y': r3(t.Coord.Y)}
+                  for t in best if t.Text.strip()]
     if L['rooms'] or L['walls'] or L['slabs']:
         out.append(L)
 

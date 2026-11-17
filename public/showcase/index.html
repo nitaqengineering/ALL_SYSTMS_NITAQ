@@ -33,6 +33,7 @@ main{display:grid;grid-template-columns:1fr 360px;min-height:0}
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .lbl{position:absolute;transform:translate(-50%,-50%);text-align:center;white-space:nowrap;font-size:12px;line-height:1.25;color:var(--navy);background:rgba(255,255,255,.86);padding:4px 9px;border-radius:6px;transition:opacity .2s}
 .lbl small{display:block;color:var(--steel);font-size:10.5px}
+.lbl.note{background:rgba(16,23,37,.82);color:#fff;letter-spacing:.02em}
 .lbl.on{background:var(--gold);color:var(--navy)}
 .lbl.on small{color:var(--navy)}
 .title{position:absolute;top:20px;inset-inline-start:24px;color:var(--navy);pointer-events:none;transition:color .5s}
@@ -64,6 +65,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .total span{color:var(--gold);font-variant-numeric:tabular-nums}
 .cta{display:block;text-align:center;background:var(--gold);color:var(--navy);font-weight:500;padding:13px;border-radius:10px;text-decoration:none;margin-top:auto}
 .foot{font-size:11px;color:var(--steel);line-height:1.6}
+.loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--navy);color:var(--white);padding:10px 18px;border-radius:999px;font-size:13px}
 .err{padding:40px;text-align:center;color:var(--steel)}
 @media(max-width:860px){
   .app{height:auto}
@@ -92,6 +94,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
     <section class="stage" id="stage">
       <canvas id="cv"></canvas>
       <div class="labels" id="labels"></div>
+      <div class="loading" id="loading" hidden></div>
       <div class="title">
         <div class="k" id="tK"></div>
         <h1 id="tName"></h1>
@@ -105,6 +108,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
         <button class="btn on" id="bDoll"></button>
         <button class="btn" id="bPlan"></button>
         <button class="btn" id="bWalls"></button>
+        <button class="btn" id="bFurn" hidden></button>
         <button class="btn" id="bReset"></button>
       </div>
     </section>

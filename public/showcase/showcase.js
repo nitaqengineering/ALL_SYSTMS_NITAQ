@@ -11,14 +11,16 @@
 
   var STR = {
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
-      rotate: 'دوران', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة',
+      rotate: 'دوران', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
+      loading: 'جاري تحميل المجسّم…',
       facts: 'بيانات المشروع', rooms: 'الفراغات', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
-      rotate: 'Rotate', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset',
+      rotate: 'Rotate', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
+      loading: 'Loading model…',
       facts: 'Project facts', rooms: 'Spaces', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
@@ -31,7 +33,8 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, auto: false, sel: null, hover: null };
+  var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
   var fmt = function (n) { return Math.round(n).toLocaleString('en-US'); };
@@ -75,6 +78,10 @@
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Section plane: everything above it is cut away, like a Revit plan cut / section box top.
+  renderer.localClippingEnabled = true;
+  var cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
+  var meshGroups = {}, noteLbls = [], edgeQueue = []; // 'arch' and 'furn' groups once the Revit geometry has loaded
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(32, 1, 0.1, 500);
 
@@ -152,17 +159,20 @@
   }
 
   var site = new THREE.Group(); scene.add(site);
-  (D.site || []).forEach(function (L) { buildSlabs(L, site, true); site.add(buildWalls(L, 0)); });
+  if (!MESH) (D.site || []).forEach(function (L) { buildSlabs(L, site, true); site.add(buildWalls(L, 0)); });
 
   var floorMeshes = [], levelGroups = [];
   D.levels.forEach(function (L, li) {
     var G = new THREE.Group(); scene.add(G);
     var floors = new THREE.Group(); G.add(floors);
-    buildSlabs(L, floors);
+    if (!MESH) buildSlabs(L, floors);
     var slabTop = (L.slabs || []).reduce(function (m, s) { return Math.max(m, s.top || 0); }, 0);
     L.rooms.forEach(function (r) {
       var geo = new THREE.ExtrudeGeometry(shape(r.poly), { depth: 0.2, bevelEnabled: false });
-      var mat = new THREE.MeshStandardMaterial({ color: FLOOR[r.type] || 0xDDD8CC, roughness: 0.75, emissive: 0xC9A25D, emissiveIntensity: 0 });
+      // With real geometry the room floor is only a highlight overlay (hover / selection).
+      var mat = MESH
+        ? new THREE.MeshBasicMaterial({ color: 0xC9A25D, transparent: true, opacity: 0, depthWrite: false })
+        : new THREE.MeshStandardMaterial({ color: FLOOR[r.type] || 0xDDD8CC, roughness: 0.75, emissive: 0xC9A25D, emissiveIntensity: 0 });
       var m = new THREE.Mesh(geo, mat);
       m.rotation.x = -Math.PI / 2; m.position.y = L.elevation + slabTop + 0.02 - 0.2; m.receiveShadow = true;
       m.userData = { room: r, level: li }; r._mesh = m; floors.add(m); floorMeshes.push(m);
@@ -175,7 +185,8 @@
       m.position.copy(P(f.x + f.w / 2, f.y + f.d / 2, L.elevation + f.h / 2));
       m.castShadow = true; m.receiveShadow = true; fur.add(m);
     });
-    var cut = buildWalls(L, CUT), full = buildWalls(L, 0);
+    var cut = MESH ? new THREE.Group() : buildWalls(L, CUT), full = MESH ? new THREE.Group() : buildWalls(L, 0);
+    L._slabTop = slabTop;
     G.add(cut); G.add(full);
     levelGroups.push({ G: G, cut: cut, full: full });
   });
@@ -226,7 +237,8 @@
     D.levels.forEach(function (L) {
       L.rooms.forEach(function (r) {
         var on = r === S.sel || r === S.hover;
-        r._mesh.material.emissiveIntensity = r === S.sel ? 0.55 : r === S.hover ? 0.3 : 0;
+        if (MESH) r._mesh.material.opacity = r === S.sel ? 0.45 : r === S.hover ? 0.25 : 0;
+        else r._mesh.material.emissiveIntensity = r === S.sel ? 0.55 : r === S.hover ? 0.3 : 0;
         if (r._lbl) r._lbl.classList.toggle('on', on);
         if (r._li) r._li.classList.toggle('on', r === S.sel);
       });
@@ -246,6 +258,7 @@
   function syncDock() {
     $('bRotate').classList.toggle('on', S.auto);
     $('bWalls').classList.toggle('on', S.full);
+    $('bFurn').classList.toggle('on', S.furn); $('bFurn').hidden = !MESH;
   }
   function applyLevel() {
     levelGroups.forEach(function (g, i) {
@@ -255,11 +268,15 @@
     });
     lamps.children.forEach(function (l) { l.visible = l.userData.level === S.level; });
     site.visible = levelY() >= -0.5; // site paving would cover a basement
+    // Cut at plan height on the current level; "full walls" cuts just under the next floor slab.
+    var L = D.levels[S.level], next = D.levels[S.level + 1];
+    cutPlane.constant = S.full ? (next ? next.elevation - 0.45 : 1e6) : L.elevation + (L._slabTop || 0) + CUT;
+    if (meshGroups.furn) meshGroups.furn.visible = S.furn;
     goal.t.y = levelY();
   }
   function applyNight() {
     $('app').classList.toggle('night', S.night);
-    hemi.intensity = S.night ? 0.16 : 0.85; sun.intensity = S.night ? 0.05 : 0.75;
+    hemi.intensity = S.night ? 0.16 : (MESH ? 0.6 : 0.85); sun.intensity = S.night ? 0.05 : (MESH ? 0.9 : 0.75);
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night;
   }
   function renderUI() {
@@ -270,7 +287,7 @@
     $('tLoc').textContent = S.lang === 'ar' ? (p.locationAr || p.location || '') : (p.location || '');
     $('tSample').hidden = !D.sample; $('tSample').textContent = T('sample');
     $('btnNight').textContent = S.night ? T('day') : T('night'); $('btnLang').textContent = T('lang');
-    ['Rotate', 'Doll', 'Plan', 'Walls', 'Reset'].forEach(function (k) { $('b' + k).textContent = T(k.toLowerCase()); });
+    ['Rotate', 'Doll', 'Plan', 'Walls', 'Furn', 'Reset'].forEach(function (k) { $('b' + k).textContent = T(k.toLowerCase()); });
     $('hint').textContent = T('hint'); $('kFacts').textContent = T('facts'); $('kRooms').textContent = T('rooms');
     $('cta').textContent = T('cta'); $('foot').textContent = T('foot'); $('totalK').textContent = T('total');
 
@@ -310,6 +327,12 @@
     });
     $('totalV').textContent = fmt(sum) + ' ' + T('m') + ' · ' + fmt(sum * SQFT) + ' ' + T('ft');
     $('totalK').parentNode.hidden = !L.rooms.length;
+    // Plan text notes (spaces with no Revit room): name-only labels, not clickable.
+    noteLbls = (L.notes || []).map(function (n) {
+      var d = document.createElement('div');
+      d.className = 'lbl note'; d.textContent = nm(n); lb.appendChild(d);
+      return { el: d, x: n.x, y: n.y };
+    });
     syncDock(); paint();
   }
   function mode(plan) {
@@ -321,6 +344,7 @@
   $('bReset').onclick = function () { S.full = false; applyLevel(); mode(false); };
   $('bRotate').onclick = function () { S.auto = !S.auto; syncDock(); };
   $('bWalls').onclick = function () { S.full = !S.full; applyLevel(); syncDock(); };
+  $('bFurn').onclick = function () { S.furn = !S.furn; applyLevel(); syncDock(); };
   $('btnNight').onclick = function () { S.night = !S.night; applyNight(); renderUI(); };
   $('btnLang').onclick = function () { S.lang = S.lang === 'ar' ? 'en' : 'ar'; renderUI(); };
 
@@ -329,7 +353,7 @@
     var w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-    var fit = SIZE * 2.9 * Math.max(1, 1.15 / camera.aspect);
+    var fit = SIZE * 2.4 * Math.max(1, 1.15 / camera.aspect);
     if (Math.abs(goal.r - HOME.r) < 0.01) goal.r = fit;
     HOME.r = fit;
   }
@@ -353,8 +377,53 @@
       r._lbl.style.opacity = ok && show ? 1 : 0;
       r._lbl.style.left = ((v.x + 1) / 2 * w) + 'px'; r._lbl.style.top = ((1 - v.y) / 2 * h) + 'px';
     });
+    noteLbls.forEach(function (n) {
+      v.copy(P(n.x, n.y, L.elevation + (L._slabTop || 0) + 0.1)).project(camera);
+      var ok = v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+      n.el.style.opacity = ok ? 1 : 0;
+      n.el.style.left = ((v.x + 1) / 2 * w) + 'px'; n.el.style.top = ((1 - v.y) / 2 * h) + 'px';
+    });
     requestAnimationFrame(frame);
   }
+  /* ---------- real Revit geometry ---------- */
+  // Each bucket is one material colour: Int16 positions (quantised, see showcase_build.mjs)
+  // and Uint16/Uint32 triangle indices. Opaque buckets get a navy back-face pass, so walls
+  // cut by the section plane read as solid navy poché instead of hollow shells.
+  function loadMesh() {
+    var note = $('loading'); note.hidden = false; note.textContent = T('loading');
+    fetch(MESH.file).then(function (r) {
+      if (!r.ok) throw new Error(r.status); return r.arrayBuffer();
+    }).then(function (buf) {
+      var root = new THREE.Group(), s = MESH.step / 1000, o = MESH.origin;
+      root.scale.set(s, s, s); root.position.set(o[0] / 1000 - CX, o[1] / 1000, o[2] / 1000 + CY);
+      var cap = new THREE.MeshBasicMaterial({ color: 0x101725, side: THREE.BackSide, clippingPlanes: [cutPlane] });
+      MESH.buckets.forEach(function (b) {
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(new Int16Array(buf, b.pos, b.verts * 3), 3));
+        g.setIndex(new THREE.BufferAttribute(b.wide ? new Uint32Array(buf, b.idx, b.count) : new Uint16Array(buf, b.idx, b.count), 1));
+        var grp = meshGroups[b.grp] || (meshGroups[b.grp] = new THREE.Group());
+        if (!grp.parent) root.add(grp);
+        var glass = b.opacity < 1;
+        var m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+          // Revit glass materials are often saturated cyan; show glass as a soft blue-grey tint.
+          color: glass ? 0x5E7484 : b.color, roughness: glass ? 0.1 : 0.85, flatShading: true,
+          transparent: glass, opacity: glass ? 0.5 : 1, depthWrite: !glass,
+          side: glass ? THREE.DoubleSide : THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true }));
+        m.castShadow = !glass; m.receiveShadow = !glass; grp.add(m);
+        if (!glass) grp.add(new THREE.Mesh(g, cap));
+        if (!glass && b.grp === 'arch') edgeQueue.push({ g: g, grp: grp });
+      });
+      scene.add(root); applyLevel(); note.hidden = true;
+      // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
+      var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
+      setTimeout(function () {
+        edgeQueue.forEach(function (e) { e.grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(e.g, 30), edgeMat)); });
+        edgeQueue = [];
+      }, 50);
+    }).catch(function () { note.textContent = 'تعذّر تحميل المجسّم'; });
+  }
+  if (MESH) loadMesh();
+
   home(); cam.t.copy(goal.t);
   applyLevel(); applyNight(); renderUI(); resize(); frame();
 })();
