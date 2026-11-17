@@ -297,6 +297,19 @@ function visible(ignoreEngineer = false, ignoreStageStatus = false) {
   });
 }
 const cls=s=>['OK','صدرت'].includes(s)?'done':['COM','HOLD','DONE','بانتظار المتطلبات'].includes(s)?'blocked':['READY','جاهز للإصدار'].includes(s)?'wait':['SUB','تم التقديم','REQ'].includes(s)?'work':'';
+// Status colour/meaning helpers + the legend live here (not in status-admin.js)
+// so the table never depends on a second file loading — a deploy race on
+// status-admin.js must not be able to break render().
+function statusMetaAll(){return db.statusMeta||{}}
+function statusColorClass(code){const c=statusMetaAll()[code]?.color;return (c!=null&&c!=='')?c:cls(code)}
+function statusMeaning(code){return statusMetaAll()[code]?.label||(typeof labels!=='undefined'?labels[code]:'')||''}
+const legendBuiltins=new Set(['REQ','READY','SUB','COM','OK','N/A','HOLD','DONE']);
+function renderStatusLegend(){
+  const el=document.getElementById('statusLegend');if(!el)return;
+  const custom=[...new Set(Object.values(db.custom||{}).flat())].filter(code=>!legendBuiltins.has(code));
+  const item=(code,text,colour)=>'<span class="legend-item"><span class="badge '+(colour!=null?colour:statusColorClass(code))+' legend-swatch">'+esc(code)+'</span>'+esc(text!=null?text:statusMeaning(code))+'</span>';
+  el.innerHTML=['REQ','SUB','COM','OK'].map(code=>item(code)).join('')+item('HOLD · DONE','متوقف · مغلق · بانتظار متطلبات','blocked')+item('N/A',statusMeaning('N/A')||'غير مطلوب التقديم لهذا الجزء','')+custom.map(code=>item(code)).join('');
+}
 function inlineOptions(arr,v){return arr.map(x=>`<option value="${esc(x)}" ${x===v?'selected':''}>${esc(x)}</option>`).join('')}
 function badge(p,k){let s=p.stages[k];if(k==='gas'&&p.service==='FEWA'&&!stopped(p))return '<span class="sub">غير متاح لدى الجهة</span>';const locked=(stopped(p)&&k!=='design')||(k==='design'&&s.status==='DONE'&&!managerPreview());return `<div class="inline-state"><select class="badge ${statusColorClass(s.status)}" data-inline="${esc(p.id)}:${k}" aria-label="حالة ${esc(columnTitle(k))} للمشروع ${esc(p.id)}" title="${esc(stateLabel(k,s.status))}" ${locked?'disabled':''}>${inlineOptions(stageStates(p,k),s.status)}</select><button class="detail-btn" data-edit="${esc(p.id)}:${k}" aria-label="تفاصيل ${esc(columnTitle(k))} للمشروع ${esc(p.id)}" title="التفاصيل والملاحظات" ${locked?'disabled':''}>✎</button></div>${stopped(p)&&k!=='design'?'<div class="sub">العمل متوقف</div>':late(s)&&!stopped(p)?'<div class="sub late">تجاوز الموعد</div>':''}`}
 function applyInline(id,k,next){const p=projects.find(p=>p.id===id);if(!p)return;try{updateStage(p,k,next);persist()}catch(err){toast(err.message);renderKeepingFocus()}}

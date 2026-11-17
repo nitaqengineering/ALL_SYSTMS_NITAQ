@@ -8,34 +8,10 @@
  * manager-only like all other settings.
  */
 
-function statusMetaAll() { return db.statusMeta || {}; }
-// Colour class for a status: an explicit override wins, else the built-in mapping.
-function statusColorClass(code) {
-  const c = statusMetaAll()[code]?.color;
-  return (c != null && c !== '') ? c : cls(code);
-}
-// Human meaning for a status: an explicit label wins, else the built-in label.
-function statusMeaning(code) {
-  return statusMetaAll()[code]?.label || (typeof labels !== 'undefined' ? labels[code] : '') || '';
-}
-
-// The legend above the table: a fixed spine of the common statuses plus any
-// custom codes a manager has added, each drawn in its real colour with meaning.
-const legendSpine = ['REQ', 'SUB', 'COM', 'OK'];
-const legendBuiltins = new Set(['REQ', 'READY', 'SUB', 'COM', 'OK', 'N/A', 'HOLD', 'DONE']);
-function renderStatusLegend() {
-  const el = document.getElementById('statusLegend');
-  if (!el) return;
-  const custom = [...new Set(Object.values(db.custom || {}).flat())].filter(code => !legendBuiltins.has(code));
-  const item = (code, text, colour) =>
-    '<span class="legend-item"><span class="badge ' + (colour != null ? colour : statusColorClass(code)) +
-    ' legend-swatch">' + esc(code) + '</span>' + esc(text != null ? text : statusMeaning(code)) + '</span>';
-  el.innerHTML =
-    legendSpine.map(code => item(code)).join('') +
-    item('HOLD · DONE', 'متوقف · مغلق · بانتظار متطلبات', 'blocked') +
-    item('N/A', statusMeaning('N/A') || 'غير مطلوب التقديم لهذا الجزء', '') +
-    custom.map(code => item(code)).join('');
-}
+// Status colour/meaning helpers (statusColorClass, statusMeaning) and the
+// legend renderer (renderStatusLegend) live in app.js so the table never
+// depends on this file loading. This file only adds the manager UI; if it
+// fails to load, the rest of the portal still renders normally.
 
 // ---- Manager ----------------------------------------------------------------
 
