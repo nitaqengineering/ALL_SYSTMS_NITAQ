@@ -212,3 +212,33 @@
 }
 @media screen and (max-width:380px) {.workspace-filter {flex-basis:100%}.stat {padding:8px}.stat b {font-size:21px}}
 @media print {.workspace-skip,.workspace-filter-help {display:none}}
+
+/* Keep the daily work visible; reveal the full control panel only when needed. */
+@media screen {
+ .workspace-controls-panel[hidden],.workspace-quickbar [hidden] {display:none!important}
+ .workspace-quickbar {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 10px;margin-block-end:8px;background:#fff;border:1px solid var(--line);border-radius:7px}
+ .workspace-quickbar .workspace-filter-search {flex:1 1 280px;margin:0}
+ .workspace-quickbar .workspace-filter-search>span {display:none}
+ .workspace-quickbar #search {box-sizing:border-box;width:100%;min-width:0;min-height:36px;padding:7px 10px;border:1px solid #b7c2ce;border-radius:6px;background:#fff;font-size:13px}
+ .workspace-quickbar .btn {min-height:36px;padding:7px 10px;font-size:12px;white-space:nowrap}
+ .workspace-quickbar #workspaceSaveStatus {background:transparent;padding-inline:4px;font-size:11px}
+ .workspace-quickbar #workspaceSaveStatus[aria-busy="true"] {background:#f6ecd7}
+ #workspaceControlsToggle[aria-expanded="true"] {background:#edf1f5;border-color:#34507f}
+ .workspace-controls-panel .compact-navigation {margin-block-end:8px}
+ .workspace-controls-panel .stats {margin-block:8px}
+ .workspace-controls-panel .stat {padding:6px 12px;min-height:40px;border-inline-width:1px}
+ .workspace-controls-panel .stat b {font-size:20px}
+ .workspace-controls-panel .combined-filters {padding:10px}
+ .workspace-controls-panel .workspace-filter-help {margin:0}
+ #gridHint {border-top:1px solid var(--line);border-radius:6px;margin-block:8px}
+ #hinttext {display:none}
+}
+@media screen and (max-width:760px){
+ .workspace-quickbar {gap:8px;padding:8px}
+ .workspace-quickbar .workspace-filter-search {order:-1;flex-basis:100%}
+ .workspace-quickbar #search {min-height:44px;font-size:16px}
+ .workspace-quickbar .btn {min-height:44px}
+ .workspace-quickbar #workspaceSaveStatus {flex:1 1 100%;margin:0}
+ .workspace-controls-panel .workspace-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+}
+@media print {.workspace-quickbar,.workspace-controls-panel {display:none}}
