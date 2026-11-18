@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {testCrmSafeDB} from './database-crm-cases.mjs';
 import {testOtherSafeDB} from './database-engineering-cases.mjs';
+import {testReadyStages} from './database-ready-cases.mjs';
 import {testRetiredStages} from './database-retired-stages-cases.mjs';
 import {testTimerSafeDB} from './database-timer-cases.mjs';
 import {testCrmTimerSafeDB} from './database-crm-timer-cases.mjs';
@@ -49,6 +50,7 @@ try{
  await testOtherSafeDB(accounting);
  await testTimerSafeDB(accounting);
  await testRetiredStages(accounting,actor);
+ await testReadyStages(accounting,actor);
  const crm=await database('crm');await testCrmSafeDB(crm);
  for(let pass=0;pass<2;pass++)await crm.query(await read('database/crm/20261112_002_time_logs.sql'));
  await testCrmTimerSafeDB(crm);

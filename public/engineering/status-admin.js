@@ -42,7 +42,7 @@ function renderStatusManager() {
     statusMgrStages().map(s => '<option value="' + esc(s) + '"' + (s === k ? ' selected' : '') + '>' + esc(columnTitle(s)) + '</option>').join('') +
     '</select>';
   const rows = states(k).map(code => {
-    const isCustom = (db.custom?.[k] || []).includes(code);
+    const isCustom = !standard.includes(code) && (db.custom?.[k] || []).includes(code);
     const used = projects.filter(p => p.stages?.[k]?.status === code).length;
     const colour = statusColorClass(code);
     return '<div class="statusrow">' +
@@ -78,7 +78,7 @@ function statusMgrAdd() {
 function statusMgrDelete(code) {
   if (!managerPreview()) return;
   const k = statusMgrStage, arr = db.custom?.[k] || [];
-  if (!arr.includes(code)) return;
+  if (standard.includes(code)||!arr.includes(code)) return;
   const used = projects.filter(p => p.stages?.[k]?.status === code).length;
   if (used && !confirm('الحالة «' + code + '» مستخدمة في ' + used + ' مشروع. تحذفها من القائمة؟ المشاريع دي هتفضل بحالتها الحالية.')) return;
   db.custom[k] = arr.filter(c => c !== code);

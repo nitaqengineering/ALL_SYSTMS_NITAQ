@@ -336,7 +336,7 @@
  function reportDoc(m){
    const title=esc(T.title.ar.replace(/\s+/g,' '))+' '+esc(m.p.id)+' — '+esc(m.p.name||'');
    const WA=JSON.stringify({ar:{title:T.waTitle.ar,owner:T.owner.ar,project:T.waProject.ar,no:T.projectNo.ar,pct:T.pct.ar,phase:T.phase.ar,permit:T.permit.ar,contract:T.contract.ar,next:T.next.ar,date:T.date.ar,footer:T.footer.ar},en:{title:T.waTitle.en,owner:T.owner.en,project:T.waProject.en,no:T.projectNo.en,pct:T.pct.en,phase:T.phase.en,permit:T.permit.en,contract:T.contract.en,next:T.next.en,date:T.date.en,footer:T.footer.en}});
-   const legData=l=>['OK','SUB','SUB COM','COM','dwg','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
+   const legData=l=>['OK','SUB','SUB COM','COM','READY','dwg','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
    const LEG=JSON.stringify({ar:legData('ar'),en:legData('en')});
    return `<!doctype html><html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body>
    <div id="flash"></div>
