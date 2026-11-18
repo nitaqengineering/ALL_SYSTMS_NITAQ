@@ -80,6 +80,7 @@ async function readSharedWorkspace() {
       const data=result.data;
       if(!data||!Array.isArray(data.projects)||!Number.isSafeInteger(data.revision))
         throw Error('رد خدمة المشاريع غير صالح.');
+      if(revision===null&&data.settings?.stageSchema!==2)throw Error('يلزم تطبيق تحديث حذف مرحلتي الإعداد 020 على قاعدة المشاريع قبل تشغيل هذه النسخة.');
       if(revision===null){revision=data.revision;settings=data.settings;permissions=data.permissions}
       if(revision!==data.revision){consistent=false;break}
       let previous=after;

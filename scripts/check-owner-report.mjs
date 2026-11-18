@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source=await readFile('public/engineering/report.js','utf8');
-const keys=['design','planning','coordination','electric','water','gas','telecom','civil','struct','sanitary','munArch','munStruct','munSanitary','tender'];
+const keys=['design','planning','coordination','electric','water','gas','telecom','civil','munArch','munStruct','munSanitary','tender'];
 const project={id:'synthetic-report',name:'Synthetic owner',service:'SEWA',contract:false,info:{},workflow:{},stages:Object.fromEntries(keys.map(k=>[k,{status:'REQ',date:'',note:''}]))};
 let blob;
 const sandbox={projects:[project],keys,Blob,URL:{createObjectURL:b=>(blob=b,'blob:synthetic'),revokeObjectURL(){}},location:{href:'https://example.invalid/engineering/index.html'},window:{open:()=>({})},setTimeout(){},today:()=> '2030-01-01',permit:()=> 'بانتظار المتطلبات',columnTitle:k=>k,esc:s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')};
@@ -34,12 +34,12 @@ console.log('PASS owner reports: dwg/SUB COM selected and translated in Arabic/E
 
 // Custom statuses must remain selected, never silently become the first standard option (OK).
 for(const custom of ['INSP','فحص خاص','x"<unsafe>&']){
- project.stages.struct.status=custom;project.stages.tender.status=custom;
+ project.stages.design.status=custom;project.stages.tender.status=custom;
  const html=await generate(),encoded=sandbox.esc(custom),rows=selected(html,encoded);
  assert.equal(rows.length,4,'single drawing and tender each preserve the custom value in both languages');
  assert.ok(rows.every(row=>row.includes(`value="${encoded}" selected>${encoded}</option>`)));
  assert.ok(rows.every(row=>!row.includes('value="OK" selected')));
 }
 sandbox.statusMeaning=code=>code==='INSP'?'معاينة خاصة':'';
-project.stages.struct.status='INSP';assert.ok((await generate()).includes('value="INSP" selected>معاينة خاصة</option>'));
+project.stages.design.status='INSP';assert.ok((await generate()).includes('value="INSP" selected>معاينة خاصة</option>'));
 console.log('PASS custom report statuses: unknown values and optional meanings remain selected and HTML-escaped');

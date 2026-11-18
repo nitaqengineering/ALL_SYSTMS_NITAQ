@@ -9,8 +9,9 @@ const client={rpc:async(name,{p_after})=>{
  if(mode==='denied')return {error:{code:'42501',message:'Permission denied'}};
  if(name.endsWith('v2')&&mode==='old')return {error:{code:'PGRST202',message:'missing nitaq_engineering_workspace_read_v2'}};
  const start=p_after?projects.findIndex(p=>p.id===p_after)+1:0,size=name.endsWith('v2')?500:100,rows=projects.slice(start,start+size);
- const data={revision:7,settings:p_after?null:{users:[],tasks:[{id:'keep-task'}]},permissions:{manager:true},projects:rows};
+ const data={revision:7,settings:p_after?null:{stageSchema:2,users:[],tasks:[{id:'keep-task'}]},permissions:{manager:true},projects:rows};
  if(name.endsWith('v2'))data.next_after=start+size<projects.length?rows.at(-1).id:null;
+ if(mode==='oldSchema'&&data.settings)delete data.settings.stageSchema;
  if(mode==='changing')data.revision=p_after?8:7;
  if(mode==='duplicate'&&p_after)data.projects=[projects[0]];
  if(mode==='badcursor')data.next_after='wrong';
@@ -24,3 +25,5 @@ mode='duplicate';await assert.rejects(vm.runInContext('readSharedWorkspace()',ct
 mode='changing';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
 mode='badcursor';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
 console.log('PASS shared reader: 5000 complete documents in 10 requests, first-page settings retained, exact missing-function fallback, permission/duplicate/cursor failures rejected');
+
+mode='oldSchema';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx),/020/);

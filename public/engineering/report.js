@@ -14,7 +14,7 @@
    COM:{ar:'دراسة عروض الأسعار',en:'Studying quotations'},
    OK:{ar:'تم الترسية / اعتماد المقاول',en:'Awarded / contractor approved'},
    HOLD:{ar:'موقوف',en:'On hold'},DONE:{ar:'مكتمل',en:'Completed'},'N/A':{ar:'لا يلزم',en:'N/A'}};
- const EN_TITLE={design:'Architectural design',planning:'Planning',coordination:'Drawings coordination',electric:'Electricity',water:'Water',gas:'Gas',telecom:'Telecom',civil:'Civil Defence',struct:'Structural',sanitary:'Sanitary',munArch:'Municipal (Architectural)',munStruct:'Municipal (Structural)',munSanitary:'Municipal (Sanitary)',tender:'Tender'};
+ const EN_TITLE={design:'Architectural design',planning:'Planning',coordination:'Drawings coordination',electric:'Electricity',water:'Water',gas:'Gas',telecom:'Telecom',civil:'Civil Defence',munArch:'Municipal (Architectural)',munStruct:'Municipal (Structural)',munSanitary:'Municipal (Sanitary)',tender:'Tender'};
  const T={
    title:{ar:'تقرير حالة المشروع',en:'Project Status Report'},
    subtitle:{ar:'نطاق للاستشارات الهندسية — إدارة ومتابعة المشاريع',en:'NITAQ Engineering Consultancy — Project Management'},
@@ -66,7 +66,7 @@
  function phases(p){
    const allOK=ks=>ks.filter(k=>!(k==='gas'&&p.service==='FEWA')).every(k=>['OK','N/A','DONE'].includes(p.stages[k].status));
    const order=[
-     {key:'design',done:allOK(['design','struct','sanitary','coordination'])},
+     {key:'design',done:allOK(['design','coordination'])},
      {key:'approvals',done:allOK(['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary'])},
      {key:'permit',done:permit(p)==='صدرت'},
      {key:'tender',done:['OK','N/A','DONE'].includes(p.stages.tender.status)},
@@ -121,7 +121,7 @@
      const notes=a.map(k=>p.stages[k].note).filter(Boolean);
      return {date:dates.length?dates[dates.length-1]:'',note:notes.join(' · ')};};
    const row=(label,ks)=>{const mt=meta(ks);return {label,st:stStat(p,ks),date:mt.date,note:mt.note};};
-   const drawings=[row(ROW.des,['design']),row(ROW.str,['struct']),row(ROW.san,['sanitary']),
+   const drawings=[row(ROW.des,['design']),
      row({ar:'مخطط الخدمات (كهرباء/مياه)',en:'Services drawings (MEP)'},['electric','water','gas']),
      row({ar:'مخطط الاتصالات',en:'Telecom drawings'},['telecom']),
      row({ar:'مخطط الدفاع المدني',en:'Civil Defence drawings'},['civil'])];
@@ -133,7 +133,7 @@
    ];
    const tStatus=p.stages.tender?p.stages.tender.status:'N/A';
    const tender={show:tStatus!=='N/A',status:tStatus,contractor:(p.tender&&p.tender.contractor)||'',offers:(p.tender&&p.tender.offers)||''};
-   const secPct={draw:pctOf(p,['design','struct','sanitary','electric','water','gas','telecom','civil']),
+   const secPct={draw:pctOf(p,['design','electric','water','gas','telecom','civil']),
      app:pctOf(p,['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary']),
      tender:['OK','N/A','DONE'].includes(tStatus)?100:(['SUB','SUB COM','COM','READY'].includes(tStatus)?50:0)};
    return {p,percent,drawings,approvals,tender,secPct,phases:phases(p),date:today(),ar:derive(p,'ar'),en:derive(p,'en')};

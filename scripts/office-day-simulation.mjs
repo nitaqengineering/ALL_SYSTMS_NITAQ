@@ -13,7 +13,7 @@ if(!['localhost','127.0.0.1','[::1]'].includes(new URL(connection).hostname))thr
 const read=p=>readFile(join(repo,p),'utf8');
 const admin=new pg.Client({connectionString:connection});await admin.connect();
 const prefix='nitaq_office_'+randomUUID().replaceAll('-','').slice(0,12),names=[],open=[];
-const stageKeys=['design','planning','coordination','electric','water','gas','telecom','civil','struct','sanitary','munArch','munStruct','munSanitary','tender'];
+const stageKeys=['design','planning','coordination','electric','water','gas','telecom','civil','munArch','munStruct','munSanitary','tender'];
 const M1='30000000-0000-4000-8000-000000000001',M2='30000000-0000-4000-8000-000000000002';
 const engineers=Array.from({length:8},(_,i)=>({uid:'31000000-0000-4000-8000-00000000000'+(i+1),id:'eng-'+(i+1),name:'Engineer '+(i+1),email:'engineer'+(i+1)+'@example.invalid'}));
 async function connect(name){const u=new URL(connection);u.pathname='/'+name;const c=new pg.Client({connectionString:u.href});await c.connect();open.push(c);return c;}
@@ -30,7 +30,7 @@ async function build(suffix){
  await c.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[M1]);
  await c.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await c.query(await read('database/engineering/'+f+'.sql'));
- for(const f of ['20261112_014_workspace_read_pages','20261112_015_project_time_logs','20261116_016_reopen_closed_project','20261116_017_edit_all_items','20261117_018_reopen_guard_and_status_list','20261118_019_preserve_latest_submission'])await c.query(await read('database/engineering/'+f+'.sql'));
+ for(const f of ['20261112_014_workspace_read_pages','20261112_015_project_time_logs','20261116_016_reopen_closed_project','20261116_017_edit_all_items','20261117_018_reopen_guard_and_status_list','20261118_019_preserve_latest_submission','20261118074139_retire_preparation_stages'])await c.query(await read('database/engineering/'+f+'.sql'));
  return {name,c};
 }
 // One signed-in session = one connection; every call is its own transaction as PostgREST does.
@@ -178,7 +178,7 @@ try{
  assert.deepEqual(fate.replyLostColleagueEditedThenRetry,{result:'already_saved',finalNote:'colleague-later'});
  assert.match(fate.sameOperationDifferentData,/^22023 /);
  assert.match(out.engineerEditsColleagueProject,/^42501 /);assert.match(out.engineerRenamesOwner,/^42501 /);assert.equal(out.outsiderReads,'42501');
- assert.equal(out.restore.result.result,'restored');assert.equal(out.restore.projects,5000);assert.equal(out.restore.stageRows,70000);
+ assert.equal(out.restore.result.result,'restored');assert.equal(out.restore.projects,5000);assert.equal(out.restore.stageRows,60000);
  assert.equal(out.restore.projectsIdentical,true);assert.equal(out.restore.settingsIdentical,true);
  assert.equal(out.restore.tasksRestored,'20 of 20');assert.equal(out.restore.userProfilesRestored,'8 of 8');
  // Login bindings deliberately require fresh approval after restoring to a different database.
