@@ -39,6 +39,12 @@ export async function testOtherSafeDB(c){
  for(const k of ['planning','electric','water','gas','telecom','civil','munArch','munStruct','munSanitary'])ready.stages[k].status='OK';
  ready.workflow={planning:{submissions:[{id:'later',submitted:'2026-11-07',outcome:'اعتماد'},{id:'earlier',submitted:'2026-11-01',outcome:'ملاحظات'}]}};
  assert.equal((await batch([{id:ready.id,before:designApproved,after:ready}])).result,'saved');
+ // Reverse ordering: a newer comment must block a permit even if an older approval is last.
+ const staleApproval=structuredClone(ready);staleApproval.workflow.planning.submissions=[
+  {id:'new-comment',submitted:'2026-11-08',outcome:'ملاحظات'},
+  {id:'old-approval',submitted:'2026-11-07',outcome:'اعتماد'}];
+ await assert.rejects(batch([{id:ready.id,before:ready,after:staleApproval}]),e=>e.code==='22023'&&e.message==='Permit prerequisites are incomplete');
+ assert.deepEqual((await c.query('select nitaq_engineering.project_document($1) p',[ready.id])).rows[0].p,ready);
  console.log('PASS engineering: out-of-order submission dates use same latest approval as client');
  const pendingUser='30000000-0000-4000-8000-000000000009';
  await c.query(`create trigger safe_membership_test after insert on auth.users for each row execute function public.nitaq_handle_new_user()`);
