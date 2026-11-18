@@ -1,3 +1,109 @@
+function englishColumnHeading(value){
+ const text=String(value??'').trim();
+ const names={
+  "رقم المشروع": "Project No.",
+  "المشروع": "Project",
+  "المالك / المشروع": "Owner / Project",
+  "المالك": "Owner",
+  "تفاصيل المشروع": "Project Details",
+  "تصنيف المشروع": "Category",
+  "نوع المشروع": "Building Type",
+  "الموقع": "Location",
+  "المسؤول": "Engineer",
+  "الحالة العامة": "Overall Status",
+  "عقد المقاول": "Contractor Contract",
+  "إجازة البناء": "Building Permit",
+  "الإشراف": "Supervision",
+  "الحالة": "Status",
+  "الموعد المستهدف": "Due Date",
+  "ملاحظات / معوق": "Notes / Blockers",
+  "التصميم": "Design",
+  "التخطيط": "Planning",
+  "تنسيق ومطابقة المخططات": "Coordination",
+  "تنسيق المخططات": "Coordination",
+  "COORDINATION — تنسيق المخططات": "Coordination",
+  "اعتمادات الخدمات": "Utility Approvals",
+  "الكهرباء": "Electricity",
+  "المياه": "Water",
+  "الغاز": "Gas",
+  "الاتصالات": "Telecom",
+  "الدفاع المدني": "Civil Defence",
+  "البلدية": "Municipality",
+  "اعتماد المعماري": "Architectural Approval",
+  "اعتماد الإنشائي": "Structural Approval",
+  "اعتماد الصحي": "Sanitary Approval",
+  "قسم المناقصات": "Tendering",
+  "البريد الإلكتروني": "Email",
+  "البريد": "Email",
+  "رقم الهوية": "Emirates ID",
+  "انتهاء الهوية": "ID Expiry",
+  "رقم الجواز": "Passport No.",
+  "انتهاء الجواز": "Passport Expiry",
+  "رقم سند الملكية": "Title Deed No.",
+  "رقم الخارطة الحكومية": "Government Plot No.",
+  "انتهاء الخارطة الحكومية": "Government Plan Expiry",
+  "رقم الخارطة المِلك": "Private Plot No.",
+  "انتهاء الخارطة المِلك": "Private Plan Expiry",
+  "فحص التربة": "Soil Test",
+  "ورقيات المشروع من التخطيط والمساحة": "Planning & Survey Documents",
+  "NOC فيوا": "FEWA NOC",
+  "ملف المشروع": "Project File",
+  "حالة المناقصة": "Tender Status",
+  "المقاول": "Contractor",
+  "العروض والملاحظات": "Offers & Notes",
+  "المستند": "Document",
+  "الصلاحية": "Expiry",
+  "الطلب": "Request",
+  "التعديل": "Change",
+  "المستخدم": "User",
+  "الوقت": "Time",
+  "بعد": "After",
+  "قبل": "Before",
+  "الحالة السحابية": "Cloud Status",
+  "تعديل التنسيق": "Coordination Update",
+  "تعليم": "Mark",
+  "الإجمالي": "Total",
+  "القسم": "Department",
+  "المهندس": "Engineer",
+  "جلسات": "Sessions",
+  "المهمة": "Task",
+  "الموعد": "Due Date",
+  "الإجراء": "Action",
+  "الانتهاء": "Expiry",
+  "التنبيه": "Alert",
+  "التاريخ": "Date",
+  "المرحلة": "Stage",
+  "النتيجة": "Result",
+  "الملاحظات": "Notes",
+  "مرجع التقرير": "Report Reference",
+  "المتابعة": "Follow-up",
+  "الوصف": "Description",
+  "السجل": "History",
+  "بواسطة": "By",
+  "التغيير": "Change",
+  "الهاتف": "Phone",
+  "المشاريع": "Projects",
+  "الملف": "Profile",
+  "المشروع البديل": "Linked Project",
+  "الملاحظات / المعوق": "Notes / Blockers",
+  "بدون موعد": "No Due Date",
+  "بنود متأخرة": "Overdue Items",
+  "بنود مفتوحة": "Open Items",
+  "تم التقديم": "Submitted",
+  "متأخر": "Overdue",
+  "متطلبات الإجازة الناقصة": "Missing Permit Requirements",
+  "مطلوب / قيد العمل": "Required / In Progress",
+  "مكتمل أو لا يلزم": "Complete / Not Required",
+  "ملاحظات": "Comments",
+  "مهام مستحقة": "Due Tasks",
+  "مهام مفتوحة": "Open Tasks",
+  "مرجع إضافي": "Additional Reference"
+};
+ if(names[text])return names[text];
+ if(text.startsWith('انتهاء '))return englishColumnHeading(text.slice(7))+' Expiry';
+ if(text.includes(' · '))return text.split(' · ').map(englishColumnHeading).join(' · ');
+ return text; // User-defined field names remain intact rather than receiving an invented translation.
+}
 function accountingMasterLocked(project){return !!(window.NITAQ_SHARED_ACTIVE&&project?.accountingProjectId);}
 const documentColumnTypes={text:'نص',number:'رقم',date:'تاريخ'};
 function openDocumentColumn(){
@@ -70,7 +176,7 @@ function renderDocumentColumns(list){
     return `<td><select class="badge" aria-label="${esc(entry.name)} — مشروع ${esc(p.id)}" ${attrs} ${applicable?'':'disabled'}>${opts(request?requestStates:documentStates,status)}</select>${applicable?docButton('⋯',kind+'-edit',p,entry.id):''}${!request&&expiryNote(entry.expiry)?'<div class="sub late">'+esc(expiryNote(entry.expiry))+'</div>':''}</td>`+(noc({kind,entries})?(applicable?input(p,'انتهاء '+entry.name,'expiry',entry.expiry,entry.id):'<td>لا يلزم</td>'):'');
   };
   $('#hinttext').textContent='حالات المستندات والطلبات قابلة للتعديل من الجدول · زر ⋯ للتفاصيل';
-  $('#table').innerHTML=`<thead><tr><th class="fixednum">المشروع</th><th class="fixedname">المالك</th>${fields.map(([label])=>`<th>${esc(label)}</th>`).join('')}${ordered.map(c=>`<th>${esc(c.name)}</th>`+(noc(c)?`<th>انتهاء ${esc(c.name)}</th>`:'')).join('')}<th>الموقع</th><th>ملف المشروع</th><th>الحالة العامة</th></tr></thead><tbody>${list.map(p=>`<tr><td class="fixednum">${esc(p.id)}</td><td class="fixedname">${esc(p.name)}</td>${fields.map(([label,key,type])=>input(p,label,key,p.info?.[key] ?? p.documents?.find(d=>d.id===({idExpiry:'identity',passportExpiry:'passport'})[key])?.expiry,'',type)).join('')}${ordered.map(c=>cell(p,c)).join('')}<td>${esc(p.location)}</td><td>${documentSummary(p)}</td><td>${stopped(p)?p.stages.design.status:'جارٍ العمل'}</td></tr>`).join('')||`<tr><td class="empty" colspan="${ordered.length+fields.length+ordered.filter(noc).length+5}">لا توجد مشاريع تطابق الفلاتر</td></tr>`}</tbody>`;
+  $('#table').innerHTML=`<thead><tr><th class="fixednum">Project</th><th class="fixedname">Owner</th>${fields.map(([label])=>`<th>${esc(englishColumnHeading(label))}</th>`).join('')}${ordered.map(c=>`<th>${esc(englishColumnHeading(c.name))}</th>`+(noc(c)?`<th>${esc(englishColumnHeading(c.name))} Expiry</th>`:'')).join('')}<th>Location</th><th>Project File</th><th>Overall Status</th></tr></thead><tbody>${list.map(p=>`<tr><td class="fixednum">${esc(p.id)}</td><td class="fixedname">${esc(p.name)}</td>${fields.map(([label,key,type])=>input(p,label,key,p.info?.[key] ?? p.documents?.find(d=>d.id===({idExpiry:'identity',passportExpiry:'passport'})[key])?.expiry,'',type)).join('')}${ordered.map(c=>cell(p,c)).join('')}<td>${esc(p.location)}</td><td>${documentSummary(p)}</td><td>${stopped(p)?p.stages.design.status:'جارٍ العمل'}</td></tr>`).join('')||`<tr><td class="empty" colspan="${ordered.length+fields.length+ordered.filter(noc).length+5}">لا توجد مشاريع تطابق الفلاتر</td></tr>`}</tbody>`;
 }
 function docStatus(d){return d.status!=='لا يلزم'&&d.expiry&&d.expiry<today()?'منتهي الصلاحية':d.status}
 function docCounts(p){const docs=documentList(p);return {received:docs.filter(d=>docStatus(d)==='مستلم').length,required:docs.filter(d=>d.status!=='لا يلزم').length,total:docs.length}}
@@ -97,7 +203,7 @@ document.addEventListener('change',event=>{
   }else return;
   persist();
 });
-function renderSupport(kind,list){$('#hinttext').textContent=kind==='documents'?'مستندات مرتبطة برقم المشروع':'متابعة المناقصات مرتبطة بالمشروع · الحالة والمسؤول والموعد والعروض';if(kind==='documents'){renderDocumentColumns(list);return}else{$('#table').innerHTML='<thead><tr><th>المشروع</th><th>المالك</th><th>حالة المناقصة</th><th>المسؤول</th><th>الموعد المستهدف</th><th>المقاول</th><th>العروض والملاحظات</th></tr></thead><tbody>'+list.map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(p.name)}</td><td>${badge(p,'tender')}</td><td>${tenderInput(p,'engineer','المسؤول',p.stages.tender.engineer)}</td><td>${tenderInput(p,'date','الموعد المستهدف',p.stages.tender.date)}</td><td>${tenderInput(p,'contractor','المقاول',p.tender?.contractor)}</td><td style="white-space:normal">${tenderInput(p,'offers','العروض',p.tender?.offers)}<div>${tenderInput(p,'note','الملاحظات',p.stages.tender.note)}</div></td></tr>`).join('')+'</tbody>'}if(!list.length)$('#table').innerHTML+='<caption class="empty">لا توجد مشاريع تطابق الفلاتر</caption>'}
+function renderSupport(kind,list){$('#hinttext').textContent=kind==='documents'?'مستندات مرتبطة برقم المشروع':'متابعة المناقصات مرتبطة بالمشروع · الحالة والمسؤول والموعد والعروض';if(kind==='documents'){renderDocumentColumns(list);return}else{$('#table').innerHTML='<thead><tr><th>Project</th><th>Owner</th><th>Tender Status</th><th>Engineer</th><th>Due Date</th><th>Contractor</th><th>Offers & Notes</th></tr></thead><tbody>'+list.map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(p.name)}</td><td>${badge(p,'tender')}</td><td>${tenderInput(p,'engineer','المسؤول',p.stages.tender.engineer)}</td><td>${tenderInput(p,'date','الموعد المستهدف',p.stages.tender.date)}</td><td>${tenderInput(p,'contractor','المقاول',p.tender?.contractor)}</td><td style="white-space:normal">${tenderInput(p,'offers','العروض',p.tender?.offers)}<div>${tenderInput(p,'note','الملاحظات',p.stages.tender.note)}</div></td></tr>`).join('')+'</tbody>'}if(!list.length)$('#table').innerHTML+='<caption class="empty">لا توجد مشاريع تطابق الفلاتر</caption>'}
 function showDocuments(p){openDocumentsHub(p)}
 
 

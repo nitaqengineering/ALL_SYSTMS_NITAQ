@@ -119,7 +119,7 @@ function saveTaskForm(id) {
   saveProjectTask(id,values);
 }
 function operationTable(head, rows) {
-  return '<div class="operation-scroll"><table class="operation-table"><thead><tr>'+head.map(label=>'<th>'+esc(label)+'</th>').join('')+'</tr></thead><tbody>'+ (rows.map(row=>'<tr>'+row.map(cell=>'<td>'+cell+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+head.length+'" class="empty">لا توجد نتائج</td></tr>')+'</tbody></table></div>';
+  return '<div class="operation-scroll"><table class="operation-table"><thead><tr>'+head.map(label=>'<th>'+esc(englishColumnHeading(label))+'</th>').join('')+'</tr></thead><tbody>'+ (rows.map(row=>'<tr>'+row.map(cell=>'<td>'+cell+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+head.length+'" class="empty">لا توجد نتائج</td></tr>')+'</tbody></table></div>';
 }
 function relevantTasks(list=projects, dueOnly=false) {
   const ids=new Set(list.map(project=>project.id));
@@ -128,7 +128,7 @@ function relevantTasks(list=projects, dueOnly=false) {
 function taskRowsHtml(tasks) {
   return tasks.map(task => '<tr><td>'+esc(task.projectId)+'</td><td>'+esc(task.title)+'<div class="sub">'+esc(task.note)+'</div></td><td>'+esc(columnTitle(task.stage))+'</td><td>'+esc(task.engineer)+'</td><td class="'+(task.date && task.date<today() && task.status==='open'?'late':'')+'">'+esc(task.date || 'بدون موعد')+'</td><td>'+ (taskBlocked(task)?'المشروع متوقف':task.status==='done'?'منجزة':'مفتوحة')+'</td><td><button type="button" class="btn xs" data-task-edit="'+esc(task.id)+'" '+(!canManageTask(task)||taskBlocked(task)?'disabled':'')+'>تعديل</button> <button type="button" class="btn xs" data-task-toggle="'+esc(task.id)+'" '+(!canManageTask(task)||taskBlocked(task)?'disabled':'')+'>'+(task.status==='done'?'إعادة فتح':'إنجاز')+'</button></td></tr>').join('');
 }
-function taskTable(tasks) {return '<div class="operation-scroll"><table class="operation-table"><thead><tr>'+['المشروع','المهمة','القسم','المسؤول','الموعد','الحالة','الإجراء'].map(label=>'<th>'+label+'</th>').join('')+'</tr></thead><tbody>'+ (taskRowsHtml(tasks)||'<tr><td colspan="7" class="empty">لا توجد مهام</td></tr>')+'</tbody></table></div>';}
+function taskTable(tasks) {return '<div class="operation-scroll"><table class="operation-table"><thead><tr>'+['المشروع','المهمة','القسم','المسؤول','الموعد','الحالة','الإجراء'].map(label=>'<th>'+esc(englishColumnHeading(label))+'</th>').join('')+'</tr></thead><tbody>'+ (taskRowsHtml(tasks)||'<tr><td colspan="7" class="empty">لا توجد مهام</td></tr>')+'</tbody></table></div>';}
 function appendDailyTasks(list) {
   const tasks=relevantTasks(list,true).filter(task=>!$('#engineer').value || task.engineer===$('#engineer').value).filter(task=>!$('#stagefilter').value || task.stage===$('#stagefilter').value);
   if (!tasks.length) return;

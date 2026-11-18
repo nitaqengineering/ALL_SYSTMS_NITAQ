@@ -258,3 +258,5 @@
  #table .project-building .project-details-compact {max-width:165px;font-weight:400}
  #table .fee-note {display:none}
 }
+/* English headings retain a left-to-right reading order inside the Arabic workspace. */
+thead th {direction:ltr;unicode-bidi:plaintext}

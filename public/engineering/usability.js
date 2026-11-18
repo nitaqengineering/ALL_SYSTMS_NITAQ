@@ -59,7 +59,7 @@ function dueDocumentEntries(project) {
 }
 function renderExpiringDocuments(list) {
   const rows=list.flatMap(project=>dueDocumentEntries(project).map(entry=>'<tr><td>'+esc(project.id)+'</td><td>'+esc(project.name)+'</td><td>'+esc(entry.name)+'</td><td>'+esc(entry.date)+'</td><td class="late">'+esc(expiryNote(entry.date))+'</td><td><button type="button" class="btn xs" data-expiry-project="'+esc(project.id)+'" data-expiry-kind="'+entry.kind+'" data-expiry-id="'+esc(entry.id)+'">تحديث</button></td></tr>'));
-  $('#table').innerHTML='<thead><tr>'+['المشروع','المالك','المستند','الانتهاء','التنبيه','الإجراء'].map(label=>'<th>'+label+'</th>').join('')+'</tr></thead><tbody>'+(rows.join('')||'<tr><td colspan="6" class="empty">لا توجد مستندات تنتهي خلال أسبوعين أو منتهية</td></tr>')+'</tbody>';
+  $('#table').innerHTML='<thead><tr>'+['المشروع','المالك','المستند','الانتهاء','التنبيه','الإجراء'].map(label=>'<th>'+esc(englishColumnHeading(label))+'</th>').join('')+'</tr></thead><tbody>'+(rows.join('')||'<tr><td colspan="6" class="empty">لا توجد مستندات تنتهي خلال أسبوعين أو منتهية</td></tr>')+'</tbody>';
 }
 function saveAllFollowupDrafts() {
   const visibleIds=new Set(visible().map(project=>project.id));

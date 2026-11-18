@@ -123,7 +123,7 @@ function openEngineeringCloud() {
     '<button type="button" class="btn" id="engineeringCloudRefresh">تحديث</button> '+
     '<button type="button" class="btn" id="engineeringCloudFirst">أول صفحة</button> '+
     '<button type="button" class="btn" id="engineeringCloudNext" disabled>التالي</button>'+
-    '<table><thead><tr><th>رقم المشروع</th><th>الحالة السحابية</th><th>تعديل التنسيق</th></tr></thead>'+
+    '<table><thead><tr><th>Project No.</th><th>Cloud Status</th><th>Coordination Update</th></tr></thead>'+
     '<tbody id="engineeringCloudRows"></tbody></table></fieldset>',
     'documentHub');
   renderEngineeringCloudRows();

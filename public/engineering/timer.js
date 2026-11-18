@@ -184,7 +184,7 @@
             + '<td style="text-align:end"><button type="button" class="btn xs" data-tp-close="'+o.id+'" data-start="'+escape(o.started_at)+'">إغلاق وتصحيح</button></td></tr>').join('')
           + '</tbody></table></div>';
       }
-      report += '<table style="width:100%"><thead><tr><th style="text-align:start">المهندس</th><th style="text-align:start">المشروع</th><th style="text-align:start">القسم</th><th>الإجمالي</th><th>جلسات</th></tr></thead><tbody>';
+      report += '<table style="width:100%"><thead><tr><th style="text-align:start">Engineer</th><th style="text-align:start">Project</th><th style="text-align:start">Department</th><th>Total</th><th>Sessions</th></tr></thead><tbody>';
       const names = Object.keys(byEngineer).sort();
       if (!names.length) report += '<tr><td colspan="5" style="text-align:center;color:#789">لا توجد أوقات مسجّلة ضمن النطاق</td></tr>';
       for (const name of names){

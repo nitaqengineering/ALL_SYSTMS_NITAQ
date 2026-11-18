@@ -23,7 +23,7 @@ function projectPrintColumns(){
     {id:'permit',title:'إجازة البناء',value:p=>permit(p)},
     {id:'supervision',title:'الإشراف',value:p=>stopped(p)?p.stages.design.status:p.permit==='صدرت'?(p.supervision?.status||'لم يبدأ'):'بانتظار إجازة البناء'}
   );
-  return columns;
+  return columns.map(column=>({...column,title:englishColumnHeading(column.title)}));
 }
 function projectPrintFilters(){
   const parts=[];
@@ -63,7 +63,7 @@ function projectPrintHtml(data,options){
   const logo=new URL('../NITAQ-Logo-gold.svg',location.href).href;
   const sections=panels.map((indices,part)=>'<section class="print-part"><header><img src="'+e(logo)+'" alt="نطاق"><div><h1>جدول متابعة المشاريع</h1><p>نطاق للاستشارات الهندسية · NITAQ ENGINEERING</p></div><p>'+e(data.date)+'<br>الجزء '+(part+1)+' من '+panels.length+'</p></header>'+
     '<div class="print-meta">'+e(data.filters)+'<br>'+data.rows.length+' مشروع · '+data.columns.length+' عمود محدد · '+(data.scope==='page'?'الصفحة المعروضة فقط':'كل النتائج المفلترة')+' · '+e(data.by)+'</div>'+
-    '<table><thead><tr>'+(options.mark?'<th class="mark">تعليم</th>':'')+indices.map(i=>'<th scope="col">'+e(data.columns[i].title)+'</th>').join('')+'</tr></thead><tbody>'+
+    '<table><thead><tr>'+(options.mark?'<th class="mark">Mark</th>':'')+indices.map(i=>'<th scope="col">'+e(data.columns[i].title)+'</th>').join('')+'</tr></thead><tbody>'+
     data.rows.map(row=>'<tr>'+(options.mark?'<td class="mark">☐</td>':'')+indices.map(i=>'<td>'+e(row[i]||'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'+
     (options.signature?'<footer>اسم المسؤول: ____________________ &nbsp; التوقيع: ____________________ &nbsp; التاريخ: ______________</footer>':'')+'</section>').join('');
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نطاق — طباعة جدول المشاريع</title><style>'+ 

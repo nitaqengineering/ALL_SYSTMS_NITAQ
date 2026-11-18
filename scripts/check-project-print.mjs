@@ -11,6 +11,8 @@ const ctx=vm.createContext({URL,location:{href:'https://example.invalid/engineer
  window:{open:()=>({opener:{},document:{open(){},write(html){output=html;},close(){}}})},
  persist(){throw Error('Print must not write data');}});
 const groups=app.slice(app.indexOf('const groups='),app.indexOf(';const people=')+1);
+const headerSource=await readFile('public/engineering/support.js','utf8');
+vm.runInContext(headerSource.slice(0,headerSource.indexOf('function accountingMasterLocked')),ctx);
 vm.runInContext(groups+await readFile('public/engineering/columns.js','utf8')+source,ctx);
 const stageKeys=vm.runInContext('[...keys]',ctx);
 const projects=Array.from({length:123},(_,i)=>({id:String(105+i),name:'Synthetic owner '+i,location:'موقع تجريبي',owner:'Engineer A',service:'SEWA',contract:false,permit:'بانتظار المتطلبات',stages:Object.fromEntries(stageKeys.map(k=>[k,{status:k==='munStruct'?'READY':'REQ',engineer:'Engineer A',date:'2030-01-02',note:k==='munStruct'?'<script>unsafe</script>':''}])),extra:{'field-ref':0},supervision:{status:'لم يبدأ'}}));

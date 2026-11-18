@@ -137,7 +137,7 @@ function activityTable(){
     <td>${esc(new Date(entry.at).toLocaleString('ar-AE',{timeZone:'Asia/Dubai'}))}</td>
     <td>${restorableActivity(entry)?'<button type="button" class="btn xs" data-restore-activity="'+index+'">استرجاع</button>':''}</td></tr>`).join('');
   return '<p>يمكن استرجاع آخر تغيير في الموعد أو الملاحظات لكل بند. القيم تظهر للتعديلات الجديدة على الحقول الفردية. يعرض السجل آخر 500 بند تغيير.</p>'+
-    '<div class="activity-scroll"><table class="doc-list"><thead><tr><th>المشروع</th><th>المستخدم</th><th>التعديل</th><th>قبل</th><th>بعد</th><th>الوقت</th><th></th></tr></thead><tbody>'+
+    '<div class="activity-scroll"><table class="doc-list"><thead><tr><th>Project</th><th>User</th><th>Change</th><th>Before</th><th>After</th><th>Time</th><th></th></tr></thead><tbody>'+
     (rows||'<tr><td colspan="7">لا توجد تعديلات مسجلة بعد</td></tr>')+'</tbody></table></div>';
 }
 
