@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 export async function testRetiredStages(c,actor){
@@ -22,6 +23,17 @@ export async function testRetiredStages(c,actor){
  assert.deepEqual(await read(),next,'rejected resurrection is atomic');
  await assert.rejects(call('select public.nitaq_engineering_timer_start_v1($1,$2,null) r',[fixture.id,'struct']),e=>e.code==='22023');
  const settings=(await c.query('select settings from nitaq_engineering.workspace')).rows[0].settings;assert.equal(settings.stageSchema,2);
+ // Reproduce the UI path (real snapshot + request builder) against migrated SQL.
+ const app=await readFile('public/engineering/app.js','utf8'),shared=await readFile('public/engineering/shared-workspace.js','utf8');
+ const snapshotSource=app.slice(app.indexOf('function snapshot()'),app.indexOf('function undoLabel('));
+ const baseline={...settings,projects:[next]};
+ const context=vm.createContext({db:structuredClone(baseline),crypto:{randomUUID},workspaceSettings:state=>{const {projects,...rest}=state;return rest;}});
+ vm.runInContext('var sharedWorkspace;'+snapshotSource+shared.slice(shared.indexOf('const workspaceBaselineText'),shared.indexOf('async function saveSharedWorkspace()')),context);
+ context.sharedWorkspace=structuredClone(baseline);vm.runInContext("db.projects[0].stages.munStruct.status='COM'",context);
+ const request=JSON.parse(vm.runInContext('JSON.stringify(workspaceRequest(JSON.parse(snapshot())))',context));
+ assert.equal(request.p_settings_after,null,'UI status edit must not rewrite settings');
+ assert.equal((await call('select public.nitaq_engineering_workspace_save_v2($1,$2::jsonb,$3::jsonb,$4::jsonb) r',[request.p_operation,JSON.stringify(request.p_changes),request.p_settings_before,request.p_settings_after])).r.result,'saved');
+ assert.equal((await read()).stages.munStruct.status,'COM','real snapshot status edit persists after retirement');
  const oldSettings={...settings};delete oldSettings.stageSchema;
  await assert.rejects(call('select public.nitaq_engineering_workspace_save_v2($1,\'[]\'::jsonb,$2::jsonb,$3::jsonb) r',[randomUUID(),JSON.stringify(settings),JSON.stringify(oldSettings)]),e=>e.code==='22023');
  console.log('PASS retired stages: no backup created, 12-stage saves, municipal data unchanged, idempotence, resurrection/timer/stale settings blocked atomically');

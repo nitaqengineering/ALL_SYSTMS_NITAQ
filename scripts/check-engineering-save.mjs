@@ -75,3 +75,23 @@ assert.ok(r.saved);
  console.log('PASS engineering pre-save comparison: cached baseline detects edits, additions and removals exactly');
 }
 console.log('PASS engineering save: v1 fallback only on confirmed missing save_v2; 100 saved, 101 refused whole; permission, conflict and network errors stay visible');
+
+// Use the real UI snapshot: projecting the server document must not discard the
+// schema marker and turn an ordinary stage edit into invalid settings replacement.
+{
+ const app=await readFile('public/engineering/app.js','utf8');
+ const snapshotSource=app.slice(app.indexOf('function snapshot()'),app.indexOf('function undoLabel('));
+ const start=source.indexOf('const workspaceBaselineText'),end=source.indexOf('async function saveSharedWorkspace()');
+ const base={stageSchema:2,custom:{},municipalities:[],projects:[{id:'105',stages:{design:{status:'REQ'},munStruct:{status:'REQ'}}}]};
+ const ctx=vm.createContext({db:structuredClone(base),crypto:{randomUUID:()=>'snapshot-op'},workspaceSettings:state=>{const {projects,...settings}=state;return settings;}});
+ vm.runInContext('var sharedWorkspace;'+snapshotSource+source.slice(start,end),ctx);ctx.sharedWorkspace=structuredClone(base);
+ vm.runInContext("db.projects[0].stages.munStruct.status='COM'",ctx);
+ const request=JSON.parse(vm.runInContext('JSON.stringify(workspaceRequest(JSON.parse(snapshot())))',ctx));
+ assert.equal(request.p_changes.length,1);assert.equal(request.p_changes[0].after.stages.munStruct.status,'COM');
+ assert.equal(request.p_settings_before,null);assert.equal(request.p_settings_after,null,'project status changes must not replace settings or drop stageSchema');
+ vm.runInContext("db.municipalities.push('مدينة تجريبية')",ctx);
+ const settings=JSON.parse(vm.runInContext('JSON.stringify(workspaceRequest(JSON.parse(snapshot())))',ctx));
+ assert.equal(settings.p_settings_after.stageSchema,2,'intentional settings edits retain schema compatibility');
+ assert.equal(settings.p_settings_before.stageSchema,2);
+ console.log('PASS actual UI snapshot -> save request: project 105 status edit sends no settings replacement; real settings edits retain stageSchema');
+}
