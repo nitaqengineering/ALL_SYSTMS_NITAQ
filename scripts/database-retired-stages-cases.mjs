@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 export async function testRetiredStages(c,actor){
- const call=async(sql,values=[])=>{await c.query('begin;set local role authenticated');await c.query("select set_config('request.jwt.claim.sub',$1,true)",[actor]);try{const r=await c.query(sql,values);await c.query('commit');return r.rows[0];}catch(e){await c.query('rollback');throw e;}};
+ const call=async(sql,values=[],uid=actor)=>{await c.query('begin;set local role authenticated');await c.query("select set_config('request.jwt.claim.sub',$1,true)",[uid]);try{const r=await c.query(sql,values);await c.query('commit');return r.rows[0];}catch(e){await c.query('rollback');throw e;}};
  const save=async(before,after)=>(await call('select public.nitaq_engineering_workspace_save_v2($1,$2::jsonb,null,null) r',[randomUUID(),JSON.stringify([{id:after.id,before,after}])])).r;
  const fixture={id:'retirement-fixture',name:'Synthetic retirement',service:'SEWA',contract:false,permit:'بانتظار المتطلبات',workflow:{struct:{note:'preserve in backup'},sanitary:{note:'preserve sanitary'}},history:[],info:{},supervision:{status:'لم يبدأ'},stages:Object.fromEntries(['design','planning','coordination','electric','water','gas','telecom','civil','struct','sanitary','munArch','munStruct','munSanitary','tender'].map(k=>[k,{status:'REQ',engineer:'',date:'',note:k.startsWith('mun')?'municipal stays':'',type:'جديد'}]))};
  assert.equal((await save(null,fixture)).result,'saved');
@@ -36,5 +36,27 @@ export async function testRetiredStages(c,actor){
  assert.equal((await read()).stages.munStruct.status,'COM','real snapshot status edit persists after retirement');
  const oldSettings={...settings};delete oldSettings.stageSchema;
  await assert.rejects(call('select public.nitaq_engineering_workspace_save_v2($1,\'[]\'::jsonb,$2::jsonb,$3::jsonb) r',[randomUUID(),JSON.stringify(settings),JSON.stringify(oldSettings)]),e=>e.code==='22023');
+ // Supervision records round-trip through the same migrated CAS document.
+ const supCtx=vm.createContext({managerPreview:()=>true,stopped:p=>['HOLD','DONE'].includes(p.stages.design.status),people:['Supervisor Test'],today:()=> '2030-01-15',crypto:{randomUUID},document:{addEventListener(){}}});
+ vm.runInContext(await readFile('public/engineering/supervision.js','utf8'),supCtx);
+ let supBefore=await read(),supAfter=structuredClone(supBefore);
+ for(const stage of Object.values(supAfter.stages))stage.status='REQ';supAfter.stages.design.status='OK';supAfter.stages.planning.engineer='Supervisor Test';
+ assert.equal((await save(supBefore,supAfter)).result,'saved');supBefore=await read();supAfter=structuredClone(supBefore);
+ for(const k of ['planning','electric','water','gas','telecom','civil','munArch','munStruct','munSanitary'])supAfter.stages[k].status='OK';
+ supAfter.contract=true;supAfter.permit='صدرت';supAfter.permitIssue={number:'synthetic-supervision-permit',date:'2026-01-01'};
+ assert.equal((await save(supBefore,supAfter)).result,'saved');supBefore=await read();supAfter=structuredClone(supBefore);
+ supCtx.saveSupervisionSummary(supAfter,{status:'جارٍ التنفيذ',engineer:'Supervisor Test',note:'Internal site follow-up'});
+ supCtx.saveSupervisionVisit(supAfter,'',{date:'2030-01-14',phase:'الحفر والأساسات',status:'منفذة',engineer:'Supervisor Test',result:'بدون ملاحظات',notes:'Synthetic site check',report:'SUP-TEST',action:'',actionOwner:'',due:'',followupStatus:'مفتوحة',completionNote:''});
+ assert.equal((await save(supBefore,supAfter)).result,'saved');assert.deepEqual((await read()).supervision,JSON.parse(JSON.stringify(supAfter.supervision)));
+ const member=randomUUID(),profile='supervision-test-member';
+ await c.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[member,'supervision-test@example.invalid']);
+ await c.query('insert into nitaq_engineering.auth_bindings_v2 values($1,$2)',[member,profile]);
+ const memberSettings=(await c.query('select settings from nitaq_engineering.workspace')).rows[0].settings;
+ memberSettings.users=[...(memberSettings.users||[]),{id:profile,name:'Supervisor Test',email:'supervision-test@example.invalid',active:true,role:'مهندس',permissions:{edit:true,assign:false}}];
+ await c.query('update nitaq_engineering.workspace set settings=$1::jsonb where id=true',[JSON.stringify(memberSettings)]);
+ const denied=structuredClone(supAfter);denied.supervision.note='Engineer must not bypass manager-only supervision';
+ await assert.rejects(call('select public.nitaq_engineering_workspace_save_v2($1,$2::jsonb,null,null) r',[randomUUID(),JSON.stringify([{id:denied.id,before:supAfter,after:denied}])],member),e=>e.code==='42501');
+ assert.deepEqual((await read()).supervision,JSON.parse(JSON.stringify(supAfter.supervision)));
+ console.log('PASS supervision SQL: actual summary/visit functions persist through migrated CAS; engineer denied even when assigned; no production data');
  console.log('PASS retired stages: no backup created, 12-stage saves, municipal data unchanged, idempotence, resurrection/timer/stale settings blocked atomically');
 }
