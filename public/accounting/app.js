@@ -2361,13 +2361,16 @@ function FormModal({
     return /*#__PURE__*/React.createElement("div", {
       className: "field",
       key: f.name
-    }, /*#__PURE__*/React.createElement("label", null, f.label, (typeof f.required === 'function' ? f.required(values) : f.required) && ' *', locked && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("label", {
+      htmlFor: f.type === 'ownerList' || f.type === 'file' && values[f.name] ? undefined : 'accounting-field-' + f.name
+    }, f.label, (typeof f.required === 'function' ? f.required(values) : f.required) && ' *', locked && /*#__PURE__*/React.createElement("span", {
       style: {
         color: 'var(--brass)',
         marginInlineStart: 6,
         fontSize: 10
       }
     }, "\uD83D\uDD12")), f.type === 'select' ? /*#__PURE__*/React.createElement("select", {
+      id: 'accounting-field-' + f.name,
       required: typeof f.required === 'function' ? f.required(values) : f.required,
       disabled: locked,
       value: values[f.name] || '',
@@ -2403,6 +2406,7 @@ function FormModal({
     }, values[f.name], " (\u062C\u062F\u064A\u062F)"), f.allowAddNew && /*#__PURE__*/React.createElement("option", {
       value: "__ADDNEW__"
     }, f.addNewLabel || '➕ إضافة تصنيف جديد...')) : f.type === 'textarea' ? /*#__PURE__*/React.createElement("textarea", {
+      id: 'accounting-field-' + f.name,
       rows: "3",
       disabled: locked,
       value: values[f.name] || '',
@@ -2423,6 +2427,7 @@ function FormModal({
     }, (f.subFields || []).map(sf => /*#__PURE__*/React.createElement("input", {
       key: sf.name,
       type: "text",
+      "aria-label": sf.label,
       placeholder: sf.label,
       disabled: locked,
       value: row[sf.name] || '',
@@ -2500,6 +2505,7 @@ function FormModal({
         set(f.name + '_name', '');
       }
     }, "\u2715 \u0625\u0632\u0627\u0644\u0629")) : /*#__PURE__*/React.createElement("input", {
+      id: 'accounting-field-' + f.name,
       type: "file",
       accept: "image/*,application/pdf",
       disabled: locked,
@@ -2519,6 +2525,7 @@ function FormModal({
         reader.readAsDataURL(file);
       }
     })) : /*#__PURE__*/React.createElement("input", {
+      id: 'accounting-field-' + f.name,
       type: f.type || 'text',
       required: typeof f.required === 'function' ? f.required(values) : f.required,
       disabled: locked,
@@ -6893,7 +6900,8 @@ function CreditNoteDoc({
   }))), /*#__PURE__*/React.createElement("div", {
     className: "sinv-tag"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "en"
+    className: "en",
+    "data-office-dialog-title": true
   }, T.title)), /*#__PURE__*/React.createElement("div", {
     className: "sinv-info"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -16238,7 +16246,10 @@ function Dashboard({
       color: 'var(--ink-soft)'
     }
   }, money(chartData.reduce((s, d) => s + d.exp, 0)))))), /*#__PURE__*/React.createElement("div", {
-    className: "card"
+    className: "card decisions-card",
+    style: {
+      alignSelf: 'start'
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "section-title"
   }, /*#__PURE__*/React.createElement("h3", null, "\u0623\u062D\u062F\u062B \u0642\u0631\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639"), /*#__PURE__*/React.createElement("div", {
@@ -17662,8 +17673,10 @@ function App() {
     }, group.group), items.map(item => {
       const Icon = item.icon;
       const count = urgentCount(item.key);
-      return /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement("button", {
+        type: "button",
         key: item.key,
+        "aria-current": view === item.key ? 'page' : undefined,
         className: "nav-item " + (view === item.key ? 'active' : ''),
         onClick: () => setView(item.key)
       }, /*#__PURE__*/React.createElement(Icon, null), /*#__PURE__*/React.createElement("span", null, item.label), count > 0 && /*#__PURE__*/React.createElement("span", {

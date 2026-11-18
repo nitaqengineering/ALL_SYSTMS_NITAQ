@@ -73,3 +73,29 @@
   color:#fff;
 }
 #stageBreakdown b {margin-inline-start:3px}
+
+/* Narrow screens keep search and results ahead of secondary operations. */
+@media screen and (max-width:760px){
+ .mobile-tool-disclosure{margin:6px 0;background:#fff;border:1px solid var(--line);border-radius:6px}
+ .mobile-tool-disclosure>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:12px;font-size:14px;font-weight:700;color:var(--ink)}
+ .mobile-tool-disclosure>summary:focus-visible{outline:3px solid #a9824f;outline-offset:2px}
+ .mobile-tool-disclosure .compact-navigation{margin:0}
+ .mobile-tool-disclosure #secondaryFilters{margin:0}
+ #primaryFilters input,#primaryFilters select,#contextProject{font-size:16px;min-height:42px}
+ #gridHint{font-size:12px}
+}
+@media print{.mobile-tool-disclosure{display:none}}
+
+@media screen{
+ #table tbody td{font-size:13px;line-height:1.4;padding-block:8px}
+ #table tbody .sub,#table .fee-note{font-size:12px}
+ #table .inline-state select{font-size:13px;min-height:30px}
+ #table .detail-btn{width:26px;height:26px;min-width:26px;font-size:13px}
+ #table .project-actions-select{width:80px;font-size:12px;min-height:28px}
+ #edit{scroll-padding-top:72px;overscroll-behavior:contain}
+ #edit .actions{position:sticky;bottom:0;z-index:15;background:#fff;padding-block:12px;border-top:1px solid var(--line)}
+}
+@media screen and (pointer:fine){#table tbody .inline-state .detail-btn{inset-inline-end:-28px}}
+@media screen and (max-width:760px){.pcard-stage .detail-btn{min-width:40px;min-height:40px}}
+
+.mobile-tool-disclosure:has(> [hidden]){display:none}

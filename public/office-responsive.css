@@ -1,0 +1,71 @@
+/* NITAQ: scoped operating layouts. Print and desktop documents remain untouched. */
+.office-nav-toggle{display:none}
+@media screen and (max-width:760px){
+ body[data-office-system]{min-width:0}
+ body[data-office-system] #root,body[data-office-system] .app{min-width:0;width:100%;flex-direction:column}
+ body[data-office-system] .sidebar,body[data-office-system] .side{width:100%;height:auto;position:static;min-width:0;flex:none}
+ body[data-office-system] .brand{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:start}
+ body[data-office-system] .brand img{width:auto!important;max-width:90px!important;max-height:44px!important;object-fit:contain}
+ body[data-office-system] .brand p{display:none}
+ body[data-office-system] .office-nav-toggle{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;border:1px solid #8996a8;border-radius:5px;background:transparent;color:#fff;font:inherit;cursor:pointer;flex:none}
+ body[data-office-system] .office-nav-toggle:focus-visible{outline:3px solid #e7c27b;outline-offset:3px}
+ body[data-office-system] .nav{max-height:45dvh;overflow:auto;padding:8px 12px;display:block}
+ body[data-office-system] .nav[hidden]{display:none!important}
+ body[data-office-system] .nav a,body[data-office-system] .nav-item{min-height:44px;font-size:14px;white-space:normal;box-sizing:border-box}
+ body[data-office-system] .sidebar-foot{display:block;padding:8px 12px;max-width:100%;overflow-wrap:anywhere}
+ body[data-office-system] .main{width:100%;min-width:0}
+ body[data-office-system] .topbar,body[data-office-system] .top{position:static;display:flex;flex-wrap:wrap;gap:10px;padding:12px;min-width:0}
+ body[data-office-system] .topbar>*,body[data-office-system] .top>*{min-width:0;max-width:100%}
+ body[data-office-system] .topbar-right{width:100%;flex-wrap:wrap}
+ body[data-office-system] .wrap,body[data-office-system] .content{padding:12px;min-width:0}
+ body[data-office-system] .grid{grid-template-columns:minmax(0,1fr)!important}
+ body[data-office-system] .grid>*{min-width:0}
+ body[data-office-system] input,body[data-office-system] select,body[data-office-system] textarea{max-width:100%;box-sizing:border-box;font-size:16px}
+ body[data-office-system] .btn{min-height:40px;white-space:normal}
+ body[data-office-system] .card{min-width:0;max-width:100%}
+ body[data-office-system] .kpi-value{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+}
+@media print{.office-nav-toggle{display:none!important}}
+
+/* Dialogs share one scroll surface and keep the close action available. */
+@media screen{
+ body[data-office-system] .modal-head,body[data-office-system] .dw-h,body[data-office-system] .mo .box>h3{position:sticky;top:0;z-index:12;background:var(--surface,#fff);margin:0}
+ body[data-office-system] .dw-h{background:var(--ink,#132a46)}
+ body[data-office-system] .modal-foot,body[data-office-system] .dw-f,body[data-office-system] .mo .box .ft{position:sticky;bottom:0;z-index:11;background:var(--surface,#fff);flex-wrap:wrap}
+ body[data-office-system] .modal,body[data-office-system] .dw,body[data-office-system] .mo .box{overscroll-behavior:contain;scroll-padding-block:76px}
+ body[data-office-system] .modal-head .close-x,body[data-office-system] .dw-h .x,body[data-office-system] .office-dialog-close{min-width:36px;min-height:36px;cursor:pointer;border-radius:4px}
+ body[data-office-system] .office-dialog-close{float:inline-end;margin-inline-start:12px;border:1px solid var(--line,#d7d9d0);background:var(--surface,#fff);color:var(--ink,#132a46);font-size:24px;line-height:1}
+ body[data-office-system] :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid #8b622a;outline-offset:3px}
+ body[data-office-system] td{font-size:13px;line-height:1.5}
+ body[data-office-system] th{font-size:12px}
+ body[data-office-system] :is(td,.kpi-value,.num){font-variant-numeric:tabular-nums}
+ body[data-office-system] .fcards{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:12px}
+ body[data-office-system] .fc{padding:14px 16px}
+ body[data-office-system] .fc .meta,body[data-office-system] .fc .note{font-size:13px}
+ body[data-office-system] .fc .note{max-height:none}
+ body[data-office-system] .kpi{padding:12px 16px}
+ body[data-office-system] .kpi .v{font-size:24px;margin-top:4px}
+ body[data-office-system] .cta-compact{padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px}
+ body[data-office-system] .cta-compact summary{cursor:pointer}
+ body[data-office-system] .cta-compact .tx{flex:1;min-width:180px}
+}
+@media screen and (max-width:760px){
+ body[data-office-system] .overlay,body[data-office-system] .mo{padding:8px}
+ body[data-office-system] .modal,body[data-office-system] .mo .box{max-height:calc(100dvh - 16px);width:100%}
+ body[data-office-system] .modal-body,body[data-office-system] .dw-b,body[data-office-system] .mo .box .bd{padding:14px}
+ body[data-office-system] .modal-head,body[data-office-system] .dw-h,body[data-office-system] .mo .box>h3{padding:12px 14px}
+ body[data-office-system] .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ body[data-office-system] .fcards{grid-template-columns:minmax(0,1fr)}
+}
+
+@media screen{
+ body[data-office-system] button.nav-item{width:100%;background:transparent;text-align:start;font-family:inherit}
+ body[data-office-system] button.nav-item.active{background:rgba(169,130,79,.18)}
+ body[data-office-system] button.nav-item:not(.active):hover{background:rgba(255,255,255,.06)}
+}
+
+@media screen{
+ body[data-office-system] :is(.sidebar,.side,.cta,.dw-h) :focus-visible{outline-color:#e7c27b}
+ body[data-office-system] details.cta-compact{display:block}
+ body[data-office-system] details.cta-compact[open]>.tx{margin-block:8px}
+}

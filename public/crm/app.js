@@ -1406,7 +1406,7 @@ const GroupCta = ({
   const n = leads.filter(l => !isGroup(l.waGroup)).length;
   if (!n) return null;
   return /*#__PURE__*/React.createElement("div", {
-    className: "cta"
+    className: "cta cta-compact"
   }, /*#__PURE__*/React.createElement("div", {
     className: "tx"
   }, "\u0632\u0631\u0627\u0631 \xAB\u0648\u0627\u062A\u0633\u0627\u0628\xBB \u0628\u064A\u0641\u062A\u062D \u062C\u0631\u0648\u0628 \u0627\u0644\u0627\u0633\u0643\u062A\u0634 \u2014 \u0628\u0633 \u0644\u0627\u0632\u0645 \u062A\u0631\u0628\u0637 \u062C\u0631\u0648\u0628 \u0643\u0644 \u0627\u0633\u0643\u062A\u0634 \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629. \u0644\u0633\u0647 ", /*#__PURE__*/React.createElement("b", null, n), " \u0627\u0633\u0643\u062A\u0634 \u0645\u0646 ", /*#__PURE__*/React.createElement("b", null, leads.length), " \u0645\u0634 \u0645\u0631\u0628\u0648\u0637."), /*#__PURE__*/React.createElement("button", {
@@ -2132,9 +2132,9 @@ function Daily({
     v: B.foll.length,
     l: "\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629",
     k: "g"
-  })), noGrp > 0 && can(me, 'groups') && /*#__PURE__*/React.createElement("div", {
-    className: "cta"
-  }, /*#__PURE__*/React.createElement("div", {
+  })), noGrp > 0 && can(me, 'groups') && /*#__PURE__*/React.createElement("details", {
+    className: "cta cta-compact"
+  }, /*#__PURE__*/React.createElement("summary", null, noGrp, " \u0633\u062C\u0644 \u064A\u062D\u062A\u0627\u062C \u0631\u0628\u0637 \u062C\u0631\u0648\u0628 \u0648\u0627\u062A\u0633\u0627\u0628"), /*#__PURE__*/React.createElement("div", {
     className: "tx"
   }, /*#__PURE__*/React.createElement("b", null, noGrp), " \u0627\u0633\u0643\u062A\u0634 \u0645\u0646 ", /*#__PURE__*/React.createElement("b", null, db.leads.length), " \u0644\u0633\u0647 \u0645\u0634 \u0645\u0631\u0628\u0648\u0637 \u0628\u062C\u0631\u0648\u0628 \u0627\u0644\u0648\u0627\u062A\u0633\u0627\u0628 \u0628\u062A\u0627\u0639\u0647. \u0627\u0631\u0628\u0637\u0647\u0645 \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629\u060C \u0648\u0628\u0639\u062F\u0647\u0627 \u0632\u0631\u0627\u0631 \xAB\u0648\u0627\u062A\u0633\u0627\u0628\xBB \u0647\u064A\u0641\u062A\u062D \u0627\u0644\u062C\u0631\u0648\u0628 \u0639\u0644\u0649 \u0637\u0648\u0644."), /*#__PURE__*/React.createElement("button", {
     className: "btn gold",

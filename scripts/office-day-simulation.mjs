@@ -30,7 +30,7 @@ async function build(suffix){
  await c.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[M1]);
  await c.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await c.query(await read('database/engineering/'+f+'.sql'));
- await c.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
+ for(const f of ['20261112_014_workspace_read_pages','20261112_015_project_time_logs','20261116_016_reopen_closed_project','20261116_017_edit_all_items','20261117_018_reopen_guard_and_status_list','20261118_019_preserve_latest_submission'])await c.query(await read('database/engineering/'+f+'.sql'));
  return {name,c};
 }
 // One signed-in session = one connection; every call is its own transaction as PostgREST does.
@@ -96,7 +96,9 @@ try{
  out.searchNoMatch=timeIt("projects.filter(p=>projectMatchesSearch(p,'لا يوجد')).length");
  out.filterStageAndEngineer=timeIt("projects.filter(p=>p.stages.planning.status==='REQ'&&p.stages.planning.engineer==='Engineer 3').length");
  const shared=await read('public/engineering/shared-workspace.js');
- vm.runInContext('var sharedWorkspace;const workspaceBaselineText=new WeakMap();'+grab(shared,'baselineText')+grab(shared,'workspaceSettings')+grab(shared,'workspaceRequest'),Object.assign(ctx,{crypto:{randomUUID}}));
+ const requestStart=shared.indexOf('const workspaceBaselineText'),requestEnd=shared.indexOf('async function saveSharedWorkspace()');
+ assert.ok(requestStart>0&&requestEnd>requestStart,'Workspace request implementation not found');
+ vm.runInContext('var sharedWorkspace;'+grab(shared,'workspaceSettings')+shared.slice(requestStart,requestEnd),Object.assign(ctx,{crypto:{randomUUID}}));
  ctx.sharedWorkspace={...solo.settings,projects:solo.projects};const edited=structuredClone(solo.projects);edited[2500].stages.planning.note='x';ctx.afterState={...solo.settings,projects:edited};
  out.diffBeforeEachSave=timeIt('workspaceRequest(afterState).p_changes.length');
  out.snapshotStringify=timeIt('JSON.stringify(afterState).length',3);
@@ -164,6 +166,25 @@ try{
  await call(targetManager,M1,'select public.nitaq_engineering_invite_target_v1($1) r',[eng.email]);
  out.restore.engineerAfterManagerApproval=await call(targetManager,eng.uid,'select public.nitaq_engineering_workspace_revision_v1() r').then(()=>'allowed',e=>e.code);
  {const id=all[0].id,b=await doc(target,id),a=structuredClone(b);a.stages.planning.note='engineer after restore';out.restore.engineerSavesOwnProject=await save(targetManager,eng.uid,[{id,before:b,after:a}]).then(r=>r.result,e=>e.code+' '+e.message);}
+ // CI must fail on a broken scenario, rather than merely print its failed result.
+ assert.equal(out.searchByName.value,1);assert.equal(out.searchByPlot.value,1);assert.equal(out.searchNoMatch.value,0);
+ assert.equal(out.filterStageAndEngineer.value,625);assert.equal(out.diffBeforeEachSave.value,1);
+ assert.equal(out.loadTenAtOnce.n,10);assert.ok(together.every(x=>x.projects.length===5000));
+ assert.deepEqual(out.saveAlone.results,{saved:30});assert.deepEqual(out.saveTenAtOnce.results,{saved:200});
+ assert.deepEqual(out.sameProjectTwoEditors.outcomes,{'conflict+saved':30});
+ assert.equal(consistent,30);assert.equal(retried,30);
+ assert.deepEqual(fate.replyLostThenRetry,{result:'already_saved',revisionUnchanged:true,stored:true});
+ assert.equal(fate.requestNeverArrived.storedBeforeRetry,'');assert.equal(fate.requestNeverArrived.retry,'saved');
+ assert.deepEqual(fate.replyLostColleagueEditedThenRetry,{result:'already_saved',finalNote:'colleague-later'});
+ assert.match(fate.sameOperationDifferentData,/^22023 /);
+ assert.match(out.engineerEditsColleagueProject,/^42501 /);assert.match(out.engineerRenamesOwner,/^42501 /);assert.equal(out.outsiderReads,'42501');
+ assert.equal(out.restore.result.result,'restored');assert.equal(out.restore.projects,5000);assert.equal(out.restore.stageRows,70000);
+ assert.equal(out.restore.projectsIdentical,true);assert.equal(out.restore.settingsIdentical,true);
+ assert.equal(out.restore.tasksRestored,'20 of 20');assert.equal(out.restore.userProfilesRestored,'8 of 8');
+ // Login bindings deliberately require fresh approval after restoring to a different database.
+ assert.equal(out.restore.loginBindingsRestored,'0 of 8');assert.equal(out.restore.engineerBeforeApproval,'42501');
+ assert.equal(out.restore.managerReadsAfterRestore,5000);assert.equal(out.restore.managerSavesAfterRestore,'saved');
+ assert.equal(out.restore.engineerAfterManagerApproval,'allowed');assert.equal(out.restore.engineerSavesOwnProject,'saved');
  console.log(JSON.stringify(out,null,1));
 }finally{
  for(const c of open)await c.end().catch(()=>{});

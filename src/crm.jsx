@@ -688,7 +688,7 @@ const Bars=({rows})=>{
 const GroupCta=({leads,go})=>{
   const n=leads.filter(l=>!isGroup(l.waGroup)).length;
   if(!n) return null;
-  return <div className="cta">
+  return <div className="cta cta-compact">
     <div className="tx">زرار «واتساب» بيفتح جروب الاسكتش — بس لازم تربط جروب كل اسكتش مرة واحدة.
       لسه <b>{n}</b> اسكتش من <b>{leads.length}</b> مش مربوط.</div>
     <button className="btn gold" onClick={()=>go('groups')}>اربط الجروبات دلوقتي</button>
@@ -996,11 +996,11 @@ function Daily({db,me,open,logCall,done,snooze,go,onPrint,taskDone}){
       <Kpi v={B.foll.length}  l="المتابعة"  k="g"/>
     </div>
 
-    {noGrp>0&&can(me,'groups')&&<div className="cta">
+    {noGrp>0&&can(me,'groups')&&<details className="cta cta-compact"><summary>{noGrp} سجل يحتاج ربط جروب واتساب</summary>
       <div className="tx"><b>{noGrp}</b> اسكتش من <b>{db.leads.length}</b> لسه مش مربوط بجروب الواتساب بتاعه.
         اربطهم مرة واحدة، وبعدها زرار «واتساب» هيفتح الجروب على طول.</div>
       <button className="btn gold" onClick={()=>go('groups')}>افتح شاشة ربط الجروبات</button>
-    </div>}
+    </details>}
 
     {myTasks.length>0&&<div style={{marginBottom:22}}>
       <div className="secbar" style={{cursor:'default'}}>

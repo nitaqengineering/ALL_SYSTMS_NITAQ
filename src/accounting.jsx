@@ -975,9 +975,9 @@ function FormModal({title, fields, initial, onCancel, onSave, data, lockedFields
               const locked = lockedFields.includes(f.name);
               return (
               <div className="field" key={f.name}>
-                <label>{f.label}{(typeof f.required==='function' ? f.required(values) : f.required) && ' *'}{locked && <span style={{color:'var(--brass)', marginInlineStart:6, fontSize:10}}>🔒</span>}</label>
+                <label htmlFor={f.type==='ownerList'||(f.type==='file'&&values[f.name])?undefined:'accounting-field-'+f.name}>{f.label}{(typeof f.required==='function' ? f.required(values) : f.required) && ' *'}{locked && <span style={{color:'var(--brass)', marginInlineStart:6, fontSize:10}}>🔒</span>}</label>
                 {f.type==='select' ? (
-                  <select required={typeof f.required==='function' ? f.required(values) : f.required} disabled={locked} value={values[f.name]||''}
+                  <select id={'accounting-field-'+f.name} required={typeof f.required==='function' ? f.required(values) : f.required} disabled={locked} value={values[f.name]||''}
                     onChange={e=>{
                       if(f.allowAddNew && e.target.value==='__ADDNEW__'){
                         const n = prompt(f.addNewPrompt || 'اسم التصنيف الجديد:');
@@ -1000,13 +1000,13 @@ function FormModal({title, fields, initial, onCancel, onSave, data, lockedFields
                     {f.allowAddNew && <option value="__ADDNEW__">{f.addNewLabel || '➕ إضافة تصنيف جديد...'}</option>}
                   </select>
                 ) : f.type==='textarea' ? (
-                  <textarea rows="3" disabled={locked} value={values[f.name]||''} onChange={e=>set(f.name,e.target.value)} style={locked?{background:'#F2F0EA', cursor:'not-allowed'}:{}} />
+                  <textarea id={'accounting-field-'+f.name} rows="3" disabled={locked} value={values[f.name]||''} onChange={e=>set(f.name,e.target.value)} style={locked?{background:'#F2F0EA', cursor:'not-allowed'}:{}} />
                 ) : f.type==='ownerList' ? (
                   <div>
                     {(values[f.name]||[]).map((row,idx)=>(
                       <div key={idx} style={{display:'flex', gap:8, marginBottom:8, alignItems:'flex-start', flexWrap:'wrap'}}>
                         {(f.subFields||[]).map(sf=>(
-                          <input key={sf.name} type="text" placeholder={sf.label} disabled={locked}
+                          <input key={sf.name} type="text" aria-label={sf.label} placeholder={sf.label} disabled={locked}
                             value={row[sf.name]||''}
                             style={{flex: sf.name==='name'?'1 1 160px':'1 1 120px', minWidth:110}}
                             onChange={e=>{
@@ -1048,7 +1048,7 @@ function FormModal({title, fields, initial, onCancel, onSave, data, lockedFields
                         {!locked && <button type="button" className="btn ghost small" style={{color:'var(--rust)'}} onClick={()=>{ set(f.name,''); set(f.name+'_name',''); }}>✕ إزالة</button>}
                       </div>
                     ) : (
-                      <input type="file" accept="image/*,application/pdf" disabled={locked}
+                      <input id={'accounting-field-'+f.name} type="file" accept="image/*,application/pdf" disabled={locked}
                         onChange={e=>{
                           const file = e.target.files && e.target.files[0];
                           if(!file) return;
@@ -1060,7 +1060,7 @@ function FormModal({title, fields, initial, onCancel, onSave, data, lockedFields
                     )}
                   </div>
                 ) : (
-                  <input type={f.type||'text'} required={typeof f.required==='function' ? f.required(values) : f.required} disabled={locked} step={f.type==='number' ? '0.01' : undefined}
+                  <input id={'accounting-field-'+f.name} type={f.type||'text'} required={typeof f.required==='function' ? f.required(values) : f.required} disabled={locked} step={f.type==='number' ? '0.01' : undefined}
                     value={values[f.name]===undefined?'':values[f.name]} onChange={e=>set(f.name,e.target.value)} style={locked?{background:'#F2F0EA', cursor:'not-allowed'}:{}} />
                 )}
                 {f.hint && <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>{f.hint}</div>}
@@ -2901,7 +2901,7 @@ function CreditNoteDoc({cn, onClose}){
             <div className="sinv-logo"><img src={NITAQ_LOGO} alt="NITAQ" /></div>
           </div>
 
-          <div className="sinv-tag"><span className="en">{T.title}</span></div>
+          <div className="sinv-tag"><span className="en" data-office-dialog-title>{T.title}</span></div>
 
           <div className="sinv-info">
             <div>
@@ -7249,7 +7249,7 @@ function Dashboard({data, go}){
           </div>
         </div>
 
-        <div className="card">
+        <div className="card decisions-card" style={{alignSelf:'start'}}>
           <div className="section-title"><h3>أحدث قرارات المشاريع</h3><div className="rule"></div></div>
           {(data.decisions||[]).length===0 && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>لا قرارات مسجلة بعد — تُضاف من ملف المشروع أو باستيراد واتساب.</p>}
           {[...(data.decisions||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,6).map(dc=>{
@@ -7954,11 +7954,11 @@ function App(){
                 const Icon = item.icon;
                 const count = urgentCount(item.key);
                 return (
-                  <div key={item.key} className={"nav-item "+(view===item.key?'active':'')} onClick={()=>setView(item.key)}>
+                  <button type="button" key={item.key} aria-current={view===item.key?'page':undefined} className={"nav-item "+(view===item.key?'active':'')} onClick={()=>setView(item.key)}>
                     <Icon/>
                     <span>{item.label}</span>
                     {count>0 && <span className="dot"></span>}
-                  </div>
+                  </button>
                 );
               })}
             </div>

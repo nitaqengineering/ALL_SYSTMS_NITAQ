@@ -3,12 +3,12 @@
    وبه حالة المخططات + الاعتمادات من الدوائر الحكومية + حالة المناقصات. ومنه يُصدَّر PDF أو
    يُرسَل كرسالة واتساب. فرونت-إند بالكامل من بيانات المشروع المحمّلة؛ لا يلمس القاعدة أو السحابة. */
 (function(){
- const STATUS={REQ:{ar:'قيد العمل',en:'In progress',c:'s-work'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-work'},
+ const STATUS={dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-work'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-sub'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-work'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-work'},
    SUB:{ar:'تم التقديم',en:'Submitted',c:'s-sub'},COM:{ar:'عليه ملاحظات',en:'Returned with comments',c:'s-com'},
    OK:{ar:'معتمد',en:'Approved',c:'s-ok'},'N/A':{ar:'لا يلزم',en:'N/A',c:'s-na'},
    HOLD:{ar:'موقوف بطلب المالك',en:'On hold (owner request)',c:'s-hold'},DONE:{ar:'مكتمل',en:'Completed',c:'s-ok'}};
- const ICON={REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
- const TENDER={REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
+ const ICON={dwg:'✏️','SUB COM':'🔁',REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
+ const TENDER={dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
    READY:{ar:'جاهز للتقديم إلى المناقصة',en:'Ready to submit to tender'},
    SUB:{ar:'تم التقديم إلى المناقصة',en:'Submitted to tender'},
    COM:{ar:'دراسة عروض الأسعار',en:'Studying quotations'},
@@ -50,10 +50,12 @@
  function groupStatus(p,ks){
    const sts=ks.filter(k=>!(k==='gas'&&p.service==='FEWA')).map(k=>p.stages[k]?p.stages[k].status:'N/A');
    if(!sts.length)return 'N/A';
-   if(sts.every(s=>['OK','N/A'].includes(s)))return 'OK';
+   if(sts.every(s=>['OK','N/A','DONE'].includes(s)))return 'OK';
    if(sts.some(s=>s==='COM'))return 'COM';
+   if(sts.some(s=>s==='SUB COM'))return 'SUB COM';
    if(sts.some(s=>s==='SUB'))return 'SUB';
    if(sts.some(s=>s==='READY'))return 'READY';
+   if(sts.some(s=>s==='dwg'))return 'dwg';
    if(sts.every(s=>s==='HOLD'))return 'HOLD';
    return 'REQ';
  }
@@ -133,7 +135,7 @@
    const tender={show:tStatus!=='N/A',status:tStatus,contractor:(p.tender&&p.tender.contractor)||'',offers:(p.tender&&p.tender.offers)||''};
    const secPct={draw:pctOf(p,['design','struct','sanitary','electric','water','gas','telecom','civil']),
      app:pctOf(p,['planning','civil','electric','water','gas','telecom','munArch','munStruct','munSanitary']),
-     tender:['OK','N/A','DONE'].includes(tStatus)?100:(['SUB','COM','READY'].includes(tStatus)?50:0)};
+     tender:['OK','N/A','DONE'].includes(tStatus)?100:(['SUB','SUB COM','COM','READY'].includes(tStatus)?50:0)};
    return {p,percent,drawings,approvals,tender,secPct,phases:phases(p),date:today(),ar:derive(p,'ar'),en:derive(p,'en')};
  }
 
@@ -281,13 +283,13 @@
    const dir=lang==='en'?'ltr':'rtl';
    const d=m[lang];
    const descVal=lang==='en'?(p.descEn||p.desc):p.desc;
-   const SORD=['OK','SUB','COM','REQ','READY','HOLD','N/A','DONE'];
+   const SORD=['OK','SUB','SUB COM','COM','dwg','REQ','READY','HOLD','N/A','DONE'];
    const sopt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${ICON[c]} ${id(STATUS[c][lang])}</option>`;
-   const ssel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${SORD.map(c=>sopt(c,cur)).join('')}</select>`;
+   const ssel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${SORD.includes(cur)?'':`<option value="${id(cur)}" selected>${id(typeof statusMeaning==='function'?(statusMeaning(cur)||cur):cur)}</option>`}${SORD.map(c=>sopt(c,cur)).join('')}</select>`;
    const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl cbnd">${id(r.label[lang])}</td><td class="rs cstat">${ssel(r.st)}</td><td class="rdate cdate"${ed}>${id(r.date)||'—'}</td><td class="rnote cnote"${ed}>${id(r.note)||'—'}</td></tr>`).join('');
-   const TORD=['REQ','COM','READY','SUB','OK','HOLD','DONE','N/A'];
+   const TORD=['REQ','dwg','COM','READY','SUB','SUB COM','OK','HOLD','DONE','N/A'];
    const topt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${id((TENDER[c]||{})[lang]||c)}</option>`;
-   const tsel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${TORD.map(c=>topt(c,cur)).join('')}</select>`;
+   const tsel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${TORD.includes(cur)?'':`<option value="${id(cur)}" selected>${id(typeof statusMeaning==='function'?(statusMeaning(cur)||cur):cur)}</option>`}${TORD.map(c=>topt(c,cur)).join('')}</select>`;
    const ctypeSel=`<select class="selplain" onchange="syncWA()"><option value="main" selected>${id(T.main[lang])}</option><option value="sub">${id(T.sub[lang])}</option></select>`;
    const secp=pc=>` <span class="secpct pct-only">${pc}%</span>`;
    const sec=(key,secKey,pc,rows)=>`<div class="sec" data-sec="${secKey}" data-title="${id(T[key][lang])}"><h3>${id(T[key][lang])}${secp(pc)}</h3><table><thead><tr><th class="cbnd">${id(T.cItem[lang])}</th><th class="cstat">${id(T.cStatus[lang])}</th><th class="cdate">${id(T.cDate[lang])}</th><th class="cnote">${id(T.cNote[lang])}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -334,7 +336,7 @@
  function reportDoc(m){
    const title=esc(T.title.ar.replace(/\s+/g,' '))+' '+esc(m.p.id)+' — '+esc(m.p.name||'');
    const WA=JSON.stringify({ar:{title:T.waTitle.ar,owner:T.owner.ar,project:T.waProject.ar,no:T.projectNo.ar,pct:T.pct.ar,phase:T.phase.ar,permit:T.permit.ar,contract:T.contract.ar,next:T.next.ar,date:T.date.ar,footer:T.footer.ar},en:{title:T.waTitle.en,owner:T.owner.en,project:T.waProject.en,no:T.projectNo.en,pct:T.pct.en,phase:T.phase.en,permit:T.permit.en,contract:T.contract.en,next:T.next.en,date:T.date.en,footer:T.footer.en}});
-   const legData=l=>['OK','SUB','COM','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
+   const legData=l=>['OK','SUB','SUB COM','COM','dwg','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
    const LEG=JSON.stringify({ar:legData('ar'),en:legData('en')});
    return `<!doctype html><html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body>
    <div id="flash"></div>
@@ -361,7 +363,7 @@
    <div class="wabox no-print"><label for="wa">نص واتساب جاهز للنسخ والإرسال (يتبع لغة التقرير؛ حدّثه بزرّ «تحديث النص»)</label><textarea id="wa"></textarea></div>
    <script>
    var WAL=${WA};var LEG=${LEG};
-   var CLS={OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
+   var CLS={dwg:'s-work','SUB COM':'s-sub',OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
    function active(){return document.querySelector('.nreport:not(.hidden)');}
    function lang(){var a=active();return a?a.getAttribute('data-lang'):'ar';}
    function stChange(sel){sel.className='stsel '+(CLS[sel.value]||'s-work');syncWA();}
