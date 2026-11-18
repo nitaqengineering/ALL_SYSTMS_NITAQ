@@ -38,6 +38,7 @@ function renderActiveFilters() {
 
 function refreshInterface() {
   if(searchTimer!==undefined)clearTimeout(searchTimer);
+  const printButton=$('#printProjects');if(printButton)printButton.hidden=view!=='projects';
   const tabs={projects:'projectsTab',documents:'documentsTab',tender:'tenderTab',supervision:'superTab',followup:'followupTab'};
   for(const [name,id] of Object.entries(tabs)) {
     if(view===name) $('#'+id).setAttribute('aria-current','page');
