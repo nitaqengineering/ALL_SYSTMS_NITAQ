@@ -51,7 +51,7 @@ function renderDocumentColumns(list){
   ];
   if(documentView==='personal'){fields=fields.filter(([,key])=>['email','idNumber','idExpiry','passportNumber','passportExpiry'].includes(key));ordered=[];}
   if(documentView==='land'){fields=fields.filter(([,key])=>!['email','idNumber','idExpiry','passportNumber','passportExpiry'].includes(key));ordered=ordered.filter(column=>column.kind==='request'&&column.name.includes('التخطيط'));}
-  if(documentView==='noc'){fields=[];ordered=ordered.filter(column=>column.kind==='request'&&[...column.entries.values()].some(entry=>['telecomNoc','fewaNoc'].includes(entry.id)));}
+  if(documentView==='noc'){fields=[];ordered=ordered.filter(column=>column.kind==='request'&&[...column.entries.values()].some(entry=>entry.id==='fewaNoc'));}
   if(documentView==='all')fields.push(...(db.documentColumns||[]).map(column=>[column.name,column.id,column.type]));
   const input=(p,label,key,value,request='',type='text')=>{
     const expiry=key.endsWith('Expiry')||request;
@@ -59,7 +59,7 @@ function renderDocumentColumns(list){
     const master=accountingMasterLocked(p)&&['plotGovernment','plotPrivate'].includes(key);
     return `<td><input class="document-grid-input" ${master?'readonly title="يُحدّث من الحسابات"':''} type="${expiry?'date':type}" ${type==='number'?'step="any"':''} dir="ltr" aria-label="${esc(label)} — مشروع ${esc(p.id)}" data-grid-project="${esc(p.id)}" data-grid-field="${key}" data-grid-request="${request}" value="${esc(value??'')}">${warning?'<div class="sub late">'+esc(warning)+'</div>':''}</td>`;
   };
-  const noc=column=>column.kind==='request'&&['telecomNoc','fewaNoc'].includes(column.entries.values().next().value?.id);
+  const noc=column=>column.kind==='request'&&column.entries.values().next().value?.id==='fewaNoc';
   const cell=(p,{kind,entries})=>{
     const entry=entries.get(p.id);
     if(!entry)return '<td>—</td>'+ (noc({kind,entries})?'<td>—</td>':'');
