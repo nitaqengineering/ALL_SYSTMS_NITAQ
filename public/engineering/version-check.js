@@ -7,26 +7,21 @@
  * This watcher reads the ?v= tags the page ACTUALLY loaded (from its own DOM,
  * so the baseline is the running build, even when that came from cache), then
  * periodically fetches the live index.html and compares. If the server now
- * serves a different set of script versions, this page is stale and we offer a
- * one-click refresh. No build step, no extra marker file: the ?v= tags that are
- * already bumped on every deploy are the signal.
+ * serves different script URLs, stylesheet URLs or inline head styles, we offer a
+ * one-click refresh. Versioned external assets still require a ?v= bump when
+ * their content changes; inline head CSS is compared directly.
  */
 (function () {
-  function versionsFrom(text) {
-    // Collect every  something.js?v=TOKEN  version token, sorted + joined.
-    const out = [];
-    const re = /\.js\?v=([^"'\s>&]+)/g;
-    let m;
-    while ((m = re.exec(text))) out.push(m[1]);
-    return out.sort().join('|');
+  function versionsFrom(doc) {
+    // Compare the asset identity as well as its token. Stylesheet-only and inline
+    // head-style deployments must notify open sessions too. Ignore runtime UI styles.
+    const scripts=[...doc.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')).filter(src=>/\.js\?v=/.test(src)).sort();
+    const links=[...doc.querySelectorAll('head link[rel="stylesheet"][href]')].map(s=>s.getAttribute('href')).sort();
+    const styles=[...doc.querySelectorAll('head style:not([data-nitaq-runtime])')].map(s=>s.textContent);
+    return JSON.stringify({scripts,links,styles});
   }
 
-  // What this page is really running, taken from its own loaded <script> tags.
-  const running = versionsFrom(
-    [...document.querySelectorAll('script[src]')].map(s => s.getAttribute('src')).join(' ')
-  );
-  if (!running) return; // nothing versioned here — nothing to watch
-
+  const running = versionsFrom(document);
   let notified = false;
 
   function showUpdateBar() {
@@ -34,6 +29,7 @@
     notified = true;
 
     const style = document.createElement('style');
+    style.setAttribute('data-nitaq-runtime','');
     style.textContent =
       '#nitaq-update-bar{position:fixed;inset-inline:0;bottom:0;z-index:9999;display:flex;' +
       'align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;' +
@@ -76,7 +72,7 @@
     try {
       const res = await fetch('index.html?__freshness=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) return;
-      const latest = versionsFrom(await res.text());
+      const latest = versionsFrom(new DOMParser().parseFromString(await res.text(),'text/html'));
       if (latest && latest !== running) showUpdateBar();
     } catch (_) { /* offline or blocked — try again later */ }
   }

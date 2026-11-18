@@ -55,8 +55,10 @@ function workspaceGate(message,actions=[]) {
 // Routine saves are non-blocking; only errors, conflicts and initial reads use the gate.
 function workspaceSaveStatus(message,saving=false) {
   window.NITAQ_SHARED_SAVING=saving;
-  const hint=document.getElementById('savehint');
-  if(hint){hint.textContent=message;hint.setAttribute('aria-busy',String(saving));}
+  for(const id of ['savehint','workspaceSaveStatus']){
+    const hint=document.getElementById(id);
+    if(hint){hint.textContent=message;hint.setAttribute('aria-busy',String(saving));}
+  }
 }
 
 function closeWorkspaceGate() {
@@ -412,6 +414,11 @@ workspaceConnect.onclick=()=>{
   void startSharedWorkspace();
 };
 document.getElementById('projectsTab').after(workspaceConnect);
+const workspaceSaveIndicator=document.createElement('span');
+workspaceSaveIndicator.id='workspaceSaveStatus';workspaceSaveIndicator.className='sub';
+workspaceSaveIndicator.setAttribute('role','status');workspaceSaveIndicator.setAttribute('aria-live','polite');
+workspaceSaveIndicator.setAttribute('aria-atomic','true');
+workspaceConnect.after(workspaceSaveIndicator);
 
 async function checkSharedWorkspaceUpdates(){
   if(!sharedWorkspace||sharedWorkspaceBusy||sharedWorkspacePending||sharedWorkspaceRestorePending||document.getElementById('edit').open||
