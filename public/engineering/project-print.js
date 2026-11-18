@@ -5,7 +5,8 @@ function projectPrintColumns(){
   const columns=[
     {id:'id',title:'رقم المشروع',value:p=>p.id},
     {id:'name',title:'المالك / المشروع',value:p=>[p.name,p.sketch?'اسكتش '+p.sketch:'',p.parent?'مرجع '+p.parent:''].filter(Boolean).join(' · ')},
-    {id:'details',title:'تفاصيل المشروع',value:p=>[p.projectType,p.workKind,p.desc,p.descEn,feeInfo(p.projectType)].filter(Boolean).join(' · ')},
+    {id:'details',title:'تصنيف المشروع',value:p=>[p.projectType,p.workKind].filter(Boolean).join(' · ')},
+    {id:'building',title:'نوع المشروع',value:p=>p.desc||p.descEn||p.info?.descriptionEn||'غير محدد'},
     {id:'location',title:'الموقع',value:p=>[p.location,[p.system,p.municipality].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')},
     {id:'owner',title:'المسؤول',value:p=>p.owner},
     {id:'general',title:'الحالة العامة',value:p=>p.stages.design.status==='DONE'?'مغلق نهائيًا':p.stages.design.status==='HOLD'?'إيقاف مؤقت':'جارٍ العمل'}

@@ -252,3 +252,9 @@
  #table .project-details-compact {display:block;max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:30px;line-height:1.5}
  #table td.project-location>span {display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+@media screen {
+ #table td.fixedname>.project-owner-compact {white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;display:block;max-width:125px;overflow-wrap:normal;word-break:normal}
+ #table .project-building {min-width:150px;max-width:180px}
+ #table .project-building .project-details-compact {max-width:165px;font-weight:400}
+ #table .fee-note {display:none}
+}
