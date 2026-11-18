@@ -388,7 +388,7 @@ function render(){
   renderStatusLegend();
   renderProjectContext();
   for(const [id,name] of [['ownersTab','owners'],['tasksTab','tasks'],['dashboardTab','dashboard'],['reportsTab','reports'],['archiveTab','archive']]){ $('#'+id).className='btn '+(view===name?'primary':'');$('#'+id).hidden=['dashboard','reports'].includes(name)&&!managerPreview();}
-  $('#savehint').textContent=saveWarning||(window.NITAQ_SHARED_ACTIVE?'الحفظ المشترك على Supabase':'التعديلات محفوظة على هذا المتصفح');
+  $('#savehint').textContent=saveWarning||(window.NITAQ_SHARED_SAVING?'جارٍ الحفظ…':window.NITAQ_SHARED_ACTIVE?'الحفظ المشترك على Supabase':'التعديلات محفوظة على هذا المتصفح');
   $('#undo').disabled=!managerPreview()||!db.undoStack?.length;
   $('#undolabel').textContent='خطوات التراجع المتاحة: '+(db.undoStack?.length||0);
   $('#projectContext').hidden=false;

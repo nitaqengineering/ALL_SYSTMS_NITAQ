@@ -3,6 +3,8 @@ let sharedWorkspace = null;
 let sharedWorkspacePending = null;
 let sharedWorkspaceRestorePending = null;
 let sharedWorkspaceBusy = false;
+let sharedWorkspaceQueued = false;
+let sharedWorkspaceSaveTimer = null;
 let sharedWorkspaceRevision = null;
 let sharedWorkspaceActor = null;
 let sharedWorkspacePermissions = null;
@@ -48,6 +50,13 @@ function workspaceGate(message,actions=[]) {
   }
   document.querySelector('main').inert=true;
   return card;
+}
+
+// Routine saves are non-blocking; only errors, conflicts and initial reads use the gate.
+function workspaceSaveStatus(message,saving=false) {
+  window.NITAQ_SHARED_SAVING=saving;
+  const hint=document.getElementById('savehint');
+  if(hint){hint.textContent=message;hint.setAttribute('aria-busy',String(saving));}
 }
 
 function closeWorkspaceGate() {
@@ -109,6 +118,10 @@ function applySharedWorkspace(state,revision,permissions=sharedWorkspacePermissi
   projects=db.projects;
   sharedWorkspace=JSON.parse(JSON.stringify(state));
   sharedWorkspaceRevision=revision;
+  sharedWorkspaceQueued=false;
+  if(sharedWorkspaceSaveTimer!==null)clearTimeout(sharedWorkspaceSaveTimer);
+  sharedWorkspaceSaveTimer=null;
+  workspaceSaveStatus('تمت قراءة المشاريع المشتركة',false);
   sharedWorkspacePermissions=permissions;
   window.NITAQ_SHARED_ACTIVE=true;
   saveWarning='';
@@ -175,9 +188,13 @@ function workspaceRequest(after) {
 }
 
 async function saveSharedWorkspace() {
-  if(sharedWorkspaceBusy)return;
+  if(sharedWorkspaceBusy||!sharedWorkspacePending)return;
+  if(sharedWorkspaceSaveTimer!==null)clearTimeout(sharedWorkspaceSaveTimer);
+  sharedWorkspaceSaveTimer=null;
   sharedWorkspaceBusy=true;
-  workspaceGate('جارٍ الحفظ المشترك…');
+  let confirmed=false;
+  workspaceSaveStatus('جارٍ الحفظ…',true);
+  if(document.getElementById('workspaceGate'))workspaceGate('جارٍ تأكيد الحفظ…');
   try {
     const client=await loadAccountingCloudClient();
     const user=await client.auth.getUser();
@@ -228,32 +245,45 @@ async function saveSharedWorkspace() {
     saveWarning='';
     closeWorkspaceGate();
     renderKeepingFocus();
-    document.getElementById('savehint').textContent='تم الحفظ على Supabase';
-    toast('تم الحفظ المشترك');
+    confirmed=true;
+    workspaceSaveStatus(sharedWorkspaceQueued?'جارٍ حفظ باقي التعديلات…':'تم الحفظ على Supabase',sharedWorkspaceQueued);
   } catch(error){
     workspaceGate(error.message,[
       ['إعادة تأكيد الحفظ',()=>void saveSharedWorkspace()],
       ['تسجيل الدخول مجددًا',()=>void startSharedWorkspace()],
       ['تنزيل تعديلاتك',downloadWorkspaceDraft]
     ]);
-  } finally {sharedWorkspaceBusy=false}
+  } finally {
+    sharedWorkspaceBusy=false;
+    if(confirmed&&sharedWorkspaceQueued){sharedWorkspaceQueued=false;writeDb();}
+    else if(!confirmed)workspaceSaveStatus('لم يتأكد الحفظ — راجع الرسالة',false);
+  }
 }
 
 writeDb=function(message){
   if(!sharedWorkspace)return localWriteDb(message);
-  if(sharedWorkspacePending)return toast('أكد نتيجة الحفظ السابق أولًا.');
+  if(sharedWorkspacePending&&sharedWorkspaceSaveTimer===null){
+    if(sharedWorkspaceBusy){sharedWorkspaceQueued=true;renderKeepingFocus();workspaceSaveStatus('جارٍ الحفظ — تعديلات إضافية في الانتظار…',true);return;}
+    return toast('أكد نتيجة الحفظ السابق أولًا.');
+  }
+  // While waiting, replace the unsent snapshot with the newest one. In-flight
+  // requests are immutable and use the same operation ID for uncertain retries.
+  if(sharedWorkspaceSaveTimer!==null)clearTimeout(sharedWorkspaceSaveTimer);
+  sharedWorkspaceSaveTimer=null;
   const after=JSON.parse(snapshot());
   const request=workspaceRequest(after);
   if(!request.p_changes.length&&request.p_settings_after===null){
-    renderKeepingFocus();
-    return;
+    sharedWorkspacePending=null;
+    renderKeepingFocus();workspaceSaveStatus('تم الحفظ على Supabase',false);return;
   }
   sharedWorkspacePending={request,after};
-  void saveSharedWorkspace();
+  renderKeepingFocus();workspaceSaveStatus('تعديلات بانتظار الحفظ…',true);
+  sharedWorkspaceSaveTimer=setTimeout(()=>{sharedWorkspaceSaveTimer=null;void saveSharedWorkspace();},1000);
 };
 
 restoreBackup=function(){
   if(!sharedWorkspace)return localRestoreBackup();
+  if(sharedWorkspaceBusy||sharedWorkspacePending)throw Error('انتظر تأكيد حفظ التعديلات الحالية قبل استعادة نسخة.');
   if(document.getElementById('replaceBackup').disabled||!document.getElementById('replaceBackup').checked)
     throw Error('افحص النسخة وأكّد الاستبدال أولًا.');
   const restored=readBackup(document.getElementById('backupText').value);
@@ -372,11 +402,13 @@ async function startSharedWorkspace() {
 const workspaceConnect=document.createElement('button');
 workspaceConnect.type='button';
 workspaceConnect.className='btn';
-workspaceConnect.textContent='الحفظ المشترك';
+workspaceConnect.id='workspaceSaveNow';
+workspaceConnect.textContent='حفظ الآن';
+workspaceConnect.title='حفظ تلقائي بعد آخر تعديل بثانية، أو اضغط للحفظ فورًا';
 workspaceConnect.onclick=()=>{
   if(sharedWorkspaceRestorePending)return void restoreSharedWorkspace();
   if(sharedWorkspacePending)return void saveSharedWorkspace();
-  if(sharedWorkspace)return void refreshSharedWorkspace();
+  if(sharedWorkspace)return writeDb();
   void startSharedWorkspace();
 };
 document.getElementById('projectsTab').after(workspaceConnect);

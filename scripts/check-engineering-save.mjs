@@ -11,13 +11,13 @@ const missing={code:'PGRST202',message:'Could not find the function public.nitaq
 const changes=n=>Array.from({length:n},(_,i)=>({id:'p'+i,before:null,after:{id:'p'+i}}));
 async function run(count,v2,v1){
  const calls=[],gates=[];
- const state={sharedWorkspaceBusy:false,sharedWorkspaceActor:'actor',sharedWorkspace:{marker:'before'},sharedWorkspaceRevision:1,saveWarning:'',
+ const state={sharedWorkspaceBusy:false,sharedWorkspaceQueued:false,sharedWorkspaceSaveTimer:null,sharedWorkspaceActor:'actor',sharedWorkspace:{marker:'before'},sharedWorkspaceRevision:1,saveWarning:'',
   sharedWorkspacePending:{request:{p_operation:'00000000-0000-4000-8000-000000000001',p_changes:changes(count),p_settings_before:null,p_settings_after:null},after:{marker:'after'}}};
  const client={auth:{getUser:async()=>({data:{user:{id:'actor'}}})},rpc:async(name,args)=>{calls.push({name,args});const reply=name.endsWith('_v2')?v2:v1;if(reply instanceof Error)throw reply;return reply;}};
  const ctx=vm.createContext({console,Error,JSON,...state,loadAccountingCloudClient:async()=>client,workspaceGate:(message,actions=[])=>gates.push({message,actions:actions.map(a=>a[0])}),closeWorkspaceGate(){},
-  downloadWorkspaceDraft(){},refreshSharedWorkspace:async()=>{},startSharedWorkspace:async()=>{},renderKeepingFocus(){},toast(){},document:{getElementById:()=>({})}});
+  workspaceSaveStatus(){},downloadWorkspaceDraft(){},refreshSharedWorkspace:async()=>{},startSharedWorkspace:async()=>{},renderKeepingFocus(){},toast(){},document:{getElementById:id=>id==='savehint'?{}:null}});
  // Top-level `let` state lives in the script scope; declare it there so the function mutates it.
- vm.runInContext('var sharedWorkspaceBusy,sharedWorkspaceActor,sharedWorkspace,sharedWorkspaceRevision,saveWarning,sharedWorkspacePending;',ctx);
+ vm.runInContext('var sharedWorkspaceBusy,sharedWorkspaceQueued,sharedWorkspaceSaveTimer,sharedWorkspaceActor,sharedWorkspace,sharedWorkspaceRevision,saveWarning,sharedWorkspacePending;',ctx);
  for(const [key,value] of Object.entries(state))ctx[key]=value;
  vm.runInContext(body,ctx);
  await vm.runInContext('saveSharedWorkspace()',ctx);
@@ -26,7 +26,7 @@ async function run(count,v2,v1){
 const names=r=>r.calls.map(c=>c.name.slice(-2)).join(',');
 // v2 present: v1 is never used.
 let r=await run(3,{data:{result:'saved',revision:9}},{data:{result:'saved',revision:1}});
-assert.equal(names(r),'v2');assert.ok(r.saved);assert.equal(r.revision,9);
+assert.equal(names(r),'v2');assert.ok(r.saved);assert.equal(r.revision,9);assert.equal(r.gates.length,0,'normal saves must not open a blocking gate');
 // v2 confirmed missing, 100 projects: one v1 call with the identical request, saved.
 r=await run(100,{error:missing,status:404},{data:{result:'saved',revision:7}});
 assert.equal(names(r),'v2,v1');assert.deepEqual(r.calls[1].args,r.calls[0].args);assert.equal(r.calls[1].args.p_changes.length,100);assert.ok(r.saved);assert.equal(r.pending,null);
