@@ -34,7 +34,7 @@ function projectPrintFilters(){
   if(onlyMine)parts.push('المسند لي');
   if(previewUser)parts.push('معاينة الفريق: '+previewUser);
   if(focusedProjectId)parts.push('مشروع محدد: '+focusedProjectId);
-  return parts.join(' · ')||'كل النتائج المتاحة حسب العرض الحالي';
+  return parts.join(' · ')||'المشاريع غير المؤرشفة حسب العرض الحالي';
 }
 function captureProjectPrint(){
   if(view!=='projects')throw Error('افتح جدول المشاريع لاختيار الصفوف والأعمدة المطلوب طباعتها.');
