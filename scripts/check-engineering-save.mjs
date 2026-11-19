@@ -40,6 +40,11 @@ for(const error of [{code:'42501',message:'Workspace edit denied'},{code:'22023'
 }
 r=await run(2,{error:{code:'42501',message:'x'},status:403},{data:{result:'saved'}});
 assert.match(r.gates.at(-1).message,/لا يملك صلاحية/);
+// Administrative denials must not tell an already-authorized engineer to request editAll again.
+r=await run(1,{error:{code:'42501',message:'Project administration requires manager'},status:403},{data:{result:'saved'}});
+assert.match(r.gates.at(-1).message,/بيانات المشروع/);assert.match(r.gates.at(-1).message,/دور مدير أو مالك/);
+assert.ok(!r.gates.at(-1).message.includes('اطلب من المدير تفعيل'));
+assert.ok(r.pending);assert.equal(names(r),'v2');
 // Conflict from v2 is shown as a conflict; no fallback.
 r=await run(2,{data:{result:'conflict',project:'109'}},{data:{result:'saved'}});
 assert.equal(names(r),'v2');assert.ok(!r.saved);assert.match(r.gates.at(-1).message,/109/);
@@ -95,3 +100,26 @@ console.log('PASS engineering save: v1 fallback only on confirmed missing save_v
  assert.equal(settings.p_settings_before.stageSchema,2);
  console.log('PASS actual UI snapshot -> save request: project 105 status edit sends no settings replacement; real settings edits retain stageSchema');
 }
+// Real project form: engineers can read full owner data without queuing an admin edit.
+const appSource=await readFile('public/engineering/app.js','utf8');
+let isManager=false;
+let controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'},{tagName:'TEXTAREA'}];
+const ui=new Map(['#dialogError','#dialogtitle','#dialogsub','#fields','#form button[type="submit"]','#cancel','#edit','#form'].map(id=>[id,{textContent:'',style:{},querySelectorAll:()=>controls,showModal(){this.open=true;}}]));
+const project={id:'109',name:'Full owner name'};
+const formContext=vm.createContext({$:id=>ui.get(id),managerPreview:()=>isManager,saveWarning:'',editing:null,projects:[project],Error});
+vm.runInContext(appSource.slice(appSource.indexOf('function show('),appSource.indexOf('function editStage(')),formContext);
+formContext.show('Project','Full name','form fields','project','109');
+assert.ok(controls[0].readOnly);assert.ok(controls[1].disabled);assert.ok(controls[2].readOnly);
+assert.equal(ui.get('#form button[type="submit"]').style.display,'none');
+assert.match(ui.get('#dialogsub').textContent,/عرض فقط/);
+const submitLine=appSource.split('\n').find(line=>line.startsWith("$('#form').onsubmit="));
+vm.runInContext(submitLine,formContext);
+ui.get('#form').onsubmit({preventDefault(){}});
+assert.match(ui.get('#dialogError').textContent,/دور مدير أو مالك/);assert.deepEqual(project,{id:'109',name:'Full owner name'});
+controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'}];
+formContext.show('Stage','Details','stage fields','stage','109','planning');
+assert.notEqual(ui.get('#form button[type="submit"]').style.display,'none');assert.ok(!controls[0].readOnly&&!controls[1].disabled);
+isManager=true;controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'}];
+formContext.show('Project','Details','admin fields','project','109');
+assert.notEqual(ui.get('#form button[type="submit"]').style.display,'none');assert.ok(!controls[0].readOnly&&!controls[1].disabled);
+console.log('PASS role UI: engineer project data read-only, submit guard prevents mutations, stage forms still editable, manager project forms unchanged');

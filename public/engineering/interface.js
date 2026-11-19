@@ -51,6 +51,7 @@ function refreshInterface() {
   $('#mine').className='btn '+(onlyMine?'primary':'');
   $('#settings').hidden=!managerPreview();
   $('#backup').hidden=!managerPreview();
+  $('#add').hidden=!managerPreview();
   const count=Number(onlyMine)+['search','engineer','statefilter'].filter(id=>$('#'+id).value.trim()).length+
     Number($('#filter').value!=='all') + Number(!!$('#stagefilter').value);
   renderActiveFilters();

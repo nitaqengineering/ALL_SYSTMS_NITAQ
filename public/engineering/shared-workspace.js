@@ -221,7 +221,16 @@ async function saveSharedWorkspace() {
     }
     if(result.error) {
       if(result.status>=400&&result.status<500&&![408,429].includes(result.status)){
-        const message=result.error.code==='42501'?'حسابك لا يملك صلاحية هذا التعديل. تعديل بنود المشاريع متاح للمهندس المسؤول عن البند أو للمدير — وللتعديل على بنود غيرك اطلب من المدير تفعيل صلاحية «تعديل كل البنود» لحسابك.'
+        const permissionReasons={
+          'Project administration requires manager':'تعديل بيانات المشروع الأساسية أو مستنداته يحتاج دور مدير أو مالك. صلاحية «تعديل كل البنود» تتيح تعديل حالات المراحل، ولا تشمل إدارة بيانات المشروع.',
+          'Permit and supervision require manager':'تعديل الإجازة أو بيانات الإشراف متاح للمدير. صلاحية تعديل البنود لا تشمل هذه الإجراءات.',
+          'Only managers can change workspace settings':'تغيير قوائم النظام والمستخدمين والإعدادات متاح للمدير فقط.',
+          'Stage is assigned to another engineer':'هذا البند مسند لمهندس آخر. راجع صلاحية «تعديل كل البنود» للحساب المسجل.',
+          'Assignment requires permission':'تغيير المسؤول يحتاج صلاحية الإسناد.',
+          'Exemption requires manager':'اعتماد استثناء «لا يلزم» متاح للمدير فقط.',
+          'Workflow is assigned to another engineer':'التقديمات والمراجعات لهذا البند تخص المهندس المسند إليه؛ صلاحية تعديل حالات البنود وحدها لا تمنح إدارة التقديمات.'
+        };
+        const message=result.error.code==='42501'?(permissionReasons[result.error.message]||'حسابك لا يملك صلاحية هذا الإجراء. السبب: '+(result.error.message||'راجع الدور والصلاحيات للحساب المسجل.'))
           :'رفضت القاعدة التعديل. '+(result.error.message||'راجع بيانات المشروع.');
         workspaceGate(message+' — المشروع '+pending.request.p_changes.map(change=>change.id).join('، '),[
           ['تنزيل تعديلاتك',downloadWorkspaceDraft],
