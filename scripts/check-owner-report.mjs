@@ -10,7 +10,7 @@ const sandbox={projects:[project],keys,Blob,URL:{createObjectURL:b=>(blob=b,'blo
 vm.runInNewContext(source,sandbox);
 async function generate(){sandbox.window.openOwnerReport(project.id);return blob.text();}
 function selected(html,status){return (html.match(/<select class="stsel[^>]*>[\s\S]*?<\/select>/g)||[]).filter(s=>s.includes(`value="${status}" selected`));}
-for(const [status,ar,en,colour] of [['dwg','جارٍ العمل على المخططات','Drafting','s-work'],['SUB COM','إعادة تقديم الملاحظات','Resubmitted','s-sub']]){
+for(const [status,ar,en,colour] of [['dwg','جارٍ العمل على المخططات','Drafting','s-work'],['SUB COM','إعادة تقديم الملاحظات','Resubmitted','s-sub'],['rev','المخططات تحتاج مراجعة','Drawings need review','s-review']]){
  project.stages.design.status=status;project.stages.tender.status=status;
  for(const k of ['electric','water','gas'])project.stages[k].status=status;
  const html=await generate();
@@ -30,7 +30,7 @@ project.stages.electric.status='COM';
 assert.ok(selected(await generate(),'COM').length>=4,'unresolved comments retain priority over resubmission in a grouped report');
 for(const k of ['electric','water','gas'])project.stages[k].status='DONE';
 assert.ok(selected(await generate(),'OK').length>=4,'completed grouped stages do not regress to in progress');
-console.log('PASS owner reports: dwg/SUB COM selected and translated in Arabic/English, grouping, tender progress, legend and interactive colours; HTML generation only');
+console.log('PASS owner reports: dwg/SUB COM/rev selected and translated in Arabic/English, grouping, tender progress, legend and interactive colours; HTML generation only');
 
 // Custom statuses must remain selected, never silently become the first standard option (OK).
 for(const custom of ['INSP','فحص خاص','x"<unsafe>&']){

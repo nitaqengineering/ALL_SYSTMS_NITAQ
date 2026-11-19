@@ -21,3 +21,10 @@ vm.runInContext("statusMgrStage='electric';statusMgrDelete('READY')",ctx);assert
 // The same states() feeds inline selectors, details forms and stage status filters.
 assert.ok(app.includes("inlineOptions(stageStates(p,k),s.status)"));assert.ok(app.includes("opts(!k?[]:k==='permit'"));
 console.log('PASS READY UI: all non-design stages including coordination, no duplicates with old custom READY, built-in deletion guard, meaning, restore normalization and shared dropdown/filter source');
+
+for(const key of vm.runInContext('[...keys]',ctx)){
+ const values=vm.runInContext(`states(${JSON.stringify(key)})`,ctx);
+ assert.equal(values.filter(v=>v==='rev').length,['design','coordination'].includes(key)?0:1);
+}
+assert.equal(vm.runInContext("stateLabel('planning','rev')",ctx),'المخططات تحتاج مراجعة');
+console.log('PASS rev UI: one built-in option per drafting stage, shared dropdown/filter source and Arabic meaning');

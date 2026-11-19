@@ -25,6 +25,16 @@ export async function testReadyStages(c,actor){
  assert.equal(egyptSaved.stages.munStruct.status,'dwg egy');
  const egyptPermit=structuredClone(egyptSaved);egyptPermit.contract=true;egyptPermit.permit='تم التقديم';
  await assert.rejects(save(egyptSaved,egyptPermit),e=>e.code==='22023');
+ const reviewMigration=await readFile('database/engineering/review_required_status.sql','utf8');
+ await c.query(reviewMigration);await c.query(reviewMigration);
+ const review=structuredClone(egyptSaved);
+ for(const [key,stage] of Object.entries(review.stages))if(!['design','coordination'].includes(key))stage.status='rev';
+ assert.equal((await save(egyptSaved,review)).result,'saved');
+ const reviewSaved=(await c.query('select nitaq_engineering.project_document($1) d',[doc.id])).rows[0].d;
+ assert.equal(reviewSaved.stages.munStruct.status,'rev');
+ const reviewPermit=structuredClone(reviewSaved);reviewPermit.contract=true;reviewPermit.permit='تم التقديم';
+ await assert.rejects(save(reviewSaved,reviewPermit),e=>e.code==='22023');
+ console.log('PASS rev SQL: saves/reloads drafting stages, idempotent migration, review required is not approval');
  console.log('PASS Egypt drafting SQL: save/reload, idempotent migration, not approval');
  console.log('PASS READY SQL: saves/reloads across every non-design stage including coordination, design rejects it, permit still requires approvals, migration reapply is safe');
 }

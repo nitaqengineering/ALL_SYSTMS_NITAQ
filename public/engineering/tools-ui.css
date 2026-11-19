@@ -262,3 +262,5 @@
 thead th {direction:ltr;unicode-bidi:plaintext}
 /* Drafting carried out by the Egypt team. Text code remains visible alongside colour. */
 .badge.egy {background:#eee7f8;color:#60338b}
+/* Review required is distinct from drafting, ready-to-submit and authority comments. */
+.badge.review {background:#fff0d9;color:#8a4800}
