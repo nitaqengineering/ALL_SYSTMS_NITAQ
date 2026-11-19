@@ -10,7 +10,7 @@ const sandbox={projects:[project],keys,Blob,URL:{createObjectURL:b=>(blob=b,'blo
 vm.runInNewContext(source,sandbox);
 async function generate(){sandbox.window.openOwnerReport(project.id);return blob.text();}
 function selected(html,status){return (html.match(/<select class="stsel[^>]*>[\s\S]*?<\/select>/g)||[]).filter(s=>s.includes(`value="${status}" selected`));}
-for(const [status,ar,en,colour] of [['dwg','جارٍ العمل على المخططات','Drafting','s-work'],['SUB COM','إعادة تقديم الملاحظات','Resubmitted','s-sub'],['rev','المخططات تحتاج مراجعة','Drawings need review','s-review']]){
+for(const [status,ar,en,colour] of [['dwg','جارٍ العمل على المخططات','Drafting','s-drafting'],['SUB COM','إعادة تقديم الملاحظات','Resubmitted','s-resubmitted'],['rev','المخططات تحتاج مراجعة','Drawings need review','s-review']]){
  project.stages.design.status=status;project.stages.tender.status=status;
  for(const k of ['electric','water','gas'])project.stages[k].status=status;
  const html=await generate();

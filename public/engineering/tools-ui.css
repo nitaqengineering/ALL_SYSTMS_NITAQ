@@ -264,3 +264,31 @@ thead th {direction:ltr;unicode-bidi:plaintext}
 .badge.egy {background:#eee7f8;color:#60338b}
 /* Review required is distinct from drafting, ready-to-submit and authority comments. */
 .badge.review {background:#fff0d9;color:#8a4800}
+
+/* One distinct palette per workflow code; colour never replaces the visible code. */
+.badge.required {background:#e6e9ef;color:#354358}
+.badge.drafting {background:#dceaff;color:#174d93}
+.badge.egy {background:#eee7f8;color:#60338b}
+.badge.review {background:#fff0d9;color:#8a4800}
+.badge.wait {background:#f3e5c4;color:#78520c}
+.badge.submitted {background:#d9f1f6;color:#075c70}
+.badge.blocked {background:#f3ddd2;color:#883a1b}
+.badge.resubmitted {background:#e5e8ff;color:#3d4094}
+.badge.done {background:#ddeae6;color:#2e6e63}
+.badge.on-hold {background:#fce3ea;color:#93284b}
+.badge.closed {background:#34465a;color:#ffffff}
+.badge.not-applicable {background:#f0f1f2;color:#606773}
+#table select.badge:disabled,.pcard select.badge:disabled {opacity:1}
+
+option.status-option.egy {background-color:#eee7f8;color:#60338b}
+option.status-option.review {background-color:#fff0d9;color:#8a4800}
+option.status-option.required {background-color:#e6e9ef;color:#354358}
+option.status-option.drafting {background-color:#dceaff;color:#174d93}
+option.status-option.wait {background-color:#f3e5c4;color:#78520c}
+option.status-option.submitted {background-color:#d9f1f6;color:#075c70}
+option.status-option.blocked {background-color:#f3ddd2;color:#883a1b}
+option.status-option.resubmitted {background-color:#e5e8ff;color:#3d4094}
+option.status-option.done {background-color:#ddeae6;color:#2e6e63}
+option.status-option.on-hold {background-color:#fce3ea;color:#93284b}
+option.status-option.closed {background-color:#34465a;color:#ffffff}
+option.status-option.not-applicable {background-color:#f0f1f2;color:#606773}

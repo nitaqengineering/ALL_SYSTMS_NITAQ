@@ -16,13 +16,62 @@
 // ---- Manager ----------------------------------------------------------------
 
 const statusMgrColours = [
-  ['', 'بدون لون (رمادي)'],
-  ['work', 'أزرق — جارٍ العمل'],
-  ['egy', 'بنفسجي — مخططات مصر'],
-  ['review', 'برتقالي — المخططات تحتاج مراجعة'],
-  ['wait', 'ذهبي — بانتظار خطوة'],
-  ['done', 'أخضر — منجز'],
-  ['blocked', 'أحمر — متوقف / مغلق']
+  [
+    "",
+    "بدون لون"
+  ],
+  [
+    "required",
+    "رمادي — REQ"
+  ],
+  [
+    "drafting",
+    "أزرق — dwg"
+  ],
+  [
+    "egy",
+    "بنفسجي — dwg egy"
+  ],
+  [
+    "review",
+    "برتقالي — rev"
+  ],
+  [
+    "wait",
+    "ذهبي — READY"
+  ],
+  [
+    "submitted",
+    "سماوي — SUB"
+  ],
+  [
+    "blocked",
+    "أحمر طوبي — COM"
+  ],
+  [
+    "resubmitted",
+    "نيلي — SUB COM"
+  ],
+  [
+    "done",
+    "أخضر — OK"
+  ],
+  [
+    "on-hold",
+    "وردي — HOLD"
+  ],
+  [
+    "closed",
+    "كحلي — DONE"
+  ],
+  [
+    "not-applicable",
+    "رمادي فاتح — N/A"
+  ],
+  [
+    "work",
+    "أزرق عام — حالة مخصصة"
+  ]
 ];
 function statusMgrStages() { return keys.filter(k => !['design', 'coordination'].includes(k)); }
 let statusMgrStage = 'planning';

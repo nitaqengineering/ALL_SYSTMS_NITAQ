@@ -3,10 +3,10 @@
    وبه حالة المخططات + الاعتمادات من الدوائر الحكومية + حالة المناقصات. ومنه يُصدَّر PDF أو
    يُرسَل كرسالة واتساب. فرونت-إند بالكامل من بيانات المشروع المحمّلة؛ لا يلمس القاعدة أو السحابة. */
 (function(){
- const STATUS={rev:{ar:'المخططات تحتاج مراجعة',en:'Drawings need review',c:'s-review'},'dwg egy':{ar:'جارٍ العمل على المخططات في مصر',en:'Drafting in Egypt',c:'s-egy'},dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-work'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-sub'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-work'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-work'},
+ const STATUS={rev:{ar:'المخططات تحتاج مراجعة',en:'Drawings need review',c:'s-review'},'dwg egy':{ar:'جارٍ العمل على المخططات في مصر',en:'Drafting in Egypt',c:'s-egy'},dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-drafting'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-resubmitted'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-required'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-ready'},
    SUB:{ar:'تم التقديم',en:'Submitted',c:'s-sub'},COM:{ar:'عليه ملاحظات',en:'Returned with comments',c:'s-com'},
    OK:{ar:'معتمد',en:'Approved',c:'s-ok'},'N/A':{ar:'لا يلزم',en:'N/A',c:'s-na'},
-   HOLD:{ar:'موقوف بطلب المالك',en:'On hold (owner request)',c:'s-hold'},DONE:{ar:'مكتمل',en:'Completed',c:'s-ok'}};
+   HOLD:{ar:'موقوف بطلب المالك',en:'On hold (owner request)',c:'s-hold'},DONE:{ar:'مكتمل',en:'Completed',c:'s-closed'}};
  const ICON={rev:'⚠️','dwg egy':'✏️',dwg:'✏️','SUB COM':'🔁',REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
  const TENDER={rev:{ar:'مستندات المناقصة تحتاج مراجعة',en:'Tender documents need review'},'dwg egy':{ar:'جارٍ إعداد مستندات المناقصة في مصر',en:'Preparing tender documents in Egypt'},dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
    READY:{ar:'جاهز للتقديم إلى المناقصة',en:'Ready to submit to tender'},
@@ -216,6 +216,20 @@
  .toolbar .legendbar .s-work{background:#eef1f4;color:#4b5563;border-color:#dde2e8}
  .toolbar .legendbar .s-hold{background:#fde8e3;color:#9a3412;border-color:#f3c7ba}
  .toolbar .legendbar .s-na{background:#f2f4f6;color:#8a95a1;border-color:#e2e6ea}
+ /* Same status colours as the project grid, including interactive selects and legend. */
+ .nreport :is(.pill,.stsel).s-required,.toolbar .legendbar .s-required{background-color:#e6e9ef;color:#354358;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-drafting,.toolbar .legendbar .s-drafting{background-color:#dceaff;color:#174d93;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-egy,.toolbar .legendbar .s-egy{background-color:#eee7f8;color:#60338b;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-review,.toolbar .legendbar .s-review{background-color:#fff0d9;color:#8a4800;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-ready,.toolbar .legendbar .s-ready{background-color:#f3e5c4;color:#78520c;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-sub,.toolbar .legendbar .s-sub{background-color:#d9f1f6;color:#075c70;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-com,.toolbar .legendbar .s-com{background-color:#f3ddd2;color:#883a1b;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-resubmitted,.toolbar .legendbar .s-resubmitted{background-color:#e5e8ff;color:#3d4094;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-ok,.toolbar .legendbar .s-ok{background-color:#ddeae6;color:#2e6e63;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-hold,.toolbar .legendbar .s-hold{background-color:#fce3ea;color:#93284b;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-closed,.toolbar .legendbar .s-closed{background-color:#34465a;color:#ffffff;border-color:transparent}
+ .nreport :is(.pill,.stsel).s-na,.toolbar .legendbar .s-na{background-color:#f0f1f2;color:#606773;border-color:transparent}
+
  .nreport .exec{margin:14px 22px 6px;padding:12px 15px;background:#f3f6fb;border:1px solid #e1e8f2;border-radius:8px;font-size:13.5px;line-height:1.7;text-align:center;color:var(--ink)}
  .nreport .exec b{color:var(--navy)}
  .nreport .timeline{display:flex;gap:0;padding:10px 22px 4px;overflow:hidden}
@@ -367,7 +381,7 @@
    <div class="wabox no-print"><label for="wa">نص واتساب جاهز للنسخ والإرسال (يتبع لغة التقرير؛ حدّثه بزرّ «تحديث النص»)</label><textarea id="wa"></textarea></div>
    <script>
    var WAL=${WA};var LEG=${LEG};
-   var CLS={rev:'s-review','dwg egy':'s-egy',dwg:'s-work','SUB COM':'s-sub',OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
+   var CLS={"REQ":"s-required","dwg":"s-drafting","dwg egy":"s-egy","rev":"s-review","READY":"s-ready","SUB":"s-sub","COM":"s-com","SUB COM":"s-resubmitted","OK":"s-ok","HOLD":"s-hold","DONE":"s-closed","N/A":"s-na"};
    function active(){return document.querySelector('.nreport:not(.hidden)');}
    function lang(){var a=active();return a?a.getAttribute('data-lang'):'ar';}
    function stChange(sel){sel.className='stsel '+(CLS[sel.value]||'s-work');syncWA();}
