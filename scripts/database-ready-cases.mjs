@@ -16,5 +16,15 @@ export async function testReadyStages(c,actor){
  assert.deepEqual((await c.query('select nitaq_engineering.project_document($1) d',[doc.id])).rows[0].d,saved);
  const permit=structuredClone(saved);permit.contract=true;permit.permit='تم التقديم';
  await assert.rejects(save(saved,permit),e=>e.code==='22023','READY is not approval and does not satisfy permit prerequisites');
+ const egyptMigration=await readFile('database/engineering/20261119000100_dwg_egy.sql','utf8');
+ await c.query(egyptMigration);await c.query(egyptMigration);
+ const egypt=structuredClone(saved);
+ for(const [key,stage] of Object.entries(egypt.stages))if(!['design','coordination'].includes(key))stage.status='dwg egy';
+ assert.equal((await save(saved,egypt)).result,'saved');
+ const egyptSaved=(await c.query('select nitaq_engineering.project_document($1) d',[doc.id])).rows[0].d;
+ assert.equal(egyptSaved.stages.munStruct.status,'dwg egy');
+ const egyptPermit=structuredClone(egyptSaved);egyptPermit.contract=true;egyptPermit.permit='تم التقديم';
+ await assert.rejects(save(egyptSaved,egyptPermit),e=>e.code==='22023');
+ console.log('PASS Egypt drafting SQL: save/reload, idempotent migration, not approval');
  console.log('PASS READY SQL: saves/reloads across every non-design stage including coordination, design rejects it, permit still requires approvals, migration reapply is safe');
 }

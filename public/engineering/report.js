@@ -3,12 +3,12 @@
    وبه حالة المخططات + الاعتمادات من الدوائر الحكومية + حالة المناقصات. ومنه يُصدَّر PDF أو
    يُرسَل كرسالة واتساب. فرونت-إند بالكامل من بيانات المشروع المحمّلة؛ لا يلمس القاعدة أو السحابة. */
 (function(){
- const STATUS={dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-work'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-sub'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-work'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-work'},
+ const STATUS={'dwg egy':{ar:'جارٍ العمل على المخططات في مصر',en:'Drafting in Egypt',c:'s-egy'},dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-work'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-sub'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-work'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-work'},
    SUB:{ar:'تم التقديم',en:'Submitted',c:'s-sub'},COM:{ar:'عليه ملاحظات',en:'Returned with comments',c:'s-com'},
    OK:{ar:'معتمد',en:'Approved',c:'s-ok'},'N/A':{ar:'لا يلزم',en:'N/A',c:'s-na'},
    HOLD:{ar:'موقوف بطلب المالك',en:'On hold (owner request)',c:'s-hold'},DONE:{ar:'مكتمل',en:'Completed',c:'s-ok'}};
- const ICON={dwg:'✏️','SUB COM':'🔁',REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
- const TENDER={dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
+ const ICON={'dwg egy':'✏️',dwg:'✏️','SUB COM':'🔁',REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
+ const TENDER={'dwg egy':{ar:'جارٍ إعداد مستندات المناقصة في مصر',en:'Preparing tender documents in Egypt'},dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
    READY:{ar:'جاهز للتقديم إلى المناقصة',en:'Ready to submit to tender'},
    SUB:{ar:'تم التقديم إلى المناقصة',en:'Submitted to tender'},
    COM:{ar:'دراسة عروض الأسعار',en:'Studying quotations'},
@@ -55,6 +55,7 @@
    if(sts.some(s=>s==='SUB COM'))return 'SUB COM';
    if(sts.some(s=>s==='SUB'))return 'SUB';
    if(sts.some(s=>s==='READY'))return 'READY';
+   if(sts.some(s=>s==='dwg egy'))return 'dwg egy';
    if(sts.some(s=>s==='dwg'))return 'dwg';
    if(sts.every(s=>s==='HOLD'))return 'HOLD';
    return 'REQ';
@@ -189,6 +190,7 @@
  .nreport th{background:var(--soft);color:var(--muted);font-size:11px;font-weight:700}
  .nreport td.rl{font-weight:600}
  .nreport .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid transparent;white-space:nowrap}
+ .nreport .s-egy{background:#eee7f8;color:#60338b;border-color:#cbb6e3}
  .nreport .pill.s-ok{background:#e6f4ea;color:#1a7f37;border-color:#bfe3c9}
  .nreport .pill.s-sub{background:#e8f0fe;color:#1f6feb;border-color:#c6dafc}
  .nreport .pill.s-com{background:#fdf0e3;color:#b26a00;border-color:#f3d9b5}
@@ -283,11 +285,11 @@
    const dir=lang==='en'?'ltr':'rtl';
    const d=m[lang];
    const descVal=lang==='en'?(p.descEn||p.desc):p.desc;
-   const SORD=['OK','SUB','SUB COM','COM','dwg','REQ','READY','HOLD','N/A','DONE'];
+   const SORD=['OK','SUB','SUB COM','COM','dwg','dwg egy','REQ','READY','HOLD','N/A','DONE'];
    const sopt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${ICON[c]} ${id(STATUS[c][lang])}</option>`;
    const ssel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${SORD.includes(cur)?'':`<option value="${id(cur)}" selected>${id(typeof statusMeaning==='function'?(statusMeaning(cur)||cur):cur)}</option>`}${SORD.map(c=>sopt(c,cur)).join('')}</select>`;
    const rowsOf=arr=>arr.map(r=>`<tr data-row><td class="rl cbnd">${id(r.label[lang])}</td><td class="rs cstat">${ssel(r.st)}</td><td class="rdate cdate"${ed}>${id(r.date)||'—'}</td><td class="rnote cnote"${ed}>${id(r.note)||'—'}</td></tr>`).join('');
-   const TORD=['REQ','dwg','COM','READY','SUB','SUB COM','OK','HOLD','DONE','N/A'];
+   const TORD=['REQ','dwg','dwg egy','COM','READY','SUB','SUB COM','OK','HOLD','DONE','N/A'];
    const topt=(c,cur)=>`<option value="${c}"${c===cur?' selected':''}>${id((TENDER[c]||{})[lang]||c)}</option>`;
    const tsel=cur=>`<select class="stsel ${(STATUS[cur]||{}).c||'s-work'}" onchange="stChange(this)">${TORD.includes(cur)?'':`<option value="${id(cur)}" selected>${id(typeof statusMeaning==='function'?(statusMeaning(cur)||cur):cur)}</option>`}${TORD.map(c=>topt(c,cur)).join('')}</select>`;
    const ctypeSel=`<select class="selplain" onchange="syncWA()"><option value="main" selected>${id(T.main[lang])}</option><option value="sub">${id(T.sub[lang])}</option></select>`;
@@ -336,7 +338,7 @@
  function reportDoc(m){
    const title=esc(T.title.ar.replace(/\s+/g,' '))+' '+esc(m.p.id)+' — '+esc(m.p.name||'');
    const WA=JSON.stringify({ar:{title:T.waTitle.ar,owner:T.owner.ar,project:T.waProject.ar,no:T.projectNo.ar,pct:T.pct.ar,phase:T.phase.ar,permit:T.permit.ar,contract:T.contract.ar,next:T.next.ar,date:T.date.ar,footer:T.footer.ar},en:{title:T.waTitle.en,owner:T.owner.en,project:T.waProject.en,no:T.projectNo.en,pct:T.pct.en,phase:T.phase.en,permit:T.permit.en,contract:T.contract.en,next:T.next.en,date:T.date.en,footer:T.footer.en}});
-   const legData=l=>['OK','SUB','SUB COM','COM','READY','dwg','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
+   const legData=l=>['OK','SUB','SUB COM','COM','READY','dwg','dwg egy','REQ','HOLD','N/A'].map(k=>({c:STATUS[k].c,t:STATUS[k][l]}));
    const LEG=JSON.stringify({ar:legData('ar'),en:legData('en')});
    return `<!doctype html><html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body>
    <div id="flash"></div>
@@ -363,7 +365,7 @@
    <div class="wabox no-print"><label for="wa">نص واتساب جاهز للنسخ والإرسال (يتبع لغة التقرير؛ حدّثه بزرّ «تحديث النص»)</label><textarea id="wa"></textarea></div>
    <script>
    var WAL=${WA};var LEG=${LEG};
-   var CLS={dwg:'s-work','SUB COM':'s-sub',OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
+   var CLS={'dwg egy':'s-egy',dwg:'s-work','SUB COM':'s-sub',OK:'s-ok',DONE:'s-ok',SUB:'s-sub',COM:'s-com',REQ:'s-work',READY:'s-work',HOLD:'s-hold','N/A':'s-na'};
    function active(){return document.querySelector('.nreport:not(.hidden)');}
    function lang(){var a=active();return a?a.getAttribute('data-lang'):'ar';}
    function stChange(sel){sel.className='stsel '+(CLS[sel.value]||'s-work');syncWA();}

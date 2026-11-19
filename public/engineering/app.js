@@ -1,12 +1,12 @@
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const standard=['REQ','dwg','READY','SUB','COM','SUB COM','OK','N/A'],design=['REQ','HOLD','DONE','OK'],permitStates=['بانتظار المتطلبات','جاهز للإصدار','تم التقديم','صدرت'];
+const standard=['REQ','dwg','dwg egy','READY','SUB','COM','SUB COM','OK','N/A'],design=['REQ','HOLD','DONE','OK'],permitStates=['بانتظار المتطلبات','جاهز للإصدار','تم التقديم','صدرت'];
 const projectTypes=['غير محدد','سكني — منح إسكان والشيخ زايد','سكني استثماري','تجاري','صناعي','حكومي'];
 const workKinds=['غير محدد','REQ — مطلوب','ADD — إضافة','MOD — تعديل','MOD SUPERVISION — تعديل إشراف'];
 function feeInfo(type){return ({'سكني — منح إسكان والشيخ زايد':'معفى من رسوم المستندات والمخططات','سكني استثماري':'الرسوم حسب المساحة','تجاري':'برسوم','صناعي':'برسوم','حكومي':'حسب الجهة — الإعفاء يتطلب رسالة من الجهة'})[type]||'معاملة الرسوم غير محددة'}
 function detailsFields(p){return select('تصنيف المشروع','projecttype',projectTypes,p?.projectType||'غير محدد')+select('طبيعة الأعمال','workkind',workKinds,p?.workKind||'غير محدد')+'<p class="sub">طبيعة الأعمال مستقلة عن حالة تقدم الأقسام.</p>'+field('نوع المشروع / وصف المبنى بالعربي','detailsdesc',p?.desc||'')+field('وصف المشروع بالإنجليزي','detailsdescEn',p?.descEn||p?.info?.descriptionEn||'')}
 function detailValues(){const projectType=$('#projecttype').value,workKind=$('#workkind').value;if(!projectTypes.includes(projectType)||!workKinds.includes(workKind))throw Error('تصنيف مشروع غير متاح');return {projectType,workKind,desc:$('#detailsdesc').value.trim(),descEn:$('#detailsdescEn').value.trim()}}
 function detailsCell(p){const summary=[p.projectType,p.workKind].filter(Boolean).join(' · ');const building=p.desc||p.descEn||p.info?.descriptionEn||'غير محدد';return `<td class="project-details"><button class="owner project-details-compact" data-details="${esc(p.id)}" title="${esc(summary)}" aria-label="تصنيف المشروع ${esc(p.id)}: ${esc(summary)}">${esc(p.projectType||'غير محدد')}</button></td><td class="project-building"><button class="owner project-details-compact" data-details="${esc(p.id)}" title="${esc([p.desc,p.descEn||p.info?.descriptionEn].filter(Boolean).join(' · '))}" aria-label="نوع المشروع ${esc(p.id)}: ${esc(building)}">${esc(building)}</button></td>`}
-const labels={REQ:'مطلوب إجراء',dwg:'جارٍ العمل على المخططات',SUB:'تم التقديم للدوائر الحكومية',COM:'استلام ملاحظات من الدوائر الحكومية','SUB COM':'إعادة تقديم الملاحظات للدوائر الحكومية',OK:'منجز · تم الاعتماد', 'N/A':'غير مطلوب التقديم لهذا الجزء',HOLD:'إيقاف مؤقت بطلب المالك',DONE:'مغلق نهائيًا',READY:'جاهز للتقديم'};
+const labels={REQ:'مطلوب إجراء',dwg:'جارٍ العمل على المخططات','dwg egy':'جارٍ العمل على المخططات في مصر',SUB:'تم التقديم للدوائر الحكومية',COM:'استلام ملاحظات من الدوائر الحكومية','SUB COM':'إعادة تقديم الملاحظات للدوائر الحكومية',OK:'منجز · تم الاعتماد', 'N/A':'غير مطلوب التقديم لهذا الجزء',HOLD:'إيقاف مؤقت بطلب المالك',DONE:'مغلق نهائيًا',READY:'جاهز للتقديم'};
 const groups=[['design','التصميم',['design']],['planning','التخطيط',['planning']],['coordination','COORDINATION — تنسيق المخططات',['coordination']],['services','اعتمادات الخدمات',['electric','water','gas']],['telecom','الاتصالات',['telecom']],['civil','الدفاع المدني',['civil']],['municipal','البلدية',['munArch','munStruct','munSanitary']],['tender','قسم المناقصات',['tender']]];
 const titles={design:'التصميم',planning:'التخطيط',coordination:'تنسيق ومطابقة المخططات',electric:'الكهرباء',water:'المياه',gas:'الغاز',telecom:'الاتصالات',civil:'الدفاع المدني',munArch:'اعتماد المعماري',munStruct:'اعتماد الإنشائي',munSanitary:'اعتماد الصحي',tender:'قسم المناقصات'};
 const keys=Object.keys(titles),approvalKeys=['planning','electric','water','gas','telecom','civil','munArch','munStruct','munSanitary'];const people=['أحمد','مروة','عمر','سيد'];const storage='nitaq-project-demo-v2';let opened=new Set(),view='projects',editing=null,saveWarning='';
@@ -296,19 +296,19 @@ function visible(ignoreEngineer = false, ignoreStageStatus = false) {
     return ignoreStageStatus || !stage || !status || projectFilterStatus(project, stage) === status;
   });
 }
-const cls=s=>['OK','صدرت'].includes(s)?'done':['COM','HOLD','DONE','بانتظار المتطلبات'].includes(s)?'blocked':['READY','جاهز للإصدار'].includes(s)?'wait':['SUB','تم التقديم','REQ','dwg','SUB COM'].includes(s)?'work':'';
+const cls=s=>s==='dwg egy'?'egy':['OK','صدرت'].includes(s)?'done':['COM','HOLD','DONE','بانتظار المتطلبات'].includes(s)?'blocked':['READY','جاهز للإصدار'].includes(s)?'wait':['SUB','تم التقديم','REQ','dwg','SUB COM'].includes(s)?'work':'';
 // Status colour/meaning helpers + the legend live here (not in status-admin.js)
 // so the table never depends on a second file loading — a deploy race on
 // status-admin.js must not be able to break render().
 function statusMetaAll(){return db.statusMeta||{}}
 function statusColorClass(code){const c=statusMetaAll()[code]?.color;return (c!=null&&c!=='')?c:cls(code)}
 function statusMeaning(code){return statusMetaAll()[code]?.label||(typeof labels!=='undefined'?labels[code]:'')||''}
-const legendBuiltins=new Set(['REQ','READY','SUB','COM','OK','N/A','HOLD','DONE','dwg','SUB COM']);
+const legendBuiltins=new Set(['REQ','READY','SUB','COM','OK','N/A','HOLD','DONE','dwg','dwg egy','SUB COM']);
 function renderStatusLegend(){
   const el=document.getElementById('statusLegend');if(!el)return;
   const custom=[...new Set(Object.values(db.custom||{}).flat())].filter(code=>!legendBuiltins.has(code));
   const item=(code,text,colour)=>'<span class="legend-item"><span class="badge '+(colour!=null?colour:statusColorClass(code))+' legend-swatch">'+esc(code)+'</span>'+esc(text!=null?text:statusMeaning(code))+'</span>';
-  el.innerHTML=['REQ','dwg','READY','SUB','COM','SUB COM','OK'].map(code=>item(code)).join('')+item('HOLD · DONE','متوقف · مغلق · بانتظار متطلبات','blocked')+item('N/A',statusMeaning('N/A')||'غير مطلوب التقديم لهذا الجزء','')+custom.map(code=>item(code)).join('');
+  el.innerHTML=['REQ','dwg','dwg egy','READY','SUB','COM','SUB COM','OK'].map(code=>item(code)).join('')+item('HOLD · DONE','متوقف · مغلق · بانتظار متطلبات','blocked')+item('N/A',statusMeaning('N/A')||'غير مطلوب التقديم لهذا الجزء','')+custom.map(code=>item(code)).join('');
 }
 function inlineOptions(arr,v){return arr.map(x=>`<option value="${esc(x)}" ${x===v?'selected':''}>${esc(x)}</option>`).join('')}
 function badge(p,k){let s=p.stages[k];if(k==='gas'&&p.service==='FEWA'&&!stopped(p))return '<span class="sub">غير متاح لدى الجهة</span>';const locked=(stopped(p)&&k!=='design')||(k==='design'&&s.status==='DONE'&&!managerPreview());return `<div class="inline-state"><select class="badge ${statusColorClass(s.status)}" data-inline="${esc(p.id)}:${k}" aria-label="حالة ${esc(columnTitle(k))} للمشروع ${esc(p.id)}" title="${esc(stateLabel(k,s.status)+(stopped(p)&&k!=='design'?' · العمل متوقف':late(s)&&!stopped(p)?' · تجاوز الموعد':''))}" ${locked?'disabled':''}>${inlineOptions(stageStates(p,k),s.status)}</select><button class="detail-btn" data-edit="${esc(p.id)}:${k}" aria-label="تفاصيل ${esc(columnTitle(k))} للمشروع ${esc(p.id)}" title="التفاصيل والملاحظات" ${locked?'disabled':''}>✎</button></div>`}
