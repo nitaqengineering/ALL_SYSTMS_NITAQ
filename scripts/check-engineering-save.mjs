@@ -102,11 +102,11 @@ console.log('PASS engineering save: v1 fallback only on confirmed missing save_v
 }
 // Real project form: engineers can read full owner data without queuing an admin edit.
 const appSource=await readFile('public/engineering/app.js','utf8');
-let isManager=false;
+let isManager=false,projectEdit=false;
 let controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'},{tagName:'TEXTAREA'}];
 const ui=new Map(['#dialogError','#dialogtitle','#dialogsub','#fields','#form button[type="submit"]','#cancel','#edit','#form'].map(id=>[id,{textContent:'',style:{},querySelectorAll:()=>controls,showModal(){this.open=true;}}]));
 const project={id:'109',name:'Full owner name'};
-const formContext=vm.createContext({$:id=>ui.get(id),managerPreview:()=>isManager,saveWarning:'',editing:null,projects:[project],Error});
+const formContext=vm.createContext({$:id=>ui.get(id),managerPreview:()=>isManager,canEditProjectData:id=>isManager||!!id&&projectEdit,saveWarning:'',editing:null,projects:[project],Error});
 vm.runInContext(appSource.slice(appSource.indexOf('function show('),appSource.indexOf('function editStage(')),formContext);
 formContext.show('Project','Full name','form fields','project','109');
 assert.ok(controls[0].readOnly);assert.ok(controls[1].disabled);assert.ok(controls[2].readOnly);
@@ -115,7 +115,7 @@ assert.match(ui.get('#dialogsub').textContent,/عرض فقط/);
 const submitLine=appSource.split('\n').find(line=>line.startsWith("$('#form').onsubmit="));
 vm.runInContext(submitLine,formContext);
 ui.get('#form').onsubmit({preventDefault(){}});
-assert.match(ui.get('#dialogError').textContent,/دور مدير أو مالك/);assert.deepEqual(project,{id:'109',name:'Full owner name'});
+assert.match(ui.get('#dialogError').textContent,/تعديل بيانات المشروع/);assert.deepEqual(project,{id:'109',name:'Full owner name'});
 controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'}];
 formContext.show('Stage','Details','stage fields','stage','109','planning');
 assert.notEqual(ui.get('#form button[type="submit"]').style.display,'none');assert.ok(!controls[0].readOnly&&!controls[1].disabled);
@@ -123,3 +123,23 @@ isManager=true;controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'}];
 formContext.show('Project','Details','admin fields','project','109');
 assert.notEqual(ui.get('#form button[type="submit"]').style.display,'none');assert.ok(!controls[0].readOnly&&!controls[1].disabled);
 console.log('PASS role UI: engineer project data read-only, submit guard prevents mutations, stage forms still editable, manager project forms unchanged');
+
+projectEdit=true;isManager=false;controls=[{tagName:'INPUT',type:'text'},{tagName:'SELECT'}];
+formContext.show('Project','Details','authorized fields','project','109');
+assert.notEqual(ui.get('#form button[type="submit"]').style.display,'none');assert.ok(!controls[0].readOnly&&!controls[1].disabled);
+controls=[{tagName:'INPUT',type:'text'}];formContext.show('New project','Details','new fields','project');
+assert.equal(ui.get('#form button[type="submit"]').style.display,'none');
+console.log('PASS explicit project edit permission opens existing project form without granting project creation');
+// The independent checkbox survives profile saves and can be revoked without changing stage permissions.
+const userDb={users:[{id:'omar',name:'OMAR',email:'omar@example.invalid',role:'مهندس',active:true,permissions:{edit:true,assign:true,editAll:true}}]};
+const userContext=vm.createContext({db:userDb,people:[],projects:[],previewUser:'OMAR',window:{NITAQ_SHARED_ACTIVE:true},document:{addEventListener(){}},$:()=>({value:''}),persist(){},Error});
+vm.runInContext(await readFile('public/engineering/admin.js','utf8'),userContext);
+vm.runInContext(await readFile('public/engineering/users.js','utf8'),userContext);
+userContext.managerPreview=()=>true;userContext.syncUserChoices=()=>{};
+const userValues={name:'OMAR',email:'omar@example.invalid',role:'مهندس',edit:true,assign:true,editAll:true,editProject:true};
+userContext.saveUserProfile('omar',userValues);assert.equal(userDb.users[0].permissions.editProject,true);
+assert.ok(userContext.userPermissionControls(userDb.users[0],'fixture').includes('fixture-editproject'));
+userContext.managerPreview=()=>false;assert.equal(userContext.canEditProjectData('109'),true);assert.equal(userContext.canEditProjectData(),false);
+userContext.managerPreview=()=>true;userContext.saveUserProfile('omar',{...userValues,editProject:false});
+userContext.managerPreview=()=>false;assert.equal(userContext.canEditProjectData('109'),false);assert.equal(userDb.users[0].permissions.editAll,true);
+console.log('PASS project data checkbox grant/save/revoke independent of role and editAll');

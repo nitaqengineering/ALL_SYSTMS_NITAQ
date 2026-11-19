@@ -36,7 +36,7 @@ function syncUserChoices(selectedEngineer) {
 
 function userPermissionControls(user, prefix) {
   const savedPermissions = user.permissions ?? db.permissions?.[user.name];
-  const permissions = savedPermissions == null ? {edit:true, assign:false, editAll:false} : {edit:savedPermissions.edit === true, assign:savedPermissions.assign === true, editAll:savedPermissions.editAll === true};
+  const permissions = savedPermissions == null ? {edit:true, assign:false, editAll:false} : {edit:savedPermissions.edit === true, assign:savedPermissions.assign === true, editAll:savedPermissions.editAll === true,editProject:savedPermissions.editProject === true};
   const manager = ['مدير','مالك'].includes(user.role);
   const preset = permissionPresets.findIndex(value => value.edit === permissions.edit && value.assign === permissions.assign && (value.editAll || false) === permissions.editAll);
   return '<label for="' + prefix + '-preset">نموذج الصلاحيات</label>' +
@@ -44,7 +44,8 @@ function userPermissionControls(user, prefix) {
     permissionPresets.map((value, index) => '<option value="' + index + '" ' + (index === preset ? 'selected' : '') + '>' + value.label + '</option>').join('') + '</select>' +
     '<div class="user-permissions"><label><input id="' + prefix + '-edit" type="checkbox" data-user-permission="' + prefix + '" ' + (permissions.edit || permissions.editAll || manager ? 'checked ' : '') + (manager ? 'disabled' : '') + '> تعديل البنود المسندة إليه</label>' +
     '<label><input id="' + prefix + '-assign" type="checkbox" data-user-permission="' + prefix + '" ' + (permissions.assign || manager ? 'checked ' : '') + (manager ? 'disabled' : '') + '> إسناد أي بند وتغيير المسؤول</label>' +
-    '<label><input id="' + prefix + '-editall" type="checkbox" data-user-permission="' + prefix + '" ' + (permissions.editAll || manager ? 'checked ' : '') + (manager ? 'disabled' : '') + '> تعديل حالات كل البنود (مش بس المسندة له)</label></div>';
+    '<label><input id="' + prefix + '-editall" type="checkbox" data-user-permission="' + prefix + '" ' + (permissions.editAll || manager ? 'checked ' : '') + (manager ? 'disabled' : '') + '> تعديل حالات كل البنود (مش بس المسندة له)</label>' +
+    '<label><input id="' + prefix + '-editproject" type="checkbox" data-user-project-permission="' + prefix + '" ' + (permissions.editProject || manager ? 'checked ' : '') + (manager ? 'disabled' : '') + '> تعديل بيانات المشروع (الوصف والتصنيف والموقع والجهات)</label></div>';
 }
 
 function renderUsers() {
@@ -89,7 +90,7 @@ function saveUserProfile(id, values) {
   const updated = {
     id: current?.id || 'user-' + crypto.randomUUID(), name, email, role: values.role,
     active: current?.active !== false,
-    permissions: {edit: values.edit === true, assign: values.assign === true, editAll: values.editAll === true}
+    permissions: {edit: values.edit === true, assign: values.assign === true, editAll: values.editAll === true, editProject: values.editProject === true}
   };
   let selectedEngineer = $('#engineer').value;
   if (current && current.name !== name) {
@@ -146,19 +147,21 @@ function initUsers() {
         name: $('#' + prefix + '-name').value, email: $('#' + prefix + '-email').value,
         role: $('#' + prefix + '-role').value, edit: $('#' + prefix + '-edit').checked,
         assign: $('#' + prefix + '-assign').checked,
-        editAll: $('#' + prefix + '-editall').checked
+        editAll: $('#' + prefix + '-editall').checked,
+        editProject: $('#' + prefix + '-editproject').checked
       });
     } catch (error) { $('#' + prefix + '-error').textContent = error.message; }
   });
   document.addEventListener('change', event => {
     const presetPrefix = event.target.dataset.userPreset;
-    const checkPrefix = event.target.dataset.userPermission;
+    const checkPrefix = event.target.dataset.userPermission || event.target.dataset.userProjectPermission;
     const prefix = presetPrefix || checkPrefix || event.target.id.match(/^(user-\d+)-role$/)?.[1];
     if (!prefix) return;
     const manager = ['مدير','مالك'].includes($('#' + prefix + '-role').value);
     const edit = $('#' + prefix + '-edit');
     const assign = $('#' + prefix + '-assign');
     const editall = $('#' + prefix + '-editall');
+    const editproject = $('#' + prefix + '-editproject');
     const preset = $('#' + prefix + '-preset');
     if (presetPrefix) {
       const values = permissionPresets[Number(preset.value)];
@@ -167,8 +170,8 @@ function initUsers() {
       editall.checked = values.editAll === true;
     }
     if (editall.checked) edit.checked = true;
-    edit.disabled = assign.disabled = editall.disabled = preset.disabled = manager;
-    if (manager) edit.checked = assign.checked = editall.checked = true;
+    edit.disabled = assign.disabled = editall.disabled = editproject.disabled = preset.disabled = manager;
+    if (manager) edit.checked = assign.checked = editall.checked = editproject.checked = true;
     preset.value = String(permissionPresets.findIndex(value => value.edit === edit.checked && value.assign === assign.checked && (value.editAll || false) === editall.checked));
   });
 }

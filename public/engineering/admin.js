@@ -1,9 +1,13 @@
 function engineerPermissions(name) {
   const account=projectUsers().find(user=>user.name===name);
   if(account?.active===false)return {edit:false,assign:false};
-  if(['مدير','مالك'].includes(account?.role))return {edit:true,assign:true,editAll:true};
+  if(['مدير','مالك'].includes(account?.role))return {edit:true,assign:true,editAll:true,editProject:true};
   const saved=account?.permissions ?? db.permissions?.[name];
-  return saved==null ? {edit:true,assign:false,editAll:false} : {edit:saved.edit===true,assign:saved.assign===true,editAll:saved.editAll===true};
+  return saved==null ? {edit:true,assign:false,editAll:false} : {edit:saved.edit===true,assign:saved.assign===true,editAll:saved.editAll===true,editProject:saved.editProject===true};
+}
+
+function canEditProjectData(projectId) {
+  return managerPreview() || (!!projectId && engineerPermissions(previewUser).editProject === true);
 }
 
 function canEditStage(stage) {

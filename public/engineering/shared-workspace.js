@@ -222,10 +222,12 @@ async function saveSharedWorkspace() {
     if(result.error) {
       if(result.status>=400&&result.status<500&&![408,429].includes(result.status)){
         const permissionReasons={
-          'Project administration requires manager':'تعديل بيانات المشروع الأساسية أو مستنداته يحتاج دور مدير أو مالك. صلاحية «تعديل كل البنود» تتيح تعديل حالات المراحل، ولا تشمل إدارة بيانات المشروع.',
+          'Project administration requires manager':'هذا التعديل يحتاج صلاحية «تعديل بيانات المشروع» أو دور مدير أو مالك. صلاحية «تعديل كل البنود» تخص حالات المراحل، والمستندات وإدارة النظام لها صلاحيات منفصلة.',
           'Permit and supervision require manager':'تعديل الإجازة أو بيانات الإشراف متاح للمدير. صلاحية تعديل البنود لا تشمل هذه الإجراءات.',
           'Only managers can change workspace settings':'تغيير قوائم النظام والمستخدمين والإعدادات متاح للمدير فقط.',
           'Stage is assigned to another engineer':'هذا البند مسند لمهندس آخر. راجع صلاحية «تعديل كل البنود» للحساب المسجل.',
+          'Accounting owner name is read-only':'اسم المالك المرتبط بالحسابات يُحدّث من نظام الحسابات.',
+          'Project owner assignment requires permission':'تغيير مسؤول المشروع يحتاج صلاحية الإسناد.',
           'Assignment requires permission':'تغيير المسؤول يحتاج صلاحية الإسناد.',
           'Exemption requires manager':'اعتماد استثناء «لا يلزم» متاح للمدير فقط.',
           'Workflow is assigned to another engineer':'التقديمات والمراجعات لهذا البند تخص المهندس المسند إليه؛ صلاحية تعديل حالات البنود وحدها لا تمنح إدارة التقديمات.'
@@ -544,5 +546,6 @@ engineerPermissions=function(name){
   if(sharedWorkspacePermissions?.manager)return localEngineerPermissions(name);
   return {edit:sharedWorkspacePermissions?.permissions?.edit===true,
     assign:sharedWorkspacePermissions?.permissions?.assign===true,
-    editAll:sharedWorkspacePermissions?.permissions?.editAll===true};
+    editAll:sharedWorkspacePermissions?.permissions?.editAll===true,
+    editProject:sharedWorkspacePermissions?.permissions?.editProject===true};
 };
