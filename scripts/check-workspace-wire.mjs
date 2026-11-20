@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFile} from 'node:fs/promises';
+const ctx=vm.createContext({});vm.runInContext(await readFile('public/engineering/workspace-wire.js','utf8'),ctx);
+const decode=ctx.NitaqWorkspaceWire.decode;
+const page={wire_format:'dictionary-v1',revision:42,next_after:null,settings:{users:[]},permissions:{manager:true},stage_sets:[{design:{status:'REQ'}}],histories:[[0,1],[0]],history_entries:[{value:{event:'exact',at:null},stage_ref:0},{value:null}],projects:[{data:{id:'1'},stage_ref:0,history_ref:0},{data:{id:'2'},stage_ref:0,history_ref:1}]};
+const result=decode(page);assert.equal(result.projects[0].history[1],null);assert.equal(result.revision,42);result.projects[0].history[0].stages.design.status='COM';assert.equal(result.projects[1].history[0].stages.design.status,'REQ');assert.equal(result.projects[0].stages.design.status,'REQ');
+assert.equal(page.stage_sets[0].design.status,'REQ');assert.equal(result.wire_format,undefined);
+for(const patch of [{wire_format:'unknown'},{stage_sets:null},{histories:[[0,1],[0]],history_entries:[]},{projects:[{data:{id:'1'},stage_ref:-1}]},{projects:[{data:{id:'1'},history_ref:999}]},{projects:[{data:{id:'1',history:[]},history_ref:0}]},{projects:[{data:{id:'1',stages:{}},stage_ref:0}]}])assert.throws(()=>decode({...page,...patch}));
+const plain={projects:[{id:'x',history:null}],next_after:null};assert.equal(decode(plain),plain);
+console.log('PASS compact transport decoder: complete independent documents, old-page compatibility, invalid format/references rejected before editing');

@@ -83,22 +83,26 @@ async function assertWorkspaceCapabilities(client){
 async function readSharedWorkspace() {
   const client=await loadAccountingCloudClient();
   await assertWorkspaceCapabilities(client);
-  let readVersion=2;
+  let readVersion=3;
   for(let attempt=0;attempt<3;attempt++){
     let after=null,revision=null,settings=null,permissions=null;
     const all=[],seen=new Set();
     let consistent=true;
     for(let page=0;page<10000;page++){
-      let result=readVersion===2
-        ?await client.rpc('nitaq_engineering_workspace_read_v2',{p_after:after})
+      let result=readVersion===3
+        ?await client.rpc('nitaq_engineering_workspace_read_v3',{p_after:after})
+        :readVersion===2?await client.rpc('nitaq_engineering_workspace_read_v2',{p_after:after})
         :await client.rpc('nitaq_engineering_workspace_read_v1',{p_after:after});
+      if(readVersion===3&&result.error?.code==='PGRST202'&&String(result.error.message||'').includes('nitaq_engineering_workspace_read_v3')){
+        readVersion=2;result=await client.rpc('nitaq_engineering_workspace_read_v2',{p_after:after});
+      }
       if(readVersion===2&&result.error?.code==='PGRST202'&&String(result.error.message||'').includes('nitaq_engineering_workspace_read_v2')){
         readVersion=1;result=await client.rpc('nitaq_engineering_workspace_read_v1',{p_after:after});
       }
       if(result.error)throw Error(result.error.code==='42501'
         ?'حسابك يحتاج تفعيل صلاحية مساحة المشاريع المشتركة.'
         :'تعذرت قراءة المشاريع المشتركة. راجع الاتصال وتسجيل الدخول.');
-      const data=result.data;
+      const data=NitaqWorkspaceWire.decode(result.data);
       if(!data||!Array.isArray(data.projects)||!Number.isSafeInteger(data.revision))
         throw Error('رد خدمة المشاريع غير صالح.');
       if(revision===null&&data.settings?.stageSchema!==2)throw Error('يلزم تطبيق تحديث حذف مرحلتي الإعداد 020 على قاعدة المشاريع قبل تشغيل هذه النسخة.');
@@ -110,7 +114,7 @@ async function readSharedWorkspace() {
         seen.add(project.id);previous=project.id;
       }
       all.push(...data.projects);
-      if(readVersion===2){
+      if(readVersion>=2){
         if(data.projects.length>500||!(data.next_after===null||typeof data.next_after==='string'))throw Error('مؤشر صفحات المشاريع غير صالح.');
         if(data.next_after===null)return {state:{...settings,projects:all},revision,permissions};
         if(!data.projects.length||data.next_after!==previous)throw Error('مؤشر صفحات المشاريع غير متسق.');

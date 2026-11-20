@@ -14,5 +14,6 @@ export const engineeringMigrations=[
  '20261119000100_dwg_egy',
  'review_required_status',
  'project_data_edit_permission',
- '20261120_020_workspace_edit_consistency'
+ '20261120_020_workspace_edit_consistency',
+ '20261120_021_compact_workspace_read'
 ];

@@ -1,9 +1,12 @@
 import {readFile} from 'node:fs/promises';
 import {parse} from '@babel/parser';
 import {resolve,dirname} from 'node:path';
+import {readSourceManifest} from './frontend-source.mjs';
 export async function sourceOf(path){
  const html=await readFile(path,'utf8');const scripts=[];
  for(const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)){
+  const manifest=m[1].match(/data-nitaq-manifest="([^"]+)"/);
+  if(manifest){const code=await readSourceManifest(resolve(dirname(path),manifest[1]));scripts.push({code,ast:parse(code,{sourceType:'unambiguous',plugins:['jsx']})});continue;}
   const source=m[1].match(/data-nitaq-source="([^"]+)"/);
   if(source){const code=await readFile(resolve(dirname(path),source[1]),'utf8');scripts.push({code,ast:parse(code,{sourceType:'unambiguous',plugins:['jsx']})});continue;}
   if(/\bsrc\s*=/.test(m[1])||!m[2].trim())continue;

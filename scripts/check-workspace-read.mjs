@@ -13,6 +13,7 @@ const projects=Array.from({length:5000},(_,i)=>({id:String(10000+i),history:[{te
 let mode='v2',calls=0;
 const client={rpc:async(name,{p_after})=>{
  calls++;
+ if(name.endsWith('v3')&&mode!=='denied')return {error:{code:'PGRST202',message:'missing nitaq_engineering_workspace_read_v3'}};
  if(mode==='denied')return {error:{code:'42501',message:'Permission denied'}};
  if(name.endsWith('v2')&&mode==='old')return {error:{code:'PGRST202',message:'missing nitaq_engineering_workspace_read_v2'}};
  const start=p_after?projects.findIndex(p=>p.id===p_after)+1:0,size=name.endsWith('v2')?500:100,rows=projects.slice(start,start+size);
@@ -24,9 +25,9 @@ const client={rpc:async(name,{p_after})=>{
  if(mode==='badcursor')data.next_after='wrong';
  return {data};
 }};
-const ctx=vm.createContext({assertWorkspaceCapabilities:async()=>{},loadAccountingCloudClient:async()=>client});vm.runInContext(body,ctx);
-let result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,10);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));assert.equal(result.state.tasks[0].id,'keep-task');assert.equal(result.permissions.manager,true);
-mode='old';calls=0;result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,52);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));
+const ctx=vm.createContext({assertWorkspaceCapabilities:async()=>{},loadAccountingCloudClient:async()=>client});vm.runInContext(await readFile('public/engineering/workspace-wire.js','utf8'),ctx);vm.runInContext(body,ctx);
+let result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,11);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));assert.equal(result.state.tasks[0].id,'keep-task');assert.equal(result.permissions.manager,true);
+mode='old';calls=0;result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,53);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));
 mode='denied';calls=0;await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));assert.equal(calls,1,'never fall back on permission failures');
 mode='duplicate';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));
 mode='changing';await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));

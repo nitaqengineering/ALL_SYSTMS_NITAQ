@@ -7,6 +7,7 @@ import {testCrmSafeDB} from './database-crm-cases.mjs';
 import {testOtherSafeDB} from './database-engineering-cases.mjs';
 import {testProjectDataPermission} from './database-project-data-cases.mjs';
 import {testWorkspaceEditConsistency} from './database-workspace-edit-cases.mjs';
+import {testCompactRead} from './database-compact-read-cases.mjs';
 import {testReadyStages} from './database-ready-cases.mjs';
 import {testRetiredStages} from './database-retired-stages-cases.mjs';
 import {testTimerSafeDB} from './database-timer-cases.mjs';
@@ -44,6 +45,7 @@ try{
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261111_002_contract_guard.sql'));
  await accounting.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
  await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
+ for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261121_005_policy_initplan.sql'));
  for(const f of engineeringMigrations.slice(3,9))for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/'+f+'.sql'));
  await testOtherSafeDB(accounting);
  await testTimerSafeDB(accounting);
@@ -51,6 +53,7 @@ try{
  await testReadyStages(accounting,actor);
  await testProjectDataPermission(accounting,actor);
  await testWorkspaceEditConsistency(accounting,actor);
+ await testCompactRead(accounting,actor);
  const crm=await database('crm');await testCrmSafeDB(crm);
  for(let pass=0;pass<2;pass++)await crm.query(await read('database/crm/20261112_002_time_logs.sql'));
  await testCrmTimerSafeDB(crm);

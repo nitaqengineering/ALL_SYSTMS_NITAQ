@@ -66,15 +66,15 @@ try{
  // 1) Opening the system: full paged read of 5000 projects.
  const readerSource=await read('public/engineering/shared-workspace.js');
  const readerBody=readerSource.slice(readerSource.indexOf('let workspaceCapabilitiesClient=null;'),readerSource.indexOf('\nfunction applySharedWorkspace'));
- async function load(u,version=2){
+ async function load(u,version=3){
   const t0=performance.now();let bytes=0,pages=0;
   const client={rpc:async(name,args)=>{
    if(name==='nitaq_engineering_capabilities_v1')return {data:(await call(u.c,u.uid,'select public.nitaq_engineering_capabilities_v1() r')).r};
-   assert.ok(['nitaq_engineering_workspace_read_v1','nitaq_engineering_workspace_read_v2'].includes(name));
+   assert.ok(['nitaq_engineering_workspace_read_v1','nitaq_engineering_workspace_read_v2','nitaq_engineering_workspace_read_v3'].includes(name));
    const r=await call(u.c,u.uid,'select public.'+name+'($1)::text r',[args.p_after]);
    bytes+=Buffer.byteLength(r.r,'utf8');pages++;return {data:JSON.parse(r.r)};
   }};
-  const reader=vm.createContext({loadAccountingCloudClient:async()=>client});vm.runInContext(readerBody.replace('let readVersion=2','let readVersion='+version),reader);
+  const reader=vm.createContext({loadAccountingCloudClient:async()=>client});vm.runInContext(await read('public/engineering/workspace-wire.js'),reader);vm.runInContext(readerBody.replace('let readVersion=3','let readVersion='+version),reader);
   const result=await vm.runInContext('readSharedWorkspace()',reader);
   return {ms:ms(t0),projects:result.state.projects,bytes,pages,settings:Object.fromEntries(Object.entries(result.state).filter(([key])=>key!=='projects'))};
  }
@@ -82,7 +82,7 @@ try{
  out.loadAlone={ms:solo.ms,pages:solo.pages,uncompressedMegabytes:Math.round(solo.bytes/1e5)/10};
  // Same dataset and process, alternate order to avoid attributing host load or warming to the new reader.
  const comparisons=[];
- for(const version of [1,2,2,1]){const sample=await load(users[0],version);comparisons.push({version,ms:sample.ms,requests:sample.pages,uncompressedBytes:sample.bytes});}
+ for(const version of [1,2,3,3,2,1]){const sample=await load(users[0],version);comparisons.push({version,ms:sample.ms,requests:sample.pages,uncompressedBytes:sample.bytes});}
  out.readerComparison=comparisons;
  const together=await Promise.all(users.map(u=>load(u)));out.loadTenAtOnce=stats(together.map(x=>x.ms));
  // 2) Background "did anything change" poll.

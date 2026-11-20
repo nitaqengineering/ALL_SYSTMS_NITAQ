@@ -292,3 +292,5 @@ option.status-option.done {background-color:#ddeae6;color:#2e6e63}
 option.status-option.on-hold {background-color:#fce3ea;color:#93284b}
 option.status-option.closed {background-color:#34465a;color:#ffffff}
 option.status-option.not-applicable {background-color:#f0f1f2;color:#606773}
+/* Header text is white; white action buttons need their own foreground. */
+header > .btn {color:var(--ink,#132a46)}

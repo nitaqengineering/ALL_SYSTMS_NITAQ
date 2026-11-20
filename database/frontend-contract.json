@@ -159,6 +159,14 @@
           "params": [],
           "public": true,
           "migration": "database/engineering/20261120_020_workspace_edit_consistency.sql"
+        },
+        {
+          "name": "nitaq_engineering_workspace_read_v3",
+          "params": [
+            "p_after"
+          ],
+          "fallback": "nitaq_engineering_workspace_read_v2",
+          "migration": "database/engineering/20261120_021_compact_workspace_read.sql"
         }
       ],
       "tables": [
@@ -192,7 +200,7 @@
       }
     },
     "crm": {
-      "config": "src/crm.jsx",
+      "config": "public/crm/app.js",
       "functions": [
         {
           "name": "nitaq_crm_capabilities_v2",

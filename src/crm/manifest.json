@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": [
+    "01-domain-and-schema.jsx",
+    "02-slice-ar.jsx",
+    "03-clients.jsx",
+    "04-cloud-splash.jsx"
+  ]
+}

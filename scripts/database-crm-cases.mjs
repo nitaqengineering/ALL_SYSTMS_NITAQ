@@ -11,6 +11,7 @@ export async function testCrmSafeDB(c){
   await c.query(`insert into auth.users(id,email) values($1,'owner@example.invalid'),($2,'engineer@example.invalid'),($3,'other@example.invalid')`,[owner,engineer,other]);
   await c.query(`insert into public.nitaq_crm_profiles(id,auth_user_id,name,role,active,perms) values('owner',$1,'Owner','owner',true,'{}'),('eng',$2,'Engineer','engineer',true,'{"seeAll":true}'),('other',$3,'Other','engineer',true,'{}')`,[owner,engineer,other]);
   await c.query(readFileSync('database/crm/20261109_001_safe_mutations.sql','utf8'));
+  for(let pass=0;pass<2;pass++)await c.query(readFileSync('database/crm/20261121_003_policy_initplan.sql','utf8'));
   async function as(actor,fn){await c.query('begin;set local role authenticated');await c.query("select set_config('request.jwt.claim.sub',$1,true)",[actor]);try{const r=await fn();await c.query('commit');return r;}catch(e){await c.query('rollback');throw e;}}
   const change=(entity,id,before,after)=>({entity,id,before,after});
   async function save(actor,changes,id=randomUUID(),insert=false){return as(actor,async()=> (await c.query('select public.nitaq_crm_apply_v2($1,$2::jsonb,$3) r',[id,JSON.stringify(changes),insert])).rows[0].r);}

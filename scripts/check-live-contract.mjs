@@ -8,16 +8,17 @@
 //   NITAQ_CONTRACT_ACCOUNTING_EMAIL / _PASSWORD and NITAQ_CONTRACT_CRM_EMAIL / _PASSWORD
 import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {readFrontendSource} from './frontend-source.mjs';
 const live=process.argv.includes('--live'),allowFallback=process.argv.includes('--allow-fallback');
 const contract=JSON.parse(await readFile('database/frontend-contract.json','utf8'));
 
 // 1) Static: every rpc(), from() and functions.invoke() in the shipped sources is declared.
-const sources={accounting:['src/accounting.jsx','public/crm/index.html',...(await readdir('public/engineering')).filter(f=>f.endsWith('.js')&&!f.startsWith('fflate')).map(f=>'public/engineering/'+f)],crm:['src/crm.jsx','public/crm/safety.js']};
+const sources={accounting:['@accounting','public/crm/index.html',...(await readdir('public/engineering')).filter(f=>f.endsWith('.js')&&!f.startsWith('fflate')).map(f=>'public/engineering/'+f)],crm:['@crm','public/crm/safety.js']};
 const used={};
 for(const [project,files] of Object.entries(sources)){
  used[project]={functions:new Set(),tables:new Set(),edgeFunctions:new Set()};
  for(const file of files){
-  const text=await readFile(file,'utf8');
+  const text=file.startsWith('@')?await readFrontendSource(file.slice(1)):await readFile(file,'utf8');
   for(const m of text.matchAll(/\.rpc\(\s*'([a-z0-9_]+)'/g))used[project].functions.add(m[1]);
   for(const m of text.matchAll(/\.from\(\s*'([a-z0-9_]+)'\s*\)/g))used[project].tables.add(m[1]);
   for(const m of text.matchAll(/functions\.invoke\(\s*'([a-z0-9-]+)'/g))used[project].edgeFunctions.add(m[1]);

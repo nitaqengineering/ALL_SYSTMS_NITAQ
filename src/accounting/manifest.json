@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "files": [
+    "01-domain-and-schema.jsx",
+    "02-stage-statuses.jsx",
+    "03-payroll-paid-for-month.jsx",
+    "04-recurring-bills-view.jsx",
+    "05-closing-checklist-modal.jsx",
+    "06-export-office-expenses-xlsx.jsx",
+    "07-payslip-doc.jsx",
+    "08-application.jsx"
+  ]
+}
