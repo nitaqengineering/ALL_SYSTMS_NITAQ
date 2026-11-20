@@ -1,3 +1,4 @@
+import {engineeringMigrations} from './engineering-migrations.mjs';
 // Office-day simulation and restore drill on a disposable LOCAL PostgreSQL (never a company database).
 // 10 signed-in accounts, 5000 synthetic projects. Prints measured numbers as JSON.
 //   NITAQ_TEST_DATABASE_URL=postgresql://... NITAQ_TEST_ALLOW_DISPOSABLE=1 npm run simulate:office-day
@@ -29,8 +30,7 @@ async function build(suffix){
  for(const f of ['20261107_003_engineering_stage_summary','20261107_004_engineering_coordination_save','20261107_005_shared_workspace','20261108_006_owner_role','20261108_007_workspace_invites','20261108_008_workspace_restore','20261108_009_accounting_identity','20261108_010_issued_permit_updates'])await c.query(await read('database/history/'+f+'.sql'));
  await c.query('insert into nitaq_engineering.workspace_managers(user_id) values($1)',[M1]);
  await c.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
- for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await c.query(await read('database/engineering/'+f+'.sql'));
- for(const f of ['20261112_014_workspace_read_pages','20261112_015_project_time_logs','20261116_016_reopen_closed_project','20261116_017_edit_all_items','20261117_018_reopen_guard_and_status_list','20261118_019_preserve_latest_submission','20261118074139_retire_preparation_stages'])await c.query(await read('database/engineering/'+f+'.sql'));
+ for(const f of engineeringMigrations)await c.query(await read('database/engineering/'+f+'.sql'));
  return {name,c};
 }
 // One signed-in session = one connection; every call is its own transaction as PostgREST does.
@@ -65,10 +65,11 @@ try{
  for(const u of users)u.c=await connect(name);
  // 1) Opening the system: full paged read of 5000 projects.
  const readerSource=await read('public/engineering/shared-workspace.js');
- const readerBody=readerSource.slice(readerSource.indexOf('async function readSharedWorkspace()'),readerSource.indexOf('\nfunction applySharedWorkspace'));
+ const readerBody=readerSource.slice(readerSource.indexOf('let workspaceCapabilitiesClient=null;'),readerSource.indexOf('\nfunction applySharedWorkspace'));
  async function load(u,version=2){
   const t0=performance.now();let bytes=0,pages=0;
   const client={rpc:async(name,args)=>{
+   if(name==='nitaq_engineering_capabilities_v1')return {data:(await call(u.c,u.uid,'select public.nitaq_engineering_capabilities_v1() r')).r};
    assert.ok(['nitaq_engineering_workspace_read_v1','nitaq_engineering_workspace_read_v2'].includes(name));
    const r=await call(u.c,u.uid,'select public.'+name+'($1)::text r',[args.p_after]);
    bytes+=Buffer.byteLength(r.r,'utf8');pages++;return {data:JSON.parse(r.r)};
@@ -89,7 +90,7 @@ try{
  // 3) Browser-side work on 5000 loaded projects, using the shipped functions.
  const usability=await read('public/engineering/usability.js');const ctx=vm.createContext({});
  const grab=(src,fn)=>{const s=src.indexOf('function '+fn+'(');let depth=0,i=src.indexOf('{',s);for(;i<src.length;i++){if(src[i]==='{')depth++;else if(src[i]==='}'&&--depth===0)break;}return src.slice(s,i+1);};
- vm.runInContext(grab(usability,'normalizeSearch')+grab(usability,'projectMatchesSearch'),ctx);ctx.projects=solo.projects;
+ vm.runInContext(usability.slice(usability.indexOf('function normalizeSearch('),usability.indexOf('function dialogHasChanges(')),ctx);ctx.projects=solo.projects;
  const timeIt=(code,n=5)=>{const runs=[];let value;for(let i=0;i<n;i++){const t0=performance.now();value=vm.runInContext(code,ctx);runs.push(ms(t0));}return {ms:stats(runs).p50,value};};
  out.searchByName=timeIt("projects.filter(p=>projectMatchesSearch(p,'تجريبي 4321')).length");
  out.searchByPlot=timeIt("projects.filter(p=>projectMatchesSearch(p,'٩٠٤٣٢١')).length");

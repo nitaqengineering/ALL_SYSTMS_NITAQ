@@ -71,8 +71,18 @@ function workspaceSettings(state) {
   return settings;
 }
 
+let workspaceCapabilitiesClient=null;
+async function assertWorkspaceCapabilities(client){
+  if(workspaceCapabilitiesClient===client)return;
+  const result=await client.rpc('nitaq_engineering_capabilities_v1');
+  if(result.error||result.data?.version!==1||!['workspaceEditConsistency','editProject','ready','dwgEgy','rev'].every(key=>result.data.features?.[key]===true))
+    throw Error('قاعدة المشاريع تحتاج تحديث الصلاحيات والحالات 020 قبل استخدام هذه النسخة. لم نغيّر بياناتك.');
+  workspaceCapabilitiesClient=client;
+}
+
 async function readSharedWorkspace() {
   const client=await loadAccountingCloudClient();
+  await assertWorkspaceCapabilities(client);
   let readVersion=2;
   for(let attempt=0;attempt<3;attempt++){
     let after=null,revision=null,settings=null,permissions=null;

@@ -81,7 +81,6 @@ function openSubmissionHistory(project,key){
   const rows=(workflowStage(project,key).submissions||[]).slice().reverse().map(cycle=>[esc(cycle.reference),esc(cycle.revision)+'<div class="sub">'+esc(cycle.authorizedBy?'تصريح داخلي: '+cycle.authorizedBy:'بدون تصريح مسجل للنسخة')+'</div>',esc(cycle.submitted),esc(cycle.outcome),esc(cycle.responseDate || '—'),esc(cycle.comments),esc(cycle.responseOwner || '—'),esc(cycle.resubmitBy || '—'),workflowButton(project,key,'submission','تسجيل / تعديل الرد',cycle.id)]);
   show('سجل التقديمات · '+columnTitle(key),project.name+' · '+project.id,operationTable(['المعاملة','المراجعة','التقديم','النتيجة','رد الجهة','الملاحظات','المسؤول','الموعد','الإجراء'],rows),'documentHub',project.id);
 }
-function workflowSummary(project){return Object.entries(project.workflow||{}).filter(([,entry])=>entry.blocker?.reason&&entry.blocker.reason!=='لا يوجد تعطيل').map(([key,entry])=>columnTitle(key)+': '+entry.blocker.reason+' · '+entry.blocker.nextAction).join('، ');}
 function initWorkflow(){document.addEventListener('click',event=>{
   const button=event.target.closest('button');if(!button||button.disabled)return;
   if(button.dataset.workflowHub){openProjectWorkflow(button.dataset.workflowHub);return;}

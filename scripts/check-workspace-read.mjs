@@ -1,6 +1,13 @@
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';import assert from 'node:assert/strict';
 const source=await readFile('public/engineering/shared-workspace.js','utf8');
+const capabilitySource=source.slice(source.indexOf('let workspaceCapabilitiesClient=null;'),source.indexOf('async function readSharedWorkspace()'));
+const capabilityContext=vm.createContext({});vm.runInContext(capabilitySource,capabilityContext);
+capabilityContext.client={rpc:async()=>({data:{version:1,features:{workspaceEditConsistency:true,editProject:true,ready:true,dwgEgy:true,rev:false}}})};
+await assert.rejects(vm.runInContext('assertWorkspaceCapabilities(client)',capabilityContext));
+capabilityContext.client.rpc=async()=>({data:{version:1,features:{workspaceEditConsistency:true,editProject:true,ready:true,dwgEgy:true,rev:true}}});
+await vm.runInContext('assertWorkspaceCapabilities(client)',capabilityContext);
+console.log('PASS workspace startup rejects missing status/permission capabilities, even when save functions exist');
 const body=source.slice(source.indexOf('async function readSharedWorkspace()'),source.indexOf('\nfunction applySharedWorkspace'));
 const projects=Array.from({length:5000},(_,i)=>({id:String(10000+i),history:[{text:'Keep this history'}],stages:{design:{status:'REQ'}}}));
 let mode='v2',calls=0;
@@ -17,7 +24,7 @@ const client={rpc:async(name,{p_after})=>{
  if(mode==='badcursor')data.next_after='wrong';
  return {data};
 }};
-const ctx=vm.createContext({loadAccountingCloudClient:async()=>client});vm.runInContext(body,ctx);
+const ctx=vm.createContext({assertWorkspaceCapabilities:async()=>{},loadAccountingCloudClient:async()=>client});vm.runInContext(body,ctx);
 let result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,10);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));assert.equal(result.state.tasks[0].id,'keep-task');assert.equal(result.permissions.manager,true);
 mode='old';calls=0;result=await vm.runInContext('readSharedWorkspace()',ctx);assert.equal(calls,52);assert.equal(JSON.stringify(result.state.projects),JSON.stringify(projects));
 mode='denied';calls=0;await assert.rejects(vm.runInContext('readSharedWorkspace()',ctx));assert.equal(calls,1,'never fall back on permission failures');

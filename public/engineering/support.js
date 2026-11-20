@@ -163,7 +163,7 @@ function renderDocumentColumns(list){
     const expiry=key.endsWith('Expiry')||request;
     const warning=expiry?expiryNote(value):'';
     const master=accountingMasterLocked(p)&&['plotGovernment','plotPrivate'].includes(key);
-    return `<td><input class="document-grid-input" ${master?'readonly title="يُحدّث من الحسابات"':''} type="${expiry?'date':type}" ${type==='number'?'step="any"':''} dir="ltr" aria-label="${esc(label)} — مشروع ${esc(p.id)}" data-grid-project="${esc(p.id)}" data-grid-field="${key}" data-grid-request="${request}" value="${esc(value??'')}">${warning?'<div class="sub late">'+esc(warning)+'</div>':''}</td>`;
+    return `<td><input class="document-grid-input" ${master?'readonly title="يُحدّث من الحسابات"':!canEditDocuments()?'readonly title="التعديل متاح للمدير أو المالك"':''} type="${expiry?'date':type}" ${type==='number'?'step="any"':''} dir="ltr" aria-label="${esc(label)} — مشروع ${esc(p.id)}" data-grid-project="${esc(p.id)}" data-grid-field="${key}" data-grid-request="${request}" value="${esc(value??'')}">${warning?'<div class="sub late">'+esc(warning)+'</div>':''}</td>`;
   };
   const noc=column=>column.kind==='request'&&column.entries.values().next().value?.id==='fewaNoc';
   const cell=(p,{kind,entries})=>{
@@ -173,7 +173,7 @@ function renderDocumentColumns(list){
     const applicable=!request||requestApplicable(p,entry);
     const status=request?requestStatus(p,entry):entry.status;
     const attrs=request?`data-request-status="${esc(p.id)}" data-entry-id="${esc(entry.id)}"`:`data-doc-status="${esc(p.id)}" data-doc-id="${esc(entry.id)}"`;
-    return `<td><select class="badge" aria-label="${esc(entry.name)} — مشروع ${esc(p.id)}" ${attrs} ${applicable?'':'disabled'}>${opts(request?requestStates:documentStates,status)}</select>${applicable?docButton('⋯',kind+'-edit',p,entry.id):''}${!request&&expiryNote(entry.expiry)?'<div class="sub late">'+esc(expiryNote(entry.expiry))+'</div>':''}</td>`+(noc({kind,entries})?(applicable?input(p,'انتهاء '+entry.name,'expiry',entry.expiry,entry.id):'<td>لا يلزم</td>'):'');
+    return `<td><select class="badge" aria-label="${esc(entry.name)} — مشروع ${esc(p.id)}" ${attrs} ${applicable&&canEditDocuments()?'':'disabled'}>${opts(request?requestStates:documentStates,status)}</select>${applicable?docButton('⋯',kind+'-edit',p,entry.id):''}${!request&&expiryNote(entry.expiry)?'<div class="sub late">'+esc(expiryNote(entry.expiry))+'</div>':''}</td>`+(noc({kind,entries})?(applicable?input(p,'انتهاء '+entry.name,'expiry',entry.expiry,entry.id):'<td>لا يلزم</td>'):'');
   };
   $('#hinttext').textContent='حالات المستندات والطلبات قابلة للتعديل من الجدول · زر ⋯ للتفاصيل';
   $('#table').innerHTML=`<thead><tr><th class="fixednum">Project</th><th class="fixedname">Owner</th>${fields.map(([label])=>`<th>${esc(englishColumnHeading(label))}</th>`).join('')}${ordered.map(c=>`<th>${esc(englishColumnHeading(c.name))}</th>`+(noc(c)?`<th>${esc(englishColumnHeading(c.name))} Expiry</th>`:'')).join('')}<th>Location</th><th>Project File</th><th>Overall Status</th></tr></thead><tbody>${list.map(p=>`<tr><td class="fixednum">${esc(p.id)}</td><td class="fixedname">${esc(p.name)}</td>${fields.map(([label,key,type])=>input(p,label,key,p.info?.[key] ?? p.documents?.find(d=>d.id===({idExpiry:'identity',passportExpiry:'passport'})[key])?.expiry,'',type)).join('')}${ordered.map(c=>cell(p,c)).join('')}<td>${esc(p.location)}</td><td>${documentSummary(p)}</td><td>${stopped(p)?p.stages.design.status:'جارٍ العمل'}</td></tr>`).join('')||`<tr><td class="empty" colspan="${ordered.length+fields.length+ordered.filter(noc).length+5}">لا توجد مشاريع تطابق الفلاتر</td></tr>`}</tbody>`;
@@ -184,7 +184,7 @@ function documentSummary(p){const d=docCounts(p),i=infoCounts(p);return `<button
 
 function tenderFields(p){return field('المقاول المختار / المرشح','tendercontractor',p.tender?.contractor||'')+'<label for="tenderoffers">العروض والمقارنة / ملاحظات المناقصة</label><textarea id="tenderoffers">'+esc(p.tender?.offers||'')+'</textarea><p class="sub">توقيع عقد المقاول يُسجل مستقلًا في عمود عقد المقاول.</p>'}
 function tenderInput(project,key,label,value){
-  const attrs=`class="document-grid-input" aria-label="${label} — مشروع ${esc(project.id)}" data-tender-project="${esc(project.id)}" data-tender-field="${key}" ${stopped(project)?'disabled':''}`;
+  const attrs=`class="document-grid-input" aria-label="${label} — مشروع ${esc(project.id)}" data-tender-project="${esc(project.id)}" data-tender-field="${key}" ${stopped(project)||(key==='engineer'?!canAssignStage():!canEditStage(project.stages.tender))?'disabled':''}`;
   if(key==='engineer')return `<select ${attrs}>${opts([...new Set(['',...people,...(value?[value]:[])])],value||'')}</select>`;
   if(key==='offers'||key==='note')return `<textarea ${attrs} rows="2" placeholder="${label}">${esc(value)}</textarea>`;
   return `<input ${attrs} type="${key==='date'?'date':'text'}" value="${esc(value)}">`;
@@ -214,6 +214,7 @@ document.addEventListener('change', event=>{
   if(!gridProject)return;
   const project=projects.find(p=>p.id===gridProject);
   if(!project)return;
+  if(!canEditDocuments()){toast('تعديل المستندات متاح للمدير أو المالك');render();return;}
   const value=event.target.value.trim();
   if(!event.target.reportValidity())return;
   if(gridRequest){

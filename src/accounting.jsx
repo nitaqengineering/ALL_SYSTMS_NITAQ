@@ -497,19 +497,6 @@ function recordsToData(rows){
   });
   return d;
 }
-function dataToRows(data){
-  const rows = [];
-  CLOUD_ENTITIES.forEach(entity=>{
-    (data[entity]||[]).forEach(rec=>{ if(rec && rec.id) rows.push({id:String(rec.id), entity, data:rec}); });
-  });
-  Object.entries(data.attendance||{}).forEach(([empId, map])=>{
-    rows.push({id:'att-'+empId, entity:'attendance', data:{empId, map}});
-  });
-  (data.employees||[]).forEach(e=>{ rows.push({id:'sd-'+e.id, entity:'staffDir', data:{empId:e.id, name:e.name||''}}); });
-  rows.push({id:'fccState', entity:'fccState', data:{map:data.fccState||{}}});
-  rows.push({id:'settings', entity:'settings', data:data.settings||{}});
-  return rows;
-}
 
 /* ================= طبقة التخزين: تعمل داخل Claude وخارجه ================= */
 /* NITAQ persistence safety, step 02. Production storage keys are unchanged. */
@@ -1862,13 +1849,6 @@ function buildConfigs(data){
 }
 
 /* ================= أقساط السلف المقسّطة ================= */
-// عدد الشهور من startMonth (شامل) حتى ym (شامل)؛ سالب/صفر لو ym قبل البداية
-function monthsElapsed(startYM, ym){
-  if(!startYM || !ym) return 0;
-  const [sy,sm] = startYM.split('-').map(Number);
-  const [ey,em] = ym.split('-').map(Number);
-  return (ey-sy)*12 + (em-sm) + 1; // +1 لأن شهر البداية نفسه يُحتسب
-}
 // هل صُرفت رواتب هذا الشهر فعلاً؟ (صرف جماعي kind='رواتب' أو دفعة راتب لموظف خارج WPS)
 function payrollPaidForMonth(data, ym){
   return (data.officeExpenses||[]).some(e=>(e.kind==='رواتب'||e.kind===SALARY_PART_KIND) && e.month===ym)

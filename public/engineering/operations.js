@@ -16,7 +16,7 @@ function sharedOwnerValues(project) {
   return {name:project.name, ...Object.fromEntries(sharedOwnerFields.map(key => [key,key==='idExpiry'||key==='passportExpiry'?ownerExpiry(project,key):project.info?.[key] || '']))};
 }
 function reconcileOwnerChanges(before) {
-  if (!before) return;
+  if (!before || !managerPreview()) return;
   const old = new Map(JSON.parse(before).projects.map(project => [project.id,project]));
   for (const group of ownerGroups().filter(group => group.projects.length > 1)) {
     const changed = group.projects.filter(project => old.has(project.id) && JSON.stringify(sharedOwnerValues(project)) !== JSON.stringify(sharedOwnerValues(old.get(project.id))));

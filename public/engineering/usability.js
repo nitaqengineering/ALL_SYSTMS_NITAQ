@@ -127,7 +127,18 @@ function initUsability() {
 }
 
 function normalizeSearch(value){return String(value??'').normalize('NFKC').toLocaleLowerCase().replace(/[٠-٩]/g,digit=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[\s()+\-]/g,'');}
-function projectMatchesSearch(project,query){const q=normalizeSearch(query);return !q||[project.id,project.name,project.location,project.sketch,project.parent,project.desc,project.descEn,project.projectType,project.workKind,...Object.values(project.info||{})].some(value=>normalizeSearch(value).includes(q));}
+const projectSearchCache=new WeakMap();
+let cachedSearchQuery,cachedNormalizedQuery;
+function projectMatchesSearch(project,query){
+  if(query!==cachedSearchQuery){cachedSearchQuery=query;cachedNormalizedQuery=normalizeSearch(query);}
+  const q=cachedNormalizedQuery;if(!q)return true;
+  const source=[project.id,project.name,project.location,project.sketch,project.parent,project.desc,project.descEn,project.projectType,project.workKind,...Object.values(project.info||{})].map(value=>String(value??''));
+  let entry=projectSearchCache.get(project);
+  if(!entry||entry.source.length!==source.length||!source.every((value,index)=>value===entry.source[index])){
+    entry={source,normalized:source.map(normalizeSearch)};projectSearchCache.set(project,entry);
+  }
+  return entry.normalized.some(value=>value.includes(q));
+}
 function dialogHasChanges(){
   if(!$('#edit').open || editing?.mode==='documentHub')return false;
   return [...$('#fields').querySelectorAll('input,select,textarea')].some(input=>{

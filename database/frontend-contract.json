@@ -153,6 +153,12 @@
             "p_to"
           ],
           "migration": "database/engineering/20261112_015_project_time_logs.sql"
+        },
+        {
+          "name": "nitaq_engineering_capabilities_v1",
+          "params": [],
+          "public": true,
+          "migration": "database/engineering/20261120_020_workspace_edit_consistency.sql"
         }
       ],
       "tables": [
@@ -172,7 +178,18 @@
           "name": "invite-workspace-user",
           "migration": "supabase/functions/invite-workspace-user (Deploy Supabase backend workflow)"
         }
-      ]
+      ],
+      "capabilityProbe": {
+        "function": "nitaq_engineering_capabilities_v1",
+        "version": 1,
+        "features": [
+          "workspaceEditConsistency",
+          "editProject",
+          "ready",
+          "dwgEgy",
+          "rev"
+        ]
+      }
     },
     "crm": {
       "config": "src/crm.jsx",

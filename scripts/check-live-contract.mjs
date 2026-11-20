@@ -75,13 +75,19 @@ for(const [project,spec] of Object.entries(contract.projects)){
   const body=JSON.stringify(Object.fromEntries(item.params.map(name=>[name,null])));
   const anon=await ask(base+'/rest/v1/rpc/'+item.name,{method:'POST',headers,body});
   const state=classify('function',anon.status,anon.body);record(item,'function',state);
-  if(state==='present-executable'&&/42501|P0001|22023|28000/.test(anon.body?.code||'')===false&&anon.status<300)warnings.push(`${project}: function "${item.name}" answered an anonymous caller (HTTP ${anon.status}); review its grants`);
+  if(!item.public&&state==='present-executable'&&/42501|P0001|22023|28000/.test(anon.body?.code||'')===false&&anon.status<300)warnings.push(`${project}: function "${item.name}" answered an anonymous caller (HTTP ${anon.status}); review its grants`);
   if(token&&state!=='missing'&&state!=='unknown'){
    const signed=await ask(base+'/rest/v1/rpc/'+item.name,{method:'POST',headers:{...headers,Authorization:'Bearer '+token},body});
    if(classify('function',signed.status,signed.body)!=='present-executable')problems.push(`${project}: signed-in test account executable access to "${item.name}" was not confirmed (HTTP ${signed.status}). Review role, service health and: ${item.migration}`);
   }
  }
  for(const item of spec.functions)if(item.fallback&&missing.has(item.name)&&missing.has(item.fallback))problems.push(`${project}: both "${item.name}" and its fallback "${item.fallback}" are missing`);
+ if(spec.capabilityProbe){
+  const probe=spec.capabilityProbe;
+  const reply=await ask(base+'/rest/v1/rpc/'+probe.function,{method:'POST',headers,body:'{}'});
+  if(reply.status!==200||reply.body?.version!==probe.version||!probe.features.every(key=>reply.body?.features?.[key]===true))
+   problems.push(`${project}: required database capabilities are absent or stale; apply database/engineering/20261120_020_workspace_edit_consistency.sql before publishing`);
+ }
  for(const item of spec.tables){
   const reply=await ask(base+'/rest/v1/'+item.name+'?select='+item.column+'&limit=0',{headers});
   record(item,'table',classify('table',reply.status,reply.body));

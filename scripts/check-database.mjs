@@ -1,3 +1,4 @@
+import {engineeringMigrations} from './engineering-migrations.mjs';
 // Disposable LOCAL databases only. Never point this runner at a company database.
 import pg from 'pg';
 import {readFile} from 'node:fs/promises';
@@ -5,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {testCrmSafeDB} from './database-crm-cases.mjs';
 import {testOtherSafeDB} from './database-engineering-cases.mjs';
 import {testProjectDataPermission} from './database-project-data-cases.mjs';
+import {testWorkspaceEditConsistency} from './database-workspace-edit-cases.mjs';
 import {testReadyStages} from './database-ready-cases.mjs';
 import {testRetiredStages} from './database-retired-stages-cases.mjs';
 import {testTimerSafeDB} from './database-timer-cases.mjs';
@@ -37,22 +39,18 @@ try{
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  // Financial forward migration is intentionally safe to reapply; no business values change.
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
- for(const f of ['20261109_011_submission_consistency','20261109_012_atomic_large_save','20261109_013_verified_membership'])await accounting.query(await read('database/engineering/'+f+'.sql'));
+ for(const f of engineeringMigrations.slice(0,3))await accounting.query(await read('database/engineering/'+f+'.sql'));
  await accounting.query(await read('database/accounting/20261109_001_revenue_controls.sql'));
  for(let pass=0;pass<2;pass++)await accounting.query(await read('database/accounting/20261111_002_contract_guard.sql'));
  await accounting.query(await read('database/accounting/20261111_003_contract_creation_guard.sql'));
  await accounting.query(await read('database/accounting/20261112_004_project_identity_revision.sql'));
- await accounting.query(await read('database/engineering/20261112_014_workspace_read_pages.sql'));
- for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261112_015_project_time_logs.sql'));
- for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261116_016_reopen_closed_project.sql'));
- for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261116_017_edit_all_items.sql'));
- for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261117_018_reopen_guard_and_status_list.sql'));
- for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/20261118_019_preserve_latest_submission.sql'));
+ for(const f of engineeringMigrations.slice(3,9))for(let pass=0;pass<2;pass++)await accounting.query(await read('database/engineering/'+f+'.sql'));
  await testOtherSafeDB(accounting);
  await testTimerSafeDB(accounting);
  await testRetiredStages(accounting,actor);
  await testReadyStages(accounting,actor);
  await testProjectDataPermission(accounting,actor);
+ await testWorkspaceEditConsistency(accounting,actor);
  const crm=await database('crm');await testCrmSafeDB(crm);
  for(let pass=0;pass<2;pass++)await crm.query(await read('database/crm/20261112_002_time_logs.sql'));
  await testCrmTimerSafeDB(crm);

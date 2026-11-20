@@ -14,6 +14,14 @@ function canEditStage(stage) {
   return managerPreview() || engineerPermissions(previewUser).editAll || (stage.engineer===previewUser && engineerPermissions(previewUser).edit);
 }
 
+function canEditDocuments() {
+  return managerPreview();
+}
+
+function requireDocumentEdit() {
+  if (!canEditDocuments()) throw Error('تعديل المستندات وبيانات المالك متاح للمدير أو المالك.');
+}
+
 function canAssignStage() {
   return managerPreview() || engineerPermissions(previewUser).assign;
 }

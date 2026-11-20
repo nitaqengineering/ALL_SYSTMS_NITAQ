@@ -1007,24 +1007,6 @@ async function cloudInviteProfile(sb, name, email) {
   }
 }
 
-/* ديف بسيط بين مصفوفتين بالـid — للاستخدام في المزامنة الجزئية والدفع الأولي */
-function diffArrById(oldArr, newArr) {
-  const oldMap = new Map((oldArr || []).map(x => [x.id, x]));
-  const newMap = new Map((newArr || []).map(x => [x.id, x]));
-  const changed = [],
-    removed = [];
-  newMap.forEach((v, id) => {
-    if (oldMap.get(id) !== v) changed.push(v);
-  });
-  oldMap.forEach((v, id) => {
-    if (!newMap.has(id)) removed.push(id);
-  });
-  return {
-    changed,
-    removed
-  };
-}
-
 /* رفع كل البيانات المحلية للسحابة دفعة واحدة — أول مرة بعد الربط */
 async function pushAllToCloud(sb, db, onProgress) {
   try {
@@ -5202,6 +5184,35 @@ function App() {
     flushBusyRef = useRef(false),
     batchRef = useRef(null),
     syncBlockedRef = useRef(false);
+  const journalRef = useRef(null),
+    journalOpenRef = useRef(null);
+  const openCrmJournal = async actor => {
+    if (journalRef.current?.actor === actor) return;
+    if (journalOpenRef.current?.actor === actor) return journalOpenRef.current.promise;
+    if (pendingRef.current.size && pendingActorRef.current !== actor) throw Error('ادخل بالحساب الذي لديه التعديلات المعلقة');
+    journalRef.current?.release();
+    journalRef.current = null;
+    const promise = NitaqCrmJournal.open(localStorage, sbCfg.url, actor, navigator.locks).then(journal => {
+      if (journalOpenRef.current?.promise !== promise) {
+        journal.release();
+        throw Error('تغيرت جلسة الحفظ؛ أعد الاتصال بالحساب.');
+      }
+      journalRef.current = journal;
+    });
+    journalOpenRef.current = {
+      actor,
+      promise
+    };
+    try {
+      await promise;
+    } finally {
+      if (journalOpenRef.current?.promise === promise) journalOpenRef.current = null;
+    }
+  };
+  const writeCrmJournal = (queue = pendingRef.current, batch = batchRef.current, actor = pendingActorRef.current) => {
+    if (!actor || journalRef.current?.actor !== actor) throw Error('سجل الحفظ غير جاهز؛ انتظر اتصال الحساب.');
+    journalRef.current.write(queue, batch);
+  };
   const reloadTmr = useRef(null);
   const hadDrop = useRef(false);
 
@@ -5324,8 +5335,9 @@ function App() {
       settingsDoc: records.find(r => r.entity === 'settings' && r.id === 'settings')?.data || null
     };
   };
-  const applyCloudBoot = (boot, keepUi) => {
+  const applyCloudBoot = (boot, keepUi, restoreActor = null) => {
     if (pendingRef.current.size) return;
+    const recovery = restoreActor ? journalRef.current.read() : null;
     cloudSyncedRef.current = boot.syncedMap;
     usersSyncedRef.current = boot.uMap;
     settingsSyncedRef.current = boot.settingsDoc ? JSON.stringify(boot.settingsDoc) : '';
@@ -5335,8 +5347,20 @@ function App() {
       inter: new Set(boot.db.inter.map(x => x.id)),
       audit: new Set(boot.db.audit.map(x => x.aid))
     };
+    let recovered = boot.db;
+    if (recovery?.items.length) {
+      recovered = NitaqCrmJournal.overlay(boot.db, recovery.items);
+      pendingRef.current = new Map(recovery.items.map(item => [item.entity + ':' + item.id, item]));
+      pendingActorRef.current = restoreActor;
+      batchRef.current = recovery.batch;
+      setSv({
+        state: 'saving',
+        fail: [],
+        message: 'تم استرجاع تعديلات غير مؤكدة من الجهاز؛ جارٍ تأكيد حفظها'
+      });
+    }
     dbRef.current = {
-      ...boot.db,
+      ...recovered,
       ui: keepUi ? dbRef.current.ui || {} : {}
     };
     setDb(dbRef.current);
@@ -5461,6 +5485,7 @@ function App() {
   const handleAuthEvent = async (event, sess, sb) => {
     try {
       if (event === 'SIGNED_IN' && sess) {
+        await openCrmJournal(sess.user.id);
         if (pendingRef.current.size) {
           if (sess.user.id !== pendingActorRef.current) {
             syncBlockedRef.current = true;
@@ -5490,7 +5515,7 @@ function App() {
           }));
           return;
         }
-        applyCloudBoot(boot, false);
+        applyCloudBoot(boot, false, sess.user.id);
         setCloud(c => ({
           ...c,
           status: 'ready',
@@ -5513,6 +5538,9 @@ function App() {
           }));
           return;
         }
+        journalRef.current?.release();
+        journalRef.current = null;
+        journalOpenRef.current = null;
         cloudSyncedRef.current = new Map();
         usersSyncedRef.current = new Map();
         settingsSyncedRef.current = '';
@@ -5583,6 +5611,17 @@ function App() {
           sb
         }));
       } else {
+        try {
+          await openCrmJournal(session.user.id);
+        } catch (error) {
+          setCloud(c => ({
+            ...c,
+            status: 'error',
+            sb,
+            err: error.message
+          }));
+          return;
+        }
         let boot = await cloudBootstrap(sb);
         /* لحظة تسجيل حساب جديد — التريجر بيعمل البروفايل، ممكن ياخد لحظة */
         for (let i = 0; i < 4 && boot.ok && !findMyProfile(boot.profiles, session.user.id); i++) {
@@ -5598,7 +5637,17 @@ function App() {
             err: String(boot.error && boot.error.message || boot.error)
           }));
         } else {
-          applyCloudBoot(boot, false);
+          try {
+            applyCloudBoot(boot, false, session.user.id);
+          } catch (error) {
+            setCloud(c => ({
+              ...c,
+              status: 'error',
+              sb,
+              err: error.message
+            }));
+            return;
+          }
           setCloud(c => ({
             ...c,
             status: 'ready',
@@ -5641,6 +5690,9 @@ function App() {
       clearTimeout(reloadTmr.current);
       if (channel && cloudRef.current.sb) cloudRef.current.sb.removeChannel(channel);
       if (authSub) authSub.unsubscribe();
+      journalRef.current?.release();
+      journalRef.current = null;
+      journalOpenRef.current = null;
     };
   }, []);
   const cloudFlush = async () => {
@@ -5654,6 +5706,7 @@ function App() {
           id: crypto.randomUUID(),
           items: [...pendingRef.current.values()].slice(0, 100)
         };
+        writeCrmJournal();
         const batch = batchRef.current;
         await crmApplyBatch(sb, batch.items, batch.id, false, pendingActorRef.current);
         for (const item of batch.items) {
@@ -5671,6 +5724,7 @@ function App() {
           });
         }
         batchRef.current = null;
+        writeCrmJournal();
       }
       pendingActorRef.current = null;
       setSv({
@@ -5678,7 +5732,14 @@ function App() {
         fail: []
       });
     } catch (error) {
-      if (error.definitive) batchRef.current = null;
+      if (error.definitive) {
+        batchRef.current = null;
+        try {
+          writeCrmJournal();
+        } catch (storageError) {
+          error = storageError;
+        }
+      }
       setSv({
         state: 'fail',
         fail: ['السحابة'],
@@ -5703,6 +5764,7 @@ function App() {
     if (!confirm('تم تنزيل نسخة من تعديلاتك. تجاهل التعديلات غير المحفوظة واقرأ النسخة الحالية؟')) return;
     const boot = await cloudBootstrap(cloudRef.current.sb);
     if (!boot.ok) return toast('تعذرت القراءة؛ ما زالت تعديلاتك موجودة');
+    writeCrmJournal(new Map(), null);
     pendingRef.current.clear();
     pendingActorRef.current = null;
     batchRef.current = null;
@@ -5836,7 +5898,7 @@ function App() {
       if (cloudRef.current.status === 'ready') {
         const actor = cloudRef.current.profile?.auth_user_id || cloudRef.current.session?.user?.id;
         if (!actor || pendingActorRef.current && pendingActorRef.current !== actor) throw Error('تغير الحساب؛ أكد الحفظ بالحساب الأصلي');
-        pendingActorRef.current = actor;
+        const planned = new Map(pendingRef.current);
         const all = [...edits, ...rows.map(row => ({
           key: 'audit',
           entity: 'audit',
@@ -5844,7 +5906,10 @@ function App() {
           before: null,
           after: row
         }))];
-        NitaqCrmSafety.enqueue(pendingRef.current, all, baselineFor, new Set((batchRef.current?.items || []).map(c => c.entity + ':' + c.id)));
+        NitaqCrmSafety.enqueue(planned, all, baselineFor, new Set((batchRef.current?.items || []).map(c => c.entity + ':' + c.id)));
+        writeCrmJournal(planned, batchRef.current, actor);
+        pendingRef.current = planned;
+        pendingActorRef.current = actor;
       }
       if (edits.length && !noUndo) {
         undoRef.current = [...undoRef.current, {
