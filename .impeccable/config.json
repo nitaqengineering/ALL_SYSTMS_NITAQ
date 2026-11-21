@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "public/engineering/index.html"
+        ],
+        "createdAt": "2026-11-20T21:56:38.123Z",
+        "reason": "Agent review: the two static findings are layout wrappers, not unpadded cards. Rendered workspace-nav is display:contents with zero border and transparent background; primaryFilters is borderless inside a 10px-padded container. Preserve the compact workspace requested in the conversation."
+      }
+    ]
+  }
+}

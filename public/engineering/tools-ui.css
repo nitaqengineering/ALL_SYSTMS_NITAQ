@@ -21,7 +21,7 @@
 #primaryFilters #search {
   background: #fff;
   border-color: var(--tool-line);
-  border-inline-start: 3px solid var(--tool-blue);
+  border-inline-start: 1px solid var(--tool-line);
   border-radius: 7px;
 }
 #primaryFilters :is(input,select):focus-visible,

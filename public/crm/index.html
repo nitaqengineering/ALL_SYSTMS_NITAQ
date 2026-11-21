@@ -24,7 +24,7 @@
   --amber:#B8862C; --amber-soft:#F3E5C4;
   --blue:#2F5E8C;  --blue-soft:#DDE7F1;
   --radius:5px;
-  --shadow:0 1px 2px rgba(19,42,70,.06), 0 6px 18px rgba(19,42,70,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.05);
   /* أسماء قديمة مربوطة على الجديدة عشان أي بقايا تفضل متسقة */
   --muted:var(--ink-soft); --red:var(--rust); --red-bg:var(--rust-soft);
   --green:var(--teal); --green-bg:var(--teal-soft);
@@ -250,7 +250,7 @@ tr.today{background:var(--amber-soft)} tr.today:hover{background:#EEDCB4}
   padding:11px 13px;font-size:12px;line-height:1.75;color:#6E5116}
 .toast{position:fixed;bottom:24px;left:24px;background:var(--ink);color:#fff;padding:12px 18px;
   border-radius:var(--radius);font-size:13px;font-weight:700;z-index:99;
-  box-shadow:0 12px 30px rgba(19,42,70,.3);animation:sl .2s;display:flex;align-items:center;gap:12px}
+  box-shadow:0 12px 30px rgba(0,0,0,.3);animation:sl .2s;display:flex;align-items:center;gap:12px}
 .tundo{background:var(--brass);color:#fff;border-radius:4px;padding:5px 12px;font-weight:700;font-size:12px}
 .tundo:hover{background:#96713F}
 .cta{background:var(--ink);color:#EDEFEA;border-radius:var(--radius);padding:16px 20px;
@@ -294,18 +294,18 @@ tr.today td.stk{background:var(--amber-soft)}
 tbody tr:hover td.stk{background:#F4F5F1}
 tbody tr.late:hover  td.stk{background:#EFD2C5}
 tbody tr.today:hover td.stk{background:#EEDCB4}
-td.stkEdge,th.stkEdge{box-shadow:-7px 0 9px -7px rgba(19,42,70,.22)}
+td.stkEdge,th.stkEdge{box-shadow:-7px 0 9px -7px rgba(0,0,0,.22)}
 td.stk-name .nml{white-space:normal;text-align:right}
 @media(max-width:760px){
   td.stkOpt,th.stkOpt{position:static!important;box-shadow:none!important}
-  td.stk-name,th.stk-name{box-shadow:-7px 0 9px -7px rgba(19,42,70,.22);
+  td.stk-name,th.stk-name{box-shadow:-7px 0 9px -7px rgba(0,0,0,.22);
     width:126px!important;min-width:126px!important;max-width:126px!important}
 }
 
 /* ─────────── لوحة الأعمدة ─────────── */
 .pop{position:relative;display:inline-block}
 .pop .panel{position:fixed;left:12px;right:12px;top:auto;bottom:12px;background:var(--surface);
-  border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 16px 44px rgba(19,42,70,.18);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 16px 44px rgba(0,0,0,.18);
   padding:10px;z-index:50;width:auto;max-width:none;max-height:70vh;overflow:auto}
 .pop .panel .hd{display:flex;gap:6px;padding:2px 2px 9px;border-bottom:1px solid var(--line);margin-bottom:6px}
 .pop .panel label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:4px;
@@ -339,7 +339,7 @@ td.stk-name .nml{white-space:normal;text-align:right}
 .svchip.saving{background:var(--amber-soft);color:var(--amber)}
 .svchip.fail{background:var(--rust-soft);color:var(--rust);border-color:var(--rust)}
 .savefail{background:var(--rust);color:#fff;padding:12px 28px;display:flex;flex-direction:column;gap:3px;
-  position:sticky;top:0;z-index:19;box-shadow:0 3px 12px rgba(174,78,45,.35)}
+  position:sticky;top:0;z-index:19;box-shadow:0 3px 12px rgba(0,0,0,.18)}
 .savefail b{font-size:13.5px;font-weight:800;line-height:1.5}
 .savefail span{font-size:11.5px;opacity:.92;line-height:1.6}
 
@@ -468,7 +468,7 @@ async function readAccountingCloudProjects(client,userId,number,accountingId){
 <script src="safety.js?v=20261111-fix3"></script>
 <script src="journal.js?v=20261120-durable-pending"></script>
 <script src="app.js?v=20261121-source-modules" data-nitaq-manifest="../../src/crm/manifest.json"></script>
-<div style="text-align:center;padding:14px;font-size:11px;color:#8A8578" class="no-print">INFO@NITAQ.AE · +971 56 816 6402 · SHARJAH–UAE · نصنع الحيّز ليبقى الأثر</div>
+<div style="text-align:center;padding:14px;font-size:12px;color:var(--ink-soft)" class="no-print">INFO@NITAQ.AE · +971 56 816 6402 · SHARJAH–UAE · نصنع الحيّز ليبقى الأثر</div>
 <script src="../office-responsive.js?v=20261118-ui3"></script>
 <script src="../office-dialogs.js?v=20261118-ui3"></script>
 <script src="../engineering/version-check.js?v=20261118-asset-watch"></script>
