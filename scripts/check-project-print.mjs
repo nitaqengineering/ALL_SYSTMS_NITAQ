@@ -7,6 +7,7 @@ const dom=new Map(),checked=[];let output='',closed=false;
 const ctx=vm.createContext({URL,location:{href:'https://example.invalid/engineering/index.html'},view:'projects',onlyMine:false,focusedProjectId:'',previewUser:'',projectPage:1,projectPageSize:50,opened:new Set(['municipal']),
  db:{columnLayout:{fields:{'field-ref':{title:'مرجع إضافي',group:'municipal',type:'number'}},order:['munStruct','field-ref','munArch','munSanitary']}},
  localStorage:{getItem:()=> '["services"]'},document:{addEventListener(){},getElementById:id=>dom.get('#'+id)||null,querySelectorAll:()=>checked},
+ statusCodeText:code=>code==='dwg egy'?'Req Egy':code,
  $:id=>dom.get(id),feeInfo:()=>'',stopped:p=>['HOLD','DONE'].includes(p.stages.design.status),stateLabel:(key,code)=>code==='READY'?'جاهز للتقديم':'مطلوب',permit:p=>p.permit,today:()=> '2030-01-01',
  window:{open:()=>({opener:{},document:{open(){},write(html){output=html;},close(){}}})},
  persist(){throw Error('Print must not write data');}});

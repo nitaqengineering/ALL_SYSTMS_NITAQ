@@ -30,7 +30,7 @@ const statusMgrColours = [
   ],
   [
     "egy",
-    "بنفسجي — dwg egy"
+    "بنفسجي — Req Egy"
   ],
   [
     "review",
@@ -97,9 +97,9 @@ function renderStatusManager() {
     const used = projects.filter(p => p.stages?.[k]?.status === code).length;
     const colour = statusColorClass(code);
     return '<div class="statusrow">' +
-      '<span class="badge ' + statusColorClass(code) + ' legend-swatch">' + esc(code) + '</span>' +
+      '<span class="badge ' + statusColorClass(code) + ' legend-swatch">' + esc(statusCodeText(code)) + '</span>' +
       '<input class="document-grid-input statusmeaning" data-code="' + esc(code) + '" value="' + esc(statusMeaning(code)) + '" placeholder="المعنى — يظهر في المفتاح والتلميح">' +
-      '<select class="statuscolor" data-code="' + esc(code) + '" aria-label="لون حالة ' + esc(code) + '">' +
+      '<select class="statuscolor" data-code="' + esc(code) + '" aria-label="لون حالة ' + esc(statusCodeText(code)) + '">' +
         statusMgrColours.map(([v, t]) => '<option value="' + v + '"' + (colour === v ? ' selected' : '') + '>' + t + '</option>').join('') +
       '</select>' +
       '<span class="sub statususe">مستخدمة في ' + used + '</span>' +

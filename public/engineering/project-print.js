@@ -14,7 +14,7 @@ function projectPrintColumns(){
   for(const [group,title,groupKeys] of tableGroups())for(const key of groupKeys){
     const label=columnTitle(key),prefix=title===label?title:title+' · '+label;
     if(!keys.includes(key)){columns.push({id:'extra:'+key,title:label,value:p=>p.extra?.[key]??''});continue;}
-    columns.push({id:'stage:'+key,title:prefix,value:p=>key==='gas'&&p.service==='FEWA'&&!stopped(p)?'غير متاح لدى الجهة':p.stages[key].status+' — '+stateLabel(key,p.stages[key].status)});
+    columns.push({id:'stage:'+key,title:prefix,value:p=>key==='gas'&&p.service==='FEWA'&&!stopped(p)?'غير متاح لدى الجهة':statusCodeText(p.stages[key].status)+' — '+stateLabel(key,p.stages[key].status)});
     if(opened.has(group))for(const [field,label] of [['engineer','المسؤول'],['date','الموعد المستهدف'],['note','الملاحظات / المعوق']])
       columns.push({id:'stage:'+key+':'+field,title:prefix+' · '+label,value:p=>p.stages[key][field]||''});
   }

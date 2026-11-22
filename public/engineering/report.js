@@ -3,12 +3,12 @@
    وبه حالة المخططات + الاعتمادات من الدوائر الحكومية + حالة المناقصات. ومنه يُصدَّر PDF أو
    يُرسَل كرسالة واتساب. فرونت-إند بالكامل من بيانات المشروع المحمّلة؛ لا يلمس القاعدة أو السحابة. */
 (function(){
- const STATUS={rev:{ar:'المخططات تحتاج مراجعة',en:'Drawings need review',c:'s-review'},'dwg egy':{ar:'جارٍ العمل على المخططات في مصر',en:'Drafting in Egypt',c:'s-egy'},dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-drafting'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-resubmitted'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-required'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-ready'},
+ const STATUS={rev:{ar:'المخططات تحتاج مراجعة',en:'Drawings need review',c:'s-review'},'dwg egy':{ar:'Req Egy — مطلوب إجراء في مصر',en:'Req Egy — Action required in Egypt',c:'s-egy'},dwg:{ar:'جارٍ العمل على المخططات',en:'Drafting',c:'s-drafting'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted',c:'s-resubmitted'},REQ:{ar:'قيد العمل',en:'In progress',c:'s-required'},READY:{ar:'جاهز للتقديم',en:'Ready to submit',c:'s-ready'},
    SUB:{ar:'تم التقديم',en:'Submitted',c:'s-sub'},COM:{ar:'عليه ملاحظات',en:'Returned with comments',c:'s-com'},
    OK:{ar:'معتمد',en:'Approved',c:'s-ok'},'N/A':{ar:'لا يلزم',en:'N/A',c:'s-na'},
    HOLD:{ar:'موقوف بطلب المالك',en:'On hold (owner request)',c:'s-hold'},DONE:{ar:'مكتمل',en:'Completed',c:'s-closed'}};
  const ICON={rev:'⚠️','dwg egy':'✏️',dwg:'✏️','SUB COM':'🔁',REQ:'🔸',READY:'📋',SUB:'📤',COM:'⚠️',OK:'✅','N/A':'➖',HOLD:'⏸️',DONE:'✅'};
- const TENDER={rev:{ar:'مستندات المناقصة تحتاج مراجعة',en:'Tender documents need review'},'dwg egy':{ar:'جارٍ إعداد مستندات المناقصة في مصر',en:'Preparing tender documents in Egypt'},dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
+ const TENDER={rev:{ar:'مستندات المناقصة تحتاج مراجعة',en:'Tender documents need review'},'dwg egy':{ar:'Req Egy — مطلوب إجراء في مصر',en:'Req Egy — Action required in Egypt'},dwg:{ar:'جارٍ إعداد مستندات المناقصة',en:'Preparing tender documents'},'SUB COM':{ar:'إعادة تقديم الملاحظات',en:'Resubmitted'},REQ:{ar:'في انتظار استلام عروض الأسعار',en:'Awaiting quotations'},
    READY:{ar:'جاهز للتقديم إلى المناقصة',en:'Ready to submit to tender'},
    SUB:{ar:'تم التقديم إلى المناقصة',en:'Submitted to tender'},
    COM:{ar:'دراسة عروض الأسعار',en:'Studying quotations'},

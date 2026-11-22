@@ -21,3 +21,11 @@ for(let i=0;i<codes.length;i++){
 assert.equal(backgrounds.size,codes.length,'Every status needs a distinct background');
 assert.ok(!app.includes("item('HOLD · DONE'"),'HOLD and DONE must be separate legend entries');
 console.log('PASS 12 distinct status colours: unique classes/backgrounds, text contrast >=4.5, matching report and menu colours, separate HOLD/DONE legend');
+
+const aliasHelpers=app.split('\n').filter(line=>line.startsWith('function statusCodeText(')||line.startsWith('function inlineOptions(')).join('\n');
+const aliasContext=vm.createContext({esc:value=>String(value),cls:()=> 'egy'});
+vm.runInContext(aliasHelpers,aliasContext);
+const egyptOption=vm.runInContext("inlineOptions(['dwg egy'],'dwg egy')",aliasContext);
+assert.ok(egyptOption.includes('value="dwg egy" selected>Req Egy</option>'),'Existing persisted Egypt state stays selected under its new display name');
+assert.equal(vm.runInContext("statusCodeText('dwg')",aliasContext),'dwg');
+console.log('PASS Req Egy display alias: existing status value and selection preserved');
