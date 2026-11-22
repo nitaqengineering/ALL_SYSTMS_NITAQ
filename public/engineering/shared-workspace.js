@@ -511,6 +511,17 @@ async function onboardWorkspaceUser(){
   };
 }
 
+async function offerWorkspacePasswordReset(client,user){
+  if(!confirm('حساب '+user.email+' موجود بالفعل. إرسال رابط لتعيين كلمة مرور إلى بريده؟')){
+    toast('الحساب موجود؛ لم يتم إرسال رسالة جديدة.');
+    return;
+  }
+  const redirectTo=new URL('index.html?onboard=1',location.href).href;
+  const result=await client.auth.resetPasswordForEmail(user.email,{redirectTo});
+  if(result.error)throw Error('تعذر طلب رابط تعيين كلمة المرور. انتظر دقيقة وأعد المحاولة؛ وإذا استمر الخطأ راجع إعدادات البريد.');
+  toast('تم طلب إرسال رابط تعيين كلمة المرور إلى '+user.email+'. راجع البريد الوارد والرسائل غير المرغوب فيها.');
+}
+
 document.addEventListener('click',event=>{
   const button=event.target.closest('[data-invite-user]');
   if(!button||!sharedWorkspace||workspaceInviteBusy||!managerPreview())return;
@@ -527,7 +538,7 @@ document.addEventListener('click',event=>{
       if(result.error)throw Error('تعذر إرسال الدعوة. تحقق من الاتصال، ولو أرسلت دعوة حالًا انتظر دقيقة.');
       if(result.data?.error)throw Error(result.data.error);
       if(result.data?.result==='already_registered'){
-        toast('حساب الدخول موجود بالفعل على نظام متابعة المشاريع. يدخل المستخدم ببريده وكلمة مروره.');
+        await offerWorkspacePasswordReset(client,user);
       }else if(result.data?.link&&typeof show==='function'){
         show('رابط دعوة المهندس','ابعت الرابط للمهندس — '+esc(user.email),
           '<p>انسخ الرابط وابعته للمهندس (واتساب أو إيميل). يفتحه ويختار كلمة مرور حسابه على نظام متابعة المشاريع، وبعدها يدخل بإيميله وكلمة المرور.</p>'+

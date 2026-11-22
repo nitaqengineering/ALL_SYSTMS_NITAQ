@@ -44,5 +44,22 @@ async function run({authorization='Bearer verified-user',origin='https://nitaq-c
  assert.equal(pages.status,200);
  assert.equal(pages.inviteOptions.redirectTo,'https://example.github.io/nitaq-systems/engineering/index.html?onboard=1&email=engineer%40example.invalid');
  assert.equal((await run({origin:'https://untrusted.invalid'})).status,403);
+ const workspace=readFileSync('public/engineering/shared-workspace.js','utf8').replace(/\r\n?/g,'\n');
+ const recoverySource=workspace.slice(workspace.indexOf('async function offerWorkspacePasswordReset('),workspace.indexOf("document.addEventListener('click',event=>{\n  const button=event.target.closest('[data-invite-user]');"));
+ let approved=false,recoveryCalls=0,recoveryRequest,providerError=false;
+ const recovery=vm.createContext({URL,location:{href:'https://example.github.io/nitaq-systems/engineering/index.html#engineering'},confirm:()=>approved,toast:()=>{},
+  client:{auth:{resetPasswordForEmail:async(email,options)=>{recoveryCalls++;recoveryRequest={email,...options};return {error:providerError?{message:'rate limited'}:null}}}},user:{email:'engineer@example.invalid'}});
+ vm.runInContext(recoverySource,recovery);
+ await vm.runInContext('offerWorkspacePasswordReset(client,user)',recovery);
+ assert.equal(recoveryCalls,0,'Declining recovery must never send email');
+ approved=true;
+ await vm.runInContext('offerWorkspacePasswordReset(client,user)',recovery);
+ assert.equal(recoveryCalls,1);
+ assert.equal(recoveryRequest.email,'engineer@example.invalid');
+ assert.equal(recoveryRequest.redirectTo,'https://example.github.io/nitaq-systems/engineering/index.html?onboard=1');
+ providerError=true;
+ await assert.rejects(vm.runInContext('offerWorkspacePasswordReset(client,user)',recovery),/تعيين كلمة المرور/);
+ assert.ok(workspace.includes('await offerWorkspacePasswordReset(client,user);'));
+ console.log('PASS existing-account recovery: explicit confirmation, no mail on cancel, correct Pages onboarding URL, provider failures visible; no live emails');
  console.log('PASS invitation handler: token verification, manager gate, existing-account handling, fixed redirect, CORS; no live emails');
 })().catch(error=>{console.error(error);process.exitCode=1});
