@@ -17,7 +17,7 @@
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
-      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في', eyeH: 'ارتفاع النظر', lens: 'العدسة', pace: 'سرعة المشي', bob: 'حركة طبيعية للرأس', mUnit: 'م', mm: 'مم', ms: 'م/ث',
+      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في', eyeH: 'ارتفاع النظر', lens: 'العدسة', pace: 'سرعة المشي', bob: 'حركة طبيعية للرأس', ao: 'ظلال واقعية (جودة عالية)', mUnit: 'م', mm: 'مم', ms: 'م/ث',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
@@ -26,7 +26,7 @@
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
-      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in', eyeH: 'Eye height', lens: 'Lens', pace: 'Walking speed', bob: 'Natural head motion', mUnit: 'm', mm: 'mm', ms: 'm/s',
+      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in', eyeH: 'Eye height', lens: 'Lens', pace: 'Walking speed', bob: 'Natural head motion', ao: 'Realistic shadows (high quality)', mUnit: 'm', mm: 'mm', ms: 'm/s',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -95,7 +95,7 @@
   var hemi = new THREE.HemisphereLight(0xffffff, 0xcfc8bb, 0.85); scene.add(hemi);
   var sun = new THREE.DirectionalLight(0xfff1dc, 0.75);
   sun.position.set(SIZE * 0.6, SIZE * 1.3, SIZE * 0.5); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = 2;
   var sc = sun.shadow.camera; sc.left = sc.bottom = -SIZE * 1.6; sc.right = sc.top = SIZE * 1.6; sc.far = SIZE * 5;
   sun.shadow.bias = -0.0005; scene.add(sun);
   var lamps = new THREE.Group(); lamps.visible = false; scene.add(lamps);
@@ -302,7 +302,7 @@
     hemi.intensity = S.night ? 0.16 : (MESH ? 0.6 : 0.85); sun.intensity = S.night ? 0.05 : (MESH ? 0.9 : 0.75);
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
     if (MESH) {
-      scene.environment = S.night ? ENV.night : ENV.day;
+      scene.environment = S.night ? ENV.night : ENV.day; paintSky();
       hemi.intensity = S.night ? 0.08 : 0.22; sun.intensity = S.night ? 0.03 : 1.25;
       if (meshReady) applyCeiling();
     }
@@ -473,7 +473,31 @@
     var big = L.rooms.slice().sort(function (a, b) { return b.area - a.area; })[0];
     return big ? P(big._c[0], big._c[1]) : new THREE.Vector3();
   }
+  /* Ambient occlusion (SSAO) in walk mode on capable screens: soft contact shadows where
+     furniture meets the floor, in corners and under shelves. Off in the dollhouse (its section
+     cut is not seen by the AO pass) and on phones, and switchable in the walk controls. */
+  var composer = null, ssao = null;
+  function useAO() {
+    if (!S.walk || !S.ao || !MESH || !THREE.SSAOPass) return false;
+    if (!composer) {
+      composer = new THREE.EffectComposer(renderer);
+      ssao = new THREE.SSAOPass(scene, camera, 2, 2);
+      ssao.kernelRadius = 0.35; ssao.minDistance = 0.00005; ssao.maxDistance = 0.003;
+      // the model carries no vertex normals (flat-shaded from faces): the AO normal pass must too
+      ssao.normalMaterial.flatShading = true; ssao.normalMaterial.needsUpdate = true;
+      composer.addPass(ssao);
+      composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+      sizeAO();
+    }
+    return true;
+  }
+  function sizeAO() {
+    if (!composer) return;
+    var w = stage.clientWidth, h = stage.clientHeight, r = renderer.getPixelRatio();
+    composer.setPixelRatio(r); composer.setSize(w, h);
+  }
   function applyLens() {
+    camera.far = S.walk ? 160 : 500; // a tighter depth range in walk mode keeps the AO precise
     if (S.walk) { camera.filmGauge = 36; camera.setFocalLength(S.lens); } else { camera.fov = 32; camera.updateProjectionMatrix(); }
   }
   // Walk controls: eye height, lens, pace and head motion.
@@ -491,10 +515,12 @@
       name.textContent = c[1]; show();
       row.appendChild(name); row.appendChild(val); row.appendChild(inp); box.appendChild(row);
     });
-    var bob = document.createElement('label'), cb = document.createElement('input');
-    bob.className = 'chk'; cb.type = 'checkbox'; cb.checked = S.bob;
-    cb.onchange = function () { S.bob = cb.checked; };
-    bob.appendChild(cb); bob.appendChild(document.createTextNode(' ' + T('bob'))); box.appendChild(bob);
+    [['bob', T('bob')], ['ao', T('ao')]].forEach(function (o) {
+      var lab = document.createElement('label'), cb = document.createElement('input');
+      lab.className = 'chk'; cb.type = 'checkbox'; cb.checked = S[o[0]];
+      cb.onchange = function () { S[o[0]] = cb.checked; };
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + o[1])); box.appendChild(lab);
+    });
   }
   function setWalk(on) {
     if (on && MESH && !meshGroups.arch) return; // geometry still loading
@@ -713,7 +739,7 @@
   function resize() {
     var w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
-    renderer.setSize(w, h, false); camera.aspect = w / h; applyLens();
+    renderer.setSize(w, h, false); camera.aspect = w / h; applyLens(); sizeAO();
     // key plan sits just above the bottom bar, however many rows the bar wraps to
     var dock = document.querySelector('.dock'); if (dock) map.style.bottom = $('walkctl').style.bottom = (dock.offsetHeight + (w < 860 ? 20 : 32)) + 'px';
     var fit = SIZE * 2.4 * Math.max(1, 1.15 / camera.aspect);
@@ -738,7 +764,8 @@
       camera.position.set(cam.t.x + cam.r * sp * Math.sin(cam.th), cam.t.y + cam.r * Math.cos(cam.ph), cam.t.z + cam.r * sp * Math.cos(cam.th));
       camera.lookAt(cam.t);
     }
-    renderer.render(scene, camera);
+    if (sky) sky.visible = S.walk;
+    if (useAO()) composer.render(); else renderer.render(scene, camera);
     $('labels').style.visibility = S.walk ? 'hidden' : '';
     var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
     L.rooms.forEach(function (r) {
@@ -934,6 +961,7 @@
     var fins = $('fins');
     [].forEach.call(fins.children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
     $('finNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
+    dressFurniture(sc.id);
   }
   function renderFinishes() {
     var fins = $('fins'), has = finishMeshes.length > 0;
@@ -976,9 +1004,44 @@
     pm.dispose(); return tex;
   }
   var ENV = MESH ? { day: envFrom(0xBFD3E6, 0xF3EEE6, 0x9C968B), night: envFrom(0x0B1424, 0x1C2433, 0x0A0D14) } : null;
+  // Glass: nearly clear when seen straight on, more reflective toward grazing angles (Fresnel),
+  // reflecting the sky environment; a faint green-blue body tint like float glass.
   var glassMat = MESH ? new THREE.MeshStandardMaterial({
-    color: 0xA9BDC9, metalness: 0.55, roughness: 0.03, transparent: true, opacity: 0.32, envMapIntensity: 1.6,
+    color: 0xC9DCDF, metalness: 0.2, roughness: 0.02, transparent: true, opacity: 1, envMapIntensity: 2.2, flatShading: true,
     depthWrite: false, side: THREE.DoubleSide, clippingPlanes: [cutPlane] }) : null;
+  if (glassMat) {
+    glassMat.onBeforeCompile = function (sh) {
+      sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', [
+        'float glassF = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0);',
+        'gl_FragColor = vec4( outgoingLight, mix(0.12, 0.8, glassF) );'].join('\n'));
+    };
+    glassMat.customProgramCacheKey = function () { return 'fresnel-glass'; };
+  }
+  // Sky dome seen through the windows in walk mode (day or night), and a ground beyond the site.
+  var sky = null;
+  if (MESH) {
+    var skyGeo = new THREE.SphereGeometry(140, 32, 16), skyCol = [], sp = skyGeo.attributes.position;
+    for (var si = 0; si < sp.count; si++) skyCol.push(0, 0, 0);
+    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyCol, 3));
+    sky = new THREE.Group();
+    sky.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })));
+    // a ring, so it never cuts through a basement under the house
+    var groundM = new THREE.Mesh(new THREE.RingGeometry(SIZE * 0.9, 140, 64), new THREE.MeshStandardMaterial({ color: 0xD3C9B8, roughness: 1 }));
+    groundM.rotation.x = -Math.PI / 2; groundM.position.y = -0.05; groundM.receiveShadow = true; sky.add(groundM);
+    sky.visible = false; scene.add(sky);
+  }
+  function paintSky() {
+    if (!sky) return;
+    var g = sky.children[0].geometry, pos = g.attributes.position, col = g.attributes.color, c = new THREE.Color();
+    var top = new THREE.Color(S.night ? 0x060B16 : 0x7FAED6), hor = new THREE.Color(S.night ? 0x1B2436 : 0xE8EEF2), bot = new THREE.Color(S.night ? 0x05070B : 0xC9C1B3);
+    for (var i = 0; i < pos.count; i++) {
+      var y = pos.getY(i) / 140;
+      if (y > 0) c.copy(hor).lerp(top, Math.pow(y, 0.55)); else c.copy(hor).lerp(bot, Math.min(1, -y * 4));
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    col.needsUpdate = true;
+    sky.children[1].material.color.set(S.night ? 0x2A2C30 : 0xD3C9B8);
+  }
 
   // Wet areas, kitchens and service rooms (from Revit rooms) get practical finishes in every scheme.
   var ZONE_FLOOR = { wet: 1, kitchen: 1, service: 1 }, ZONE_WALL = { wet: 1 };
@@ -1221,7 +1284,8 @@
   }
   function proposal(b) {
     var c = new THREE.Color(b.color), hsl = {}; c.getHSL(hsl);
-    return finish(nameKind(lookOf(b)) || colourKind(hsl), c, hsl);
+    var out = finish(nameKind(lookOf(b)) || colourKind(hsl), c, hsl);
+    out.hsl = hsl; return out;
   }
   // Generated textures: light, near-neutral, so the proposed colour tints them.
   function grain(c, n, r) {
@@ -1290,7 +1354,38 @@
   function makeMaterial(p, smooth) {
     var mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.rough, metalness: p.metal, flatShading: !smooth,
       envMapIntensity: p.metal ? 1 : 0.7, side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
+    furnMats.push({ mat: mat, p: p });
     return p.tex ? triplanar(mat, procFor(p.tex), p.scale, p.scale) : mat;
+  }
+  /* Interior palettes: with a finish scheme chosen, the furniture is dressed to match it rather
+     than keeping a mix of Revit colours. Each proposed kind maps to a slot of the palette, the
+     original lightness choosing between light/dark variants, so bedding stays lighter than a
+     headboard and cushions stay darker than a sofa. 'revit' keeps the per-piece proposal. */
+  var furnMats = [];
+  var PALETTES = {
+    classic: { woodL: '#B08A64', woodD: '#5A3A26', fabL: '#EFE8DC', fabM: '#CDBFA8', fabD: '#6B5A4A', accent: '#7A5C3A', metal: '#B8955A', rug: '#E7DCC8' },
+    warm: { woodL: '#C29B72', woodD: '#7A5235', fabL: '#ECE4D6', fabM: '#C9B79C', fabD: '#7B5E4B', accent: '#B5654A', metal: '#2A2A2A', metalRough: 0.45, rug: '#D9C7AE' },
+    calm: { woodL: '#B3A898', woodD: '#4A4440', fabL: '#E9E7E3', fabM: '#B9B6B0', fabD: '#55565A', accent: '#22324A', metal: '#B8BABC', rug: '#CDCAC4' }
+  };
+  function paletteFor(p, pal) {
+    var l = p.hsl && p.hsl.l != null ? p.hsl.l : 0.5;
+    switch (p.kind) {
+      case 'wood': return { color: l > 0.45 ? pal.woodL : pal.woodD };
+      case 'fabric': return { color: l > 0.82 ? pal.fabL : pal.fabM };
+      case 'charcoal': return { color: pal.fabD };
+      case 'accent': return { color: pal.accent };
+      case 'metal': return { color: pal.metal, rough: pal.metalRough || 0.3 };
+      case 'rug': return { color: pal.rug };
+    }
+    return null;
+  }
+  function dressFurniture(scheme) {
+    var pal = PALETTES[scheme];
+    furnMats.forEach(function (f) {
+      var v = pal ? paletteFor(f.p, pal) : null;
+      f.mat.color.set(v ? v.color : f.p.color);
+      f.mat.roughness = v && v.rough != null ? v.rough : f.p.rough;
+    });
   }
   function lookMaterial(b, smooth) {
     if (!PROPOSE[b.grp]) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, flatShading: true, envMapIntensity: 0.75,
