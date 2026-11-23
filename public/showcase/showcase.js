@@ -17,7 +17,7 @@
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
-      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال · الأسهم للمشي والالتفات', inRoom: 'أنت في',
+      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
@@ -26,7 +26,7 @@
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
-      walkHint: 'Drag to look around · click the gold ring on the floor to go there · arrows to walk and turn', inRoom: 'You are in',
+      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -325,7 +325,7 @@
     $('facts').innerHTML = facts.map(function (f) { return '<div class="fact"><b>' + f[0] + '</b><span>' + f[1] + '</span></div>'; }).join('');
 
     var lv = $('levels'); lv.innerHTML = ''; lv.hidden = D.levels.length < 2;
-    D.levels.slice().reverse().forEach(function (l) {
+    D.levels.forEach(function (l) { // lowest floor first, in reading order
       var i = D.levels.indexOf(l), b = document.createElement('button');
       b.className = 'btn' + (i === S.level ? ' on' : ''); b.textContent = nm(l);
       b.onclick = function () { S.level = i; S.sel = null; applyLevel(); renderUI(); paint(); if (S.walk) placeWalker(W.pos.x, W.pos.z); };
@@ -663,32 +663,14 @@
   });
   window.addEventListener('keyup', function (e) { W.keys[e.key.toLowerCase()] = false; W.keys.shift = e.shiftKey; });
   window.addEventListener('blur', function () { W.keys = {}; });
-  // On-screen arrows (mouse or touch): hold to keep walking or turning; a tap moves a short step.
-  (function () {
-    var MOVE = { f: [1, 0], b: [-1, 0], l: [0, -1], r: [0, 1] };
-    [].forEach.call($('pad').querySelectorAll('button'), function (btn) {
-      var v = MOVE[btn.dataset.k], since = 0, timer = 0;
-      function start(e) {
-        e.preventDefault(); e.stopPropagation(); clearTimeout(timer);
-        try { btn.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-        since = Date.now(); W.target = null; W.joy = [0, v[0]]; W.turn = v[1]; btn.classList.add('on');
-      }
-      function stop() {
-        if (!since) return;
-        var left = Math.max(0, 350 - (Date.now() - since)); since = 0; // a tap still lasts 0.35 s
-        timer = setTimeout(function () { W.joy = [0, 0]; W.turn = 0; btn.classList.remove('on'); }, left);
-      }
-      btn.addEventListener('pointerdown', start);
-      btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop); btn.addEventListener('lostpointercapture', stop);
-      btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-    });
-  })();
 
   /* ---------- loop ---------- */
   function resize() {
     var w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    // key plan sits just above the bottom bar, however many rows the bar wraps to
+    var dock = document.querySelector('.dock'); if (dock) map.style.bottom = (dock.offsetHeight + (w < 860 ? 20 : 32)) + 'px';
     var fit = SIZE * 2.4 * Math.max(1, 1.15 / camera.aspect);
     if (Math.abs(goal.r - HOME.r) < 0.01) goal.r = fit;
     HOME.r = fit;

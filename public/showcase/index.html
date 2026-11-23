@@ -42,13 +42,11 @@ main{display:grid;grid-template-columns:1fr 360px;min-height:0}
 .title h1{font-size:26px;font-weight:500;margin-top:4px}
 .title p{font-size:13px;color:var(--steel);margin-top:2px}
 .badge{display:inline-block;margin-top:8px;font-size:11px;border:1px solid var(--gold);color:var(--gold);padding:2px 8px;border-radius:4px}
-.levels{position:absolute;top:20px;inset-inline-end:24px;display:flex;flex-direction:column;gap:6px}
-.dock{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--navy);padding:6px;border-radius:12px;box-shadow:0 8px 30px rgba(16,23,37,.25)}
-.btn{padding:9px 16px;border-radius:8px;font-size:13px;color:#C9CED8;transition:.2s;white-space:nowrap}
+.levels{display:flex;gap:6px;padding-inline-start:6px;border-inline-start:1px solid rgba(255,255,255,.15)}
+.dock{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);overflow-x:auto;scrollbar-width:none;display:flex;gap:6px;background:var(--navy);padding:6px;border-radius:12px;box-shadow:0 8px 30px rgba(16,23,37,.25)}
+.btn{padding:9px 12px;border-radius:8px;font-size:13px;color:#C9CED8;transition:.2s;white-space:nowrap}
 .btn:hover{color:var(--white)}
 .btn.on{background:var(--gold);color:var(--navy);font-weight:500}
-.levels .btn{background:var(--navy);box-shadow:0 4px 16px rgba(16,23,37,.2)}
-.levels .btn.on{background:var(--gold)}
 .hint{position:absolute;bottom:26px;inset-inline-start:24px;font-size:11px;color:var(--steel)}
 aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:22px}
 .sec-k{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase;margin-bottom:10px}
@@ -68,15 +66,8 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--navy);color:var(--white);padding:10px 18px;border-radius:999px;font-size:13px}
 .here{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--gold);padding:8px 16px;border-radius:999px;font-size:13px;pointer-events:none;display:none}
 .walking .here:not([hidden]){display:block}
-.pad{position:absolute;bottom:84px;inset-inline-start:24px;display:none;grid-template:repeat(3,44px)/repeat(3,44px);gap:4px;touch-action:none;user-select:none;-webkit-user-select:none}
-.pad button{background:var(--navy);color:var(--gold);border-radius:10px;font-size:16px;box-shadow:0 4px 14px rgba(16,23,37,.3);touch-action:none}
-.pad button:hover{color:#fff}
-.pad button.on{background:var(--gold);color:var(--navy)}
-.pad [data-k=f]{grid-area:1/2}.pad [data-k=l]{grid-area:2/1}.pad [data-k=r]{grid-area:2/3}.pad [data-k=b]{grid-area:3/2}
-.walking .pad{display:grid}
-.stage canvas.map{position:absolute;top:20px;inset-inline-end:24px;width:170px;height:170px;border-radius:12px;background:#CFCBC3;border:2px solid var(--navy);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
+.stage canvas.map{position:absolute;bottom:84px;right:24px;width:170px;height:170px;border-radius:12px;background:#CFCBC3;border:2px solid var(--navy);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
 .walking .stage canvas.map{display:block}
-.walking .levels{top:206px}
 .walking .title{opacity:0}
 .walking .hint{bottom:78px;inset-inline-start:50%;transform:translateX(50%);background:rgba(16,23,37,.7);color:#fff;padding:6px 12px;border-radius:999px;white-space:nowrap}
 [dir=ltr] .walking .hint{transform:translateX(-50%)}
@@ -98,12 +89,11 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   aside{border:0;border-top:1px solid var(--line);padding:20px 16px}
   header{padding:12px 16px}.hd-meta{display:none}
   .title{inset-inline-start:16px;top:14px}.title h1{font-size:20px}
-  .levels{inset-inline-end:12px;top:14px}
-  .dock{bottom:12px;max-width:calc(100% - 16px);overflow-x:auto;scrollbar-width:none}
-  .pad{bottom:72px;inset-inline-start:12px}.btn{padding:8px 11px;font-size:12px}
+  .dock{bottom:12px;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center;overflow:visible}
+  .levels{flex-basis:100%;justify-content:center;border-inline-start:0;border-top:1px solid rgba(255,255,255,.15);padding:6px 0 0}
+  .btn{padding:8px 11px;font-size:12px}
   .hint{display:none}
-  .stage canvas.map{width:120px;height:120px;top:14px;inset-inline-end:12px}
-  .walking .levels{top:146px}
+  .stage canvas.map{width:120px;height:120px;bottom:70px;right:12px}
 }
 </style>
 </head>
@@ -123,12 +113,6 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="labels" id="labels"></div>
       <div class="loading" id="loading" hidden></div>
       <div class="here" id="here" hidden></div>
-      <div class="pad" id="pad" dir="ltr">
-        <button data-k="f" aria-label="forward">&#9650;</button>
-        <button data-k="l" aria-label="turn left">&#9664;</button>
-        <button data-k="r" aria-label="turn right">&#9654;</button>
-        <button data-k="b" aria-label="back">&#9660;</button>
-      </div>
       <canvas class="map" id="map" aria-label="mini map"></canvas>
       <div class="title">
         <div class="k" id="tK"></div>
@@ -136,7 +120,6 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
         <p id="tLoc"></p>
         <span class="badge" id="tSample" hidden></span>
       </div>
-      <div class="levels" id="levels"></div>
       <div class="hint" id="hint"></div>
       <div class="dock">
         <button class="btn" id="bRotate"></button>
@@ -146,6 +129,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
         <button class="btn" id="bWalls"></button>
         <button class="btn" id="bFurn" hidden></button>
         <button class="btn" id="bReset"></button>
+        <div class="levels" id="levels"></div>
       </div>
     </section>
     <aside>
