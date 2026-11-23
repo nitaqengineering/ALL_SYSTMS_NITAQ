@@ -11,3 +11,7 @@ supabase/.branches/
 *-before-restore*.json
 *.log
 .DS_Store
+
+# Client villa models are private: publish them to the showcase storage, never to this public repo.
+public/showcase/data/*
+!public/showcase/data/sample-villa.js
