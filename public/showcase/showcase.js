@@ -13,7 +13,7 @@
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
       rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
-      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
+      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', ceiling: 'تصميم السقف والإضاءة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
@@ -22,7 +22,7 @@
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
-      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
+      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', ceiling: 'Ceiling and lighting', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', ceil: 'spots', auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -80,6 +80,7 @@
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if (D.mesh) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95; }
   // Section plane: everything above it is cut away, like a Revit plan cut / section box top.
   renderer.localClippingEnabled = true;
   var cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
@@ -299,7 +300,12 @@
   function applyNight() {
     $('app').classList.toggle('night', S.night);
     hemi.intensity = S.night ? 0.16 : (MESH ? 0.6 : 0.85); sun.intensity = S.night ? 0.05 : (MESH ? 0.9 : 0.75);
-    hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night;
+    hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
+    if (MESH) {
+      scene.environment = S.night ? ENV.night : ENV.day;
+      hemi.intensity = S.night ? 0.08 : 0.35; sun.intensity = S.night ? 0.03 : 1.1;
+      if (meshReady) applyCeiling();
+    }
   }
   function renderUI() {
     document.documentElement.lang = S.lang; document.documentElement.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
@@ -653,7 +659,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -680,7 +686,7 @@
   var clock = new THREE.Clock();
   function frame() {
     var dt = Math.min(clock.getDelta(), 0.1);
-    swingDoors(dt);
+    swingDoors(dt); nightLights(performance.now());
     if (S.walk) {
       stepWalk(dt);
       camera.position.copy(W.eye);
@@ -734,17 +740,17 @@
         var parent = b.grp === 'leaf' ? pivotFor(grp, b.door, b.hinge) : grp;
         var glass = b.opacity < 1;
         if (b.grp === 'floor') addUV(g); // floor finishes are textures laid in plan
-        var m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
-          // Revit glass materials are often saturated cyan; show glass as a soft blue-grey tint.
-          color: glass ? 0x5E7484 : b.color, roughness: glass ? 0.1 : 0.85, flatShading: true,
-          transparent: glass, opacity: glass ? 0.5 : 1, depthWrite: !glass,
-          side: glass ? THREE.DoubleSide : THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true }));
+        // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
+        var m = new THREE.Mesh(g, glass ? glassMat : new THREE.MeshStandardMaterial({
+          color: b.color, roughness: 0.85, flatShading: true,
+          side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true }));
         m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
         if (!glass) parent.add(new THREE.Mesh(g, cap));
         if (!glass && FINISH_KIND[b.grp]) finishMeshes.push({ m: m, kind: FINISH_KIND[b.grp], color: b.color });
         if (!glass && ARCH.indexOf(b.grp) >= 0) edgeQueue.push({ g: g, grp: parent });
       });
       scene.add(root); applyLevel(); note.hidden = true;
+      setupInterior(root);
       meshReady = true; mapLevel = -1; renderUI(); applyFinish();
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
@@ -834,14 +840,30 @@
   }
   var SCHEMES = [
     { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
-    { id: 'classic', ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#EFE9DF', ceil: '#FBFAF7', sw: ['#F3F1EC', '#EFE9DF', '#C9A25D'],
-      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 · دهان عاجي دافئ · أسقف جبس بيضاء', enD: 'White veined marble 120×120 · warm ivory paint · white gypsum ceilings' },
-    { id: 'warm', ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DCD5CA', ceil: '#FAF8F4', sw: ['#C9A57A', '#DCD5CA', '#FAF8F4'],
+    { id: 'classic', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#EFE9DF', ceil: '#FBFAF7', sw: ['#F3F1EC', '#EFE9DF', '#C9A25D'],
+      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان عاجي دافئ · أسقف جبس بيضاء · الحمامات والمطبخ: بورسلين 60×60 وسيراميك جدران 30×60', enD: 'Polished white veined marble 120×120 · warm ivory paint · white gypsum ceilings · wet areas and kitchen: porcelain 60×60, ceramic wall tiles 30×60' },
+    { id: 'warm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.45 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DCD5CA', ceil: '#FAF8F4', sw: ['#C9A57A', '#DCD5CA', '#FAF8F4'],
       arD: 'باركيه بلوط فاتح 20×120 · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Light oak planks 20×120 · greige paint · off-white ceilings' },
-    { id: 'calm', ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#ECEAE6', ceil: '#FFFFFF', sw: ['#DAD7D1', '#ECEAE6', '#6E7787'],
+    { id: 'calm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.35 }, ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#ECEAE6', ceil: '#FFFFFF', sw: ['#DAD7D1', '#ECEAE6', '#6E7787'],
       arD: 'بورسلين رمادي فاتح مطفي 120×120 · دهان أبيض دافئ · سقف أبيض', enD: 'Matte light-grey porcelain 120×120 · warm white paint · white ceilings' }
   ];
   var texCache = {};
+  var ROUGH = { wall: 0.92, ceil: 0.95, floor: 0.6, zoneFloor: 0.32, zoneWall: 0.18 };
+  // Wet areas: matte porcelain 60 x 60 on the floor, glossy ceramic 30 x 60 on the walls.
+  function porcelainSmall(c, n, r) {
+    c.fillStyle = '#CFCBC4'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 6000; i++) { c.fillStyle = 'rgba(' + (r() > .5 ? '255,255,255' : '110,105,100') + ',.05)'; c.fillRect(r() * n, r() * n, 2, 2); }
+    c.strokeStyle = 'rgba(140,135,130,.85)'; c.lineWidth = 3;
+    for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
+  }
+  function ceramic(c, n, r) {
+    c.fillStyle = '#F4F3F0'; c.fillRect(0, 0, n, n);
+    c.strokeStyle = 'rgba(175,170,165,.9)'; c.lineWidth = 3;
+    for (var y = 0; y <= n; y += n / 4) { c.beginPath(); c.moveTo(0, y); c.lineTo(n, y); c.stroke(); }
+    for (var row = 0; row < 4; row++) for (var x = (row % 2) * n / 4; x <= n; x += n / 2) {
+      c.beginPath(); c.moveTo(x, row * n / 4); c.lineTo(x, (row + 1) * n / 4); c.stroke();
+    }
+  }
   function applyFinish() {
     var sc = SCHEMES.filter(function (x) { return x.id === S.finish; })[0] || SCHEMES[0];
     finishMeshes.forEach(function (f) {
@@ -849,9 +871,11 @@
       if (!v) { mat.color.set(f.color); mat.map = null; }
       else if (typeof v === 'string') { mat.color.set(v); mat.map = null; }
       else {
-        texCache[sc.id] = texCache[sc.id] || texture(v[0], v[1]);
-        mat.color.set('#ffffff'); mat.map = texCache[sc.id];
+        var key = v[0].name + v[1];
+        texCache[key] = texCache[key] || texture(v[0], v[1]);
+        mat.color.set('#ffffff'); mat.map = texCache[key];
       }
+      mat.roughness = v ? ((sc.rough || {})[f.kind] || ROUGH[f.kind] || 0.85) : 0.85;
       mat.needsUpdate = true;
     });
     var fins = $('fins');
@@ -872,6 +896,222 @@
       fins.appendChild(b);
     });
     applyFinish();
+    renderCeilings();
+  }
+
+  /* ---------- interior: reflections, zoned finishes, ceiling designs, night lighting ----------
+     Everything here is derived from the exported geometry, so it works for any villa:
+     - reflections: an image-based environment (sky, horizon, ground) lights every material and
+       shows in the glass and in polished floors;
+     - zones: floors inside wet/kitchen/service rooms and the walls around wet rooms get their
+       own finishes (porcelain floor, ceramic wall tiles) whichever scheme is chosen;
+     - ceilings: downlights on a 1.5 m grid wherever a ceiling is overhead, and a gypsum cove
+       (shelf + hidden LED glow) along the top of every interior wall that meets a ceiling;
+     - night: the downlights nearest the visitor become real lights. */
+  function envFrom(top, mid, bottom) {
+    var es = new THREE.Scene(), geo = new THREE.SphereGeometry(50, 32, 16), col = [];
+    var cTop = new THREE.Color(top), cMid = new THREE.Color(mid), cBot = new THREE.Color(bottom), c = new THREE.Color();
+    var pos = geo.attributes.position;
+    for (var i = 0; i < pos.count; i++) {
+      var y = pos.getY(i) / 50;
+      if (y > 0) c.copy(cMid).lerp(cTop, Math.pow(y, 0.6)); else c.copy(cMid).lerp(cBot, Math.min(1, -y * 3));
+      col.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    es.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    var pm = new THREE.PMREMGenerator(renderer), tex = pm.fromScene(es, 0.02).texture;
+    pm.dispose(); return tex;
+  }
+  var ENV = MESH ? { day: envFrom(0xBFD3E6, 0xF3EEE6, 0x9C968B), night: envFrom(0x0B1424, 0x1C2433, 0x0A0D14) } : null;
+  var glassMat = MESH ? new THREE.MeshStandardMaterial({
+    color: 0xA9BDC9, metalness: 0.55, roughness: 0.03, transparent: true, opacity: 0.32, envMapIntensity: 1.6,
+    depthWrite: false, side: THREE.DoubleSide, clippingPlanes: [cutPlane] }) : null;
+
+  // Wet areas, kitchens and service rooms (from Revit rooms) get practical finishes in every scheme.
+  var ZONE_FLOOR = { wet: 1, kitchen: 1, service: 1 }, ZONE_WALL = { wet: 1 };
+  function levelAt(y) {
+    var li = 0;
+    D.levels.forEach(function (L, i) { if (L.elevation + (L._slabTop || 0) - 0.3 <= y) li = i; });
+    return D.levels[li];
+  }
+  function roomAt(wx, wy, wz, types) {
+    var L = levelAt(wy), x = wx + CX, y = -wz + CY;
+    return L.rooms.filter(function (r) { return types[r.type] && inPoly(x, y, r.poly); })[0];
+  }
+  function splitZones() {
+    var va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    finishMeshes.slice().forEach(function (f) {
+      if (f.kind !== 'floor' && f.kind !== 'wall') return;
+      var g = f.m.geometry, idx = g.index.array, pos = g.attributes.position, mw = f.m.matrixWorld;
+      var keep = [], zone = [], types = f.kind === 'floor' ? ZONE_FLOOR : ZONE_WALL;
+      for (var t = 0; t < idx.length; t += 3) {
+        va.fromBufferAttribute(pos, idx[t]).applyMatrix4(mw); vb.fromBufferAttribute(pos, idx[t + 1]).applyMatrix4(mw); vc.fromBufferAttribute(pos, idx[t + 2]).applyMatrix4(mw);
+        var cx = (va.x + vb.x + vc.x) / 3, cy = (va.y + vb.y + vc.y) / 3, cz = (va.z + vb.z + vc.z) / 3;
+        if (f.kind === 'wall') { // a wall face belongs to the room it faces: probe 15 cm in front of it
+          n.crossVectors(e1.subVectors(vb, va), e2.subVectors(vc, va)).normalize();
+          cx += n.x * 0.15; cz += n.z * 0.15;
+        }
+        (roomAt(cx, cy, cz, types) ? zone : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+      }
+      if (!zone.length) return;
+      g.setIndex(keep);
+      var zg = new THREE.BufferGeometry();
+      zg.setAttribute('position', pos); zg.setIndex(zone);
+      if (f.kind === 'wall') { zg = zg.toNonIndexed(); boxUV(zg, f.m); } else zg.setAttribute('uv', g.attributes.uv);
+      var zm = new THREE.Mesh(zg, f.m.material.clone());
+      zm.castShadow = zm.receiveShadow = true; f.m.parent.add(zm);
+      f.m.parent.add(new THREE.Mesh(zg, f.m.parent.children.filter(function (o) { return o.material && o.material.side === THREE.BackSide; })[0].material));
+      edgeQueue.push({ g: zg, grp: f.m.parent });
+      finishMeshes.push({ m: zm, kind: f.kind === 'floor' ? 'zoneFloor' : 'zoneWall', color: f.color });
+    });
+  }
+  // Wall tiles need UVs: per triangle, along the wall and up it, in metres.
+  function boxUV(g, mesh) {
+    var p = g.attributes.position, uv = new Float32Array(p.count * 2), k = MESH.step / 1000, o = MESH.origin;
+    var a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e = new THREE.Vector3();
+    for (var t = 0; t < p.count; t += 3) {
+      a.fromBufferAttribute(p, t); b.fromBufferAttribute(p, t + 1); c.fromBufferAttribute(p, t + 2);
+      n.crossVectors(e.subVectors(b, a), c.clone().sub(a));
+      var alongX = Math.abs(n.z) > Math.abs(n.x);
+      for (var i = 0; i < 3; i++) {
+        var v = [a, b, c][i];
+        uv[(t + i) * 2] = (alongX ? v.x * k + o[0] / 1000 : v.z * k + o[2] / 1000);
+        uv[(t + i) * 2 + 1] = v.y * k + o[1] / 1000;
+      }
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  }
+
+  // Ceiling fixtures and cove, built once after the model loads.
+  var ceilGroup = new THREE.Group(), spots = [], spotMesh = null, coveGroup = new THREE.Group();
+  ceilGroup.add(coveGroup); scene.add(ceilGroup);
+  var ledMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xFFD9A8, emissiveIntensity: 0.4, clippingPlanes: [cutPlane] });
+  var glowMat = new THREE.MeshBasicMaterial({ color: 0xFFC98A, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, clippingPlanes: [cutPlane] });
+  var shelfMat = new THREE.MeshStandardMaterial({ color: 0xFAF8F4, roughness: 0.9, clippingPlanes: [cutPlane] });
+  function glowTexture() {
+    var c = document.createElement('canvas'); c.width = 4; c.height = 128;
+    var x = c.getContext('2d'), gr = x.createLinearGradient(0, 128, 0, 0);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 4, 128);
+    return new THREE.CanvasTexture(c);
+  }
+  function buildCeilings() {
+    var ceils = [];
+    if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
+    if (!ceils.length) return;
+    var cr = new THREE.Raycaster(), upV = new THREE.Vector3(0, 1, 0), o = new THREE.Vector3();
+    function ceilingAbove(x, y, z) {
+      cr.set(o.set(x, y, z), upV); cr.near = 0; cr.far = 4.6;
+      var h = cr.intersectObjects(ceils, false)[0];
+      return h ? h.point.y : null;
+    }
+    // Downlights: a 1.5 m grid over each level, wherever a ceiling is 2.3-4.6 m above the floor.
+    D.levels.forEach(function (L, li) {
+      if (!L.rooms.length && !(L.notes || []).length) return;
+      var fy = L.elevation + (L._slabTop || 0), x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      (L.slabs || []).forEach(function (s) { s.poly.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }); });
+      for (var x = x0 + 0.75; x < x1; x += 1.5) {
+        for (var y = y0 + 0.75; y < y1; y += 1.5) {
+          var w = P(x, y), cy = ceilingAbove(w.x, fy + 1.6, w.z);
+          if (cy != null && cy - fy > 2.3) spots.push({ p: new THREE.Vector3(w.x, cy - 0.012, w.z), level: li });
+        }
+      }
+    });
+    if (spots.length) {
+      spotMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.055, 0.055, 0.02, 16), ledMat, spots.length);
+      var m = new THREE.Matrix4();
+      spots.forEach(function (s, i) { spotMesh.setMatrixAt(i, m.makeTranslation(s.p.x, s.p.y, s.p.z)); });
+      ceilGroup.add(spotMesh);
+    }
+    // Cove: along the top edge of each interior wall face that meets a ceiling.
+    var segs = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e = new THREE.Vector3();
+    (meshGroups.wall ? [meshGroups.wall] : []).forEach(function (grp) {
+      grp.traverse(function (mesh) {
+        if (!mesh.isMesh || mesh.material.side === THREE.BackSide) return;
+        var g = mesh.geometry, idx = g.index ? g.index.array : null, pos = g.attributes.position, cnt = idx ? idx.length : pos.count;
+        for (var t = 0; t < cnt; t += 3) {
+          var vs = [0, 1, 2].map(function (i) { return new THREE.Vector3().fromBufferAttribute(pos, idx ? idx[t + i] : t + i).applyMatrix4(mesh.matrixWorld); });
+          n.crossVectors(e.subVectors(vs[1], vs[0]), c.subVectors(vs[2], vs[0])); n.y = 0;
+          if (n.lengthSq() < 1e-8) continue;
+          n.normalize();
+          var ymax = Math.max(vs[0].y, vs[1].y, vs[2].y), top = vs.filter(function (v) { return ymax - v.y < 0.004; });
+          if (top.length !== 2 || top[0].distanceTo(top[1]) < 0.5) continue;
+          var L = levelAt(ymax - 2.3), fy = L.elevation + (L._slabTop || 0);
+          if (ymax - fy < 2.3) continue;
+          var mid = a.addVectors(top[0], top[1]).multiplyScalar(0.5);
+          var cy = ceilingAbove(mid.x + n.x * 0.3, fy + 1.6, mid.z + n.z * 0.3);
+          if (cy == null || cy - fy < 2.3 || Math.abs(cy - ymax) > 0.6) continue;
+          segs.push({ a: top[0].clone(), b: top[1].clone(), n: n.clone(), y: cy });
+        }
+      });
+    });
+    if (!segs.length) return;
+    var shelf = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), shelfMat, segs.length);
+    var led = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), ledMat, segs.length);
+    var glowM = glowMat.clone(); glowM.map = glowTexture(); glowMat = glowM;
+    var glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowM, segs.length);
+    var M = new THREE.Matrix4(), R = new THREE.Matrix4(), Rx = new THREE.Matrix4().makeRotationX(Math.PI / 2), Sm = new THREE.Matrix4(), q = new THREE.Vector3();
+    segs.forEach(function (s, i) {
+      var len = s.a.distanceTo(s.b), d = e.subVectors(s.b, s.a).normalize(), th = Math.atan2(-d.z, d.x);
+      if (s.n.x * -d.z + s.n.z * d.x < 0) th += Math.PI; // so the shelf's depth and the glow point into the room
+      var mid = q.addVectors(s.a, s.b).multiplyScalar(0.5);
+      R.makeRotationY(th);
+      function put(mesh, along, depth, height, off, y, flat) {
+        Sm.makeScale(along, flat ? depth : height, flat ? 1 : depth);
+        M.makeTranslation(mid.x + s.n.x * off, y, mid.z + s.n.z * off).multiply(R);
+        if (flat) M.multiply(Rx);
+        mesh.setMatrixAt(i, M.multiply(Sm));
+      }
+      put(shelf, len, 0.3, 0.05, 0.15, s.y - 0.3);
+      put(led, len, 0.02, 0.012, 0.28, s.y - 0.27);
+      put(glow, len, 0.7, 0, 0.35, s.y - 0.006, true);
+    });
+    coveGroup.add(shelf, led, glow);
+  }
+  // Night: the downlights nearest the visitor light the space (a few real lights, reused).
+  var pool = [];
+  for (var pi = 0; pi < 8; pi++) { var pl = new THREE.PointLight(0xFFD2A0, 0, 7, 2); pool.push(pl); scene.add(pl); }
+  var lastPick = 0;
+  function nightLights(now) {
+    var on = MESH && S.night && spots.length;
+    if (!on) { pool.forEach(function (l) { l.intensity = 0; }); return; }
+    if (now - lastPick < 250) return;
+    lastPick = now;
+    var focus = S.walk ? W.eye : cam.t, li = S.level;
+    spots.filter(function (s) { return s.level === li; })
+      .sort(function (p, q) { return p.p.distanceToSquared(focus) - q.p.distanceToSquared(focus); })
+      .slice(0, pool.length)
+      .forEach(function (s, i) { pool[i].position.set(s.p.x, s.p.y - 0.15, s.p.z); pool[i].intensity = S.walk ? 1.3 : 0.9; });
+  }
+  var CEILS = [
+    { id: 'spots', ar: 'سبوتات', en: 'Downlights', arD: 'سقف جبس مستوي وسبوتات LED دافئة 3000K كل 1.5 م', enD: 'Flat gypsum ceiling, warm 3000K LED downlights every 1.5 m' },
+    { id: 'cove', ar: 'جبس بإنارة مخفية', en: 'Gypsum cove', arD: 'رف جبس على محيط الفراغ بإضاءة LED مخفية تنعكس على السقف، مع السبوتات', enD: 'Gypsum cove around each space with hidden LED washing the ceiling, plus downlights' },
+    { id: 'flat', ar: 'كما في الموديل', en: 'As modelled', arD: 'سقف بلا تجهيزات إضاءة', enD: 'Ceiling without light fittings' }
+  ];
+  function applyCeiling() {
+    var sc = CEILS.filter(function (c) { return c.id === S.ceil; })[0] || CEILS[0];
+    if (spotMesh) spotMesh.visible = sc.id !== 'flat';
+    coveGroup.visible = sc.id === 'cove';
+    ledMat.emissiveIntensity = S.night ? 2.2 : 0.5;
+    glowMat.opacity = S.night ? 0.9 : 0.22;
+    [].forEach.call($('ceils').children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
+    $('ceilNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
+  }
+  function renderCeilings() {
+    var box = $('ceils'); $('kCeil').textContent = T('ceiling');
+    box.innerHTML = '';
+    CEILS.forEach(function (c) {
+      var b = document.createElement('button'); b.className = 'fin'; b.dataset.id = c.id;
+      b.textContent = S.lang === 'ar' ? c.ar : c.en;
+      b.onclick = function () { S.ceil = c.id; applyCeiling(); };
+      box.appendChild(b);
+    });
+    applyCeiling();
+  }
+  function setupInterior(root) {
+    root.updateMatrixWorld(true);
+    splitZones();
+    setTimeout(function () { buildCeilings(); applyCeiling(); }, 80);
   }
 
   if (MESH) loadMesh();
