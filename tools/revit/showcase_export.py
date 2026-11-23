@@ -3,6 +3,7 @@
 # Read-only: run through the pyRevit agent (run_query). IronPython 2.7 and CPython.
 # Curtain walls are exported as glass panels and cut as window openings in their host.
 from pyrevit.api import DB
+import re
 
 FT = 0.3048
 r3 = lambda v: round(v * FT, 3)
@@ -168,6 +169,22 @@ for i, lv in enumerate(levels):
 
 # Perspective 3D views (Revit cameras) become ready-made scenes in the viewer: eye position and
 # look direction in metres. Model coordinates match the rooms and slabs above.
+# Furniture the viewer re-dresses as realistic pieces in the same layout: sofas and armchairs,
+# beds, tables and chairs. Each instance: names, insertion point and its X axis in plan (the
+# viewer reads the actual shape from the instance's own exported geometry).
+REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner', re.I)
+furniture = []
+for fi in DB.FilteredElementCollector(doc).OfClass(DB.FamilyInstance):
+    cat = fi.Category.Name if fi.Category else ''
+    if cat.strip() not in ('Furniture', 'Furniture Systems') or not isinstance(fi.Location, DB.LocationPoint):
+        continue
+    name = '%s %s' % (fi.Symbol.FamilyName, fi.Name)
+    if not REDRESS.search(name):
+        continue
+    t = fi.GetTotalTransform()
+    pt = fi.Location.Point
+    furniture.append({'id': eid(fi), 'name': ''.join([ch for ch in name if ord(ch) < 128])[:80],
+                      'p': [r3(pt.X), r3(pt.Y), r3(pt.Z)], 'ax': [round(t.BasisX.X, 4), round(t.BasisX.Y, 4)]})
 views = []
 for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D):
     if v.IsTemplate or not v.IsPerspective:
@@ -179,5 +196,5 @@ for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D):
 views.sort(key=lambda x: x['name'])
 pi = doc.ProjectInformation
 result = {'project': {'name': pi.Name or doc.Title, 'ref': pi.Number or '', 'location': pi.Address or ''},
-          'levels': out, 'views': views,
+          'levels': out, 'views': views, 'furniture': furniture,
           'unplacedRooms': [r.get_Parameter(DB.BuiltInParameter.ROOM_NAME).AsString() for r in all_rooms if r.Area <= 0]}

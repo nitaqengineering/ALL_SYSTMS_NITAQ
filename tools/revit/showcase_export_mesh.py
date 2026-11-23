@@ -8,6 +8,7 @@ from System.Collections.Generic import List
 from Autodesk.Revit.DB import Visual
 import io
 import os
+import re
 import json
 
 FT_MM = 304.8
@@ -30,6 +31,7 @@ opts.DetailLevel = DB.ViewDetailLevel.Medium
 opts.IncludeNonVisibleObjects = False
 
 DEFAULT = ((214, 210, 202), 0, '')
+REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner', re.I)
 mats = {}
 
 
@@ -328,6 +330,9 @@ for e in DB.FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType(
         fb = material(c.Material.Id, DEFAULT)
     # doors are their own group: the walk mode lets the visitor pass through them
     grp = 'furn' if c.Name in FURN else 'door' if c.Name == 'Doors' else 'arch'
+    # pieces the viewer re-dresses keep their own group, so it can read each one's shape and hide it
+    if grp == 'furn' and c.Name.strip() in ('Furniture', 'Furniture Systems') and isinstance(e, DB.FamilyInstance)             and REDRESS.search('%s %s' % (e.Symbol.FamilyName, e.Name)):
+        grp = 'furn:%d' % eid(e.Id)
     route = None
     if c.Name == 'Doors':
         hs = hinges_of(e)

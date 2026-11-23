@@ -47,7 +47,9 @@ const out = {
   project: {...ex.project, ...(cfg.project || {})},
   levels: [],
   site: [],
-  views: ex.views || [] // Revit perspective views: {name, eye:[x,y,z], dir:[x,y,z]} in metres
+  views: ex.views || [], // Revit perspective views: {name, eye:[x,y,z], dir:[x,y,z]} in metres
+  // furniture re-dressed by the viewer: {id, name, p:[x,y,z], ax:[x,y] (instance X axis in plan)}
+  furniture: ex.furniture || []
 };
 for (const L of ex.levels) {
   const n = names[L.name];
@@ -142,7 +144,7 @@ async function packMesh(mesh, binPath) {
     if (!tris.length) continue;
     const wide = pos.length / 3 > 65535;
     buckets.push({
-      grp, ...(grp === 'leaf' ? {door: +door, hinge: +hinge} : {}), ...(lookKey && lookIndex.has(lookKey) ? {look: lookIndex.get(lookKey)} : {}), color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
+      grp, ...(grp === 'leaf' ? {door: +door, hinge: +hinge} : {}), ...(grp === 'furn' && door ? {elem: +door} : {}), ...(lookKey && lookIndex.has(lookKey) ? {look: lookIndex.get(lookKey)} : {}), color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
       opacity: Math.round(100 - +transp) / 100,
       pos: push(Int16Array.from(pos)), verts: pos.length / 3,
       idx: push(wide ? Uint32Array.from(tris) : Uint16Array.from(tris)), count: tris.length, wide

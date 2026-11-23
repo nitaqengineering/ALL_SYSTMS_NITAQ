@@ -13,7 +13,7 @@
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
       rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
-      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', ceiling: 'تصميم السقف والإضاءة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
+      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', realFurn: 'فرش واقعي بنفس توزيع الموديل', ceiling: 'تصميم السقف والإضاءة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
@@ -22,7 +22,7 @@
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
-      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', ceiling: 'Ceiling and lighting', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
+      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', realFurn: 'Realistic furniture in the model layout', ceiling: 'Ceiling and lighting', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -295,6 +295,7 @@
     var L = D.levels[S.level], next = D.levels[S.level + 1];
     cutPlane.constant = S.walk ? 1e6 : S.full ? (next ? next.elevation - 0.45 : 1e6) : L.elevation + (L._slabTop || 0) + CUT;
     if (meshGroups.furn) meshGroups.furn.visible = S.furn;
+    applyRealFurniture();
     goal.t.y = levelY();
   }
   function applyNight() {
@@ -724,7 +725,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -843,6 +844,7 @@
         var grp = meshGroups[b.grp] || (meshGroups[b.grp] = new THREE.Group());
         if (!grp.parent) root.add(grp);
         var parent = b.grp === 'leaf' ? pivotFor(grp, b.door, b.hinge) : grp;
+        if (b.grp === 'furn' && b.elem != null) { collectTris(b.elem, g, root); parent = elemGroup(b.elem, grp); }
         var glass = b.opacity < 1;
         if (b.grp === 'floor') addUV(g); // floor finishes are textures laid in plan
         // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
@@ -870,6 +872,7 @@
       });
       scene.add(root); applyLevel(); note.hidden = true;
       setupInterior(root);
+      buildRealFurniture();
       meshReady = true; mapLevel = -1; renderUI(); applyFinish();
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
@@ -1017,6 +1020,13 @@
     });
     applyFinish();
     renderCeilings();
+    var old = fins.parentNode.querySelector('.realfurn'); if (old) old.remove();
+    if (D.furniture && D.furniture.length) {
+      var lab = document.createElement('label'), cb = document.createElement('input');
+      lab.className = 'realfurn'; cb.type = 'checkbox'; cb.checked = S.realFurn;
+      cb.onchange = function () { S.realFurn = cb.checked; applyRealFurniture(); };
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + T('realFurn'))); fins.parentNode.insertBefore(lab, fins);
+    }
   }
 
   /* ---------- interior: reflections, zoned finishes, ceiling designs, night lighting ----------
@@ -1366,7 +1376,7 @@
   function procFor(kind) {
     if (!procTex[kind]) {
       var c = document.createElement('canvas'); c.width = c.height = 512;
-      ({ wood: grain, fabric: weave, stone: speckle, rug: wool })[kind](c.getContext('2d'), 512, rng({ wood: 11, fabric: 13, stone: 17, rug: 19 }[kind]));
+      ({ wood: grain, fabric: weave, stone: speckle, rug: wool, marble: marble })[kind](c.getContext('2d'), 512, rng({ wood: 11, fabric: 13, stone: 17, rug: 19, marble: 23 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
@@ -1482,6 +1492,332 @@
     out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     out.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
     return out;
+  }
+
+  /* ---------- realistic furniture in the Revit layout ----------
+     Revit's sofas, beds, tables and chairs are simple blocks. Each listed piece (D.furniture:
+     insertion point and X axis) is read from its own exported geometry as a height map in its
+     local frame; from that the viewer finds the seat, back and arms of a sofa module, the
+     headboard, mattress and nightstands of a bed, the top of a table and the chairs around a
+     dining table, then builds a detailed piece of the same size, position and orientation
+     (cushions, base, legs, bedding, tufted headboard, marble tops). The Revit block is hidden;
+     "Realistic furniture" in the finishes panel switches back to it. */
+  var elemGroups = {}, elemTris = {}, realGroup = new THREE.Group(), realBuilt = false;
+  scene.add(realGroup);
+  function elemGroup(id, grp) {
+    if (!elemGroups[id]) { elemGroups[id] = new THREE.Group(); grp.add(elemGroups[id]); }
+    return elemGroups[id];
+  }
+  function collectTris(id, g, root) {
+    var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, rp = root.position;
+    var out = elemTris[id] || (elemTris[id] = []);
+    for (var t = 0; t < idx.length; t++) {
+      var v = idx[t] * 3; out.push(p[v] * k + rp.x, p[v + 1] * k + rp.y, p[v + 2] * k + rp.z);
+    }
+  }
+  var CELL = 0.04;
+  // Height map of a piece in its frame: u along its X axis, v = X x up, h above its lowest point.
+  function heightMap(tris, O, A, C) {
+    var n = tris.length / 9, us = [], vs = [], hs = [], minY = Infinity, u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (var i = 0; i < tris.length; i += 3) {
+      var dx = tris[i] - O.x, dz = tris[i + 2] - O.z, u = dx * A.x + dz * A.z, v = dx * C.x + dz * C.z;
+      us.push(u); vs.push(v); hs.push(tris[i + 1]); minY = Math.min(minY, tris[i + 1]);
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    var nu = Math.max(1, Math.ceil((u1 - u0) / CELL)), nv = Math.max(1, Math.ceil((v1 - v0) / CELL)), H = new Float32Array(nu * nv).fill(-1);
+    for (var t = 0; t < n; t++) {
+      var a = t * 3, b = a + 1, c = a + 2;
+      var minU = Math.min(us[a], us[b], us[c]), maxU = Math.max(us[a], us[b], us[c]), minV = Math.min(vs[a], vs[b], vs[c]), maxV = Math.max(vs[a], vs[b], vs[c]);
+      var i0 = Math.max(0, Math.floor((minU - u0) / CELL)), i1 = Math.min(nu - 1, Math.floor((maxU - u0) / CELL));
+      var j0 = Math.max(0, Math.floor((minV - v0) / CELL)), j1 = Math.min(nv - 1, Math.floor((maxV - v0) / CELL));
+      var den = (vs[b] - vs[c]) * (us[a] - us[c]) + (us[c] - us[b]) * (vs[a] - vs[c]);
+      for (var i = i0; i <= i1; i++) for (var j = j0; j <= j1; j++) {
+        var pu = u0 + (i + 0.5) * CELL, pv = v0 + (j + 0.5) * CELL, w0, w1, w2;
+        if (Math.abs(den) < 1e-12) { // a vertical face: it only lifts the cells along its edge
+          if (pu < minU - CELL || pu > maxU + CELL || pv < minV - CELL || pv > maxV + CELL) continue;
+          w0 = w1 = w2 = 1 / 3;
+          var hv = Math.max(hs[a], hs[b], hs[c]) - minY;
+          if (Math.min(Math.abs(pu - minU), Math.abs(pu - maxU)) > CELL && Math.min(Math.abs(pv - minV), Math.abs(pv - maxV)) > CELL) continue;
+          if (hv > H[i * nv + j]) H[i * nv + j] = hv;
+          continue;
+        }
+        w0 = ((vs[b] - vs[c]) * (pu - us[c]) + (us[c] - us[b]) * (pv - vs[c])) / den;
+        w1 = ((vs[c] - vs[a]) * (pu - us[c]) + (us[a] - us[c]) * (pv - vs[c])) / den;
+        w2 = 1 - w0 - w1;
+        if (w0 < -0.02 || w1 < -0.02 || w2 < -0.02) continue;
+        var h = w0 * hs[a] + w1 * hs[b] + w2 * hs[c] - minY;
+        if (h > H[i * nv + j]) H[i * nv + j] = h;
+      }
+    }
+    return { H: H, nu: nu, nv: nv, u0: u0, v0: v0, u1: u1, v1: v1, base: minY };
+  }
+  function hAt(m, i, j) { return i < 0 || j < 0 || i >= m.nu || j >= m.nv ? -1 : m.H[i * m.nv + j]; }
+  function cellsWhere(m, fn) { var out = []; for (var i = 0; i < m.nu; i++) for (var j = 0; j < m.nv; j++) { var h = m.H[i * m.nv + j]; if (h > 0.02 && fn(h, i, j)) out.push([i, j, h]); } return out; }
+  function median(a) { if (!a.length) return null; a = a.slice().sort(function (x, y) { return x - y; }); return a[a.length >> 1]; }
+  // Sides of the piece's rectangle: 0 = u-min, 1 = u-max, 2 = v-min, 3 = v-max.
+  function stripStats(m, side, depth, thr) {
+    var cnt = 0, high = 0, maxh = 0, k = Math.max(1, Math.round(depth / CELL));
+    for (var i = 0; i < m.nu; i++) for (var j = 0; j < m.nv; j++) {
+      var inS = side === 0 ? i < k : side === 1 ? i >= m.nu - k : side === 2 ? j < k : j >= m.nv - k;
+      var h = m.H[i * m.nv + j]; if (!inS || h <= 0.02) continue;
+      cnt++; if (h > thr) high++; if (h > maxh) maxh = h;
+    }
+    return { frac: cnt ? high / cnt : 0, maxh: maxh, cnt: cnt };
+  }
+  // Rounded box: a segmented box whose corners are pushed onto spheres of radius r.
+  var rbCache = {};
+  function rboxGeo(w, h, d, r) {
+    r = Math.max(0.002, Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4));
+    var key = [w, h, d, r].map(function (x) { return x.toFixed(3); }).join(',');
+    if (rbCache[key]) return rbCache[key];
+    var g = new THREE.BoxGeometry(w, h, d, 5, 5, 5), p = g.attributes.position, v = new THREE.Vector3(), c = new THREE.Vector3();
+    var lo = new THREE.Vector3(-w / 2 + r, -h / 2 + r, -d / 2 + r), hi = new THREE.Vector3(w / 2 - r, h / 2 - r, d / 2 - r);
+    for (var i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i); c.copy(v).clamp(lo, hi); v.sub(c);
+      if (v.lengthSq() > 1e-12) v.setLength(r); v.add(c); p.setXYZ(i, v.x, v.y, v.z);
+    }
+    g.computeVertexNormals();
+    return (rbCache[key] = g);
+  }
+  var realMats = {};
+  function rmat(kind, l, hex, rough, tex, scale, metal) {
+    var key = [kind, l, hex, tex].join('|');
+    if (!realMats[key]) realMats[key] = makeMaterial({ kind: kind, color: new THREE.Color(hex), rough: rough, metal: metal || 0, tex: tex || null, scale: scale || 1, hsl: { l: l } }, true);
+    return realMats[key];
+  }
+  function M() { // the scheme-aware materials of the real pieces
+    return {
+      body: rmat('fabric', 0.7, '#CDBFA8', 0.95, 'fabric', 0.16), cushion: rmat('fabric', 0.9, '#EFE8DC', 0.95, 'fabric', 0.16),
+      accent: rmat('accent', 0.4, '#7A5C3A', 0.85, 'fabric', 0.16), plinth: rmat('charcoal', 0.15, '#2B2B2D', 0.6),
+      wood: rmat('wood', 0.3, '#5A3A26', 0.5, 'wood', 0.6), woodL: rmat('wood', 0.6, '#B08A64', 0.5, 'wood', 0.6),
+      metal: rmat('metal', 0.5, '#B8955A', 0.3, null, 1, 0.9), linen: rmat('linen', 0.95, '#F3F0EA', 0.95, 'fabric', 0.12),
+      top: rmat('top', 0.9, '#F1EEE8', 0.15, 'marble', 0.9), shade: rmat('linen', 0.95, '#EFE7D8', 0.9, 'fabric', 0.1)
+    };
+  }
+  function put(group, geo, mat, x, y, z, ry, rx) {
+    var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+    if (ry) m.rotation.y = ry; if (rx) m.rotation.x = rx;
+    m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
+  }
+  // A box against side s: `depth` inward from the edge, spanning [a0, a1] along the side.
+  function sideRect(r, s, off, depth, a0, a1) {
+    if (s === 0) return { u: r.u0 + off + depth / 2, v: (a0 + a1) / 2, du: depth, dv: a1 - a0 };
+    if (s === 1) return { u: r.u1 - off - depth / 2, v: (a0 + a1) / 2, du: depth, dv: a1 - a0 };
+    if (s === 2) return { u: (a0 + a1) / 2, v: r.v0 + off + depth / 2, du: a1 - a0, dv: depth };
+    return { u: (a0 + a1) / 2, v: r.v1 - off - depth / 2, du: a1 - a0, dv: depth };
+  }
+  function along(r, s) { return s < 2 ? [r.v0, r.v1] : [r.u0, r.u1]; }
+  function occRect(m, fn) { // bounds of the cells matching fn, in frame units
+    var c = cellsWhere(m, fn); if (!c.length) return null;
+    var i0 = Infinity, i1 = -1, j0 = Infinity, j1 = -1;
+    c.forEach(function (x) { i0 = Math.min(i0, x[0]); i1 = Math.max(i1, x[0]); j0 = Math.min(j0, x[1]); j1 = Math.max(j1, x[1]); });
+    return { u0: m.u0 + i0 * CELL, u1: m.u0 + (i1 + 1) * CELL, v0: m.v0 + j0 * CELL, v1: m.v0 + (j1 + 1) * CELL, n: c.length, cells: c };
+  }
+
+  // Upholstered seating (sofa modules, corner pieces, armchairs).
+  function buildSeat(m, G, mt) {
+    var r = occRect(m, function () { return true; }); if (!r) return false;
+    var top = 0; cellsWhere(m, function (h) { if (h > top) top = h; return false; });
+    var seatH = median(cellsWhere(m, function (h) { return h > 0.25 && h < 0.6; }).map(function (c) { return c[2]; })) || 0.42;
+    var thr = seatH + 0.12, sides = [0, 1, 2, 3].map(function (s) { return stripStats(m, s, Math.min(0.3, ((s < 2 ? r.u1 - r.u0 : r.v1 - r.v0)) * 0.3), thr); });
+    var backs = [], arms = [];
+    sides.forEach(function (st, s) { if (st.frac > 0.5) (st.maxh >= top - 0.1 ? backs : arms).push(s); });
+    if (!backs.length && arms.length) { backs.push(arms.shift()); } // a module whose tallest side is lower than usual
+    var baseTop = Math.max(0.2, seatH - 0.13), BK = 0.2, AW = 0.15;
+    put(G, rboxGeo(r.u1 - r.u0 - 0.1, 0.06, r.v1 - r.v0 - 0.1, 0.01), mt.plinth, (r.u0 + r.u1) / 2, 0.03, (r.v0 + r.v1) / 2);
+    put(G, rboxGeo(r.u1 - r.u0 - 0.01, baseTop - 0.06, r.v1 - r.v0 - 0.01, 0.03), mt.body, (r.u0 + r.u1) / 2, 0.06 + (baseTop - 0.06) / 2, (r.v0 + r.v1) / 2);
+    // seat area: what the backs and arms leave
+    var s = { u0: r.u0, u1: r.u1, v0: r.v0, v1: r.v1 };
+    backs.concat(arms).forEach(function (sd) { var t = backs.indexOf(sd) >= 0 ? BK : AW; if (sd === 0) s.u0 += t; if (sd === 1) s.u1 -= t; if (sd === 2) s.v0 += t; if (sd === 3) s.v1 -= t; });
+    var lenU = s.u1 - s.u0, lenV = s.v1 - s.v0, alongU = lenU >= lenV, len = alongU ? lenU : lenV, n = Math.max(1, Math.round(len / 0.85));
+    for (var i = 0; i < n; i++) {
+      var a0 = (alongU ? s.u0 : s.v0) + len * i / n, a1 = a0 + len / n;
+      var cu = alongU ? (a0 + a1) / 2 : (s.u0 + s.u1) / 2, cv = alongU ? (s.v0 + s.v1) / 2 : (a0 + a1) / 2;
+      put(G, rboxGeo(alongU ? a1 - a0 - 0.012 : lenU - 0.01, 0.15, alongU ? lenV - 0.01 : a1 - a0 - 0.012, 0.05), mt.cushion, cu, baseTop + 0.075, cv);
+    }
+    var backTop = Math.max(top, seatH + 0.3);
+    backs.forEach(function (sd) {
+      var ax = along(r, sd), a0 = ax[0], a1 = ax[1];
+      backs.forEach(function (o) { if (o === sd || (o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
+      var fr = sideRect(r, sd, 0, 0.12, a0, a1);
+      put(G, rboxGeo(fr.du, backTop - 0.06 - 0.04, fr.dv, 0.04), mt.body, fr.u, 0.06 + (backTop - 0.1) / 2, fr.v);
+      var nb = Math.max(1, Math.round((a1 - a0) / 0.85)), len2 = (a1 - a0) / nb;
+      for (var k = 0; k < nb; k++) {
+        var cr = sideRect(r, sd, 0.1, 0.17, a0 + k * len2, a0 + (k + 1) * len2), hgt = (backTop - baseTop - 0.15) * 0.92;
+        var cushion = put(G, rboxGeo(sd < 2 ? 0.17 : len2 - 0.015, hgt, sd < 2 ? len2 - 0.015 : 0.17, 0.06), mt.cushion, cr.u, baseTop + 0.15 + hgt / 2, cr.v);
+        var tilt = 0.12; // leans back
+        if (sd === 0) cushion.rotation.z = tilt; if (sd === 1) cushion.rotation.z = -tilt; if (sd === 2) cushion.rotation.x = -tilt; if (sd === 3) cushion.rotation.x = tilt;
+      }
+    });
+    arms.forEach(function (sd) {
+      var ax = along(r, sd), a0 = ax[0], a1 = ax[1], armTop = Math.max(seatH + 0.18, Math.min(sides[sd].maxh, backTop - 0.1));
+      backs.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
+      var fr = sideRect(r, sd, 0, AW, a0, a1);
+      put(G, rboxGeo(fr.du, armTop - 0.06, fr.dv, 0.06), mt.body, fr.u, 0.06 + (armTop - 0.06) / 2, fr.v);
+    });
+    if (backs.length && arms.length) { // a scatter cushion where an arm meets the back
+      var b = backs[0], am = arms[0], cu = am === 0 ? s.u0 + 0.22 : am === 1 ? s.u1 - 0.22 : (s.u0 + s.u1) / 2, cv = am === 2 ? s.v0 + 0.22 : am === 3 ? s.v1 - 0.22 : (s.v0 + s.v1) / 2;
+      if (b === 0) cu = s.u0 + 0.12; if (b === 1) cu = s.u1 - 0.12; if (b === 2) cv = s.v0 + 0.12; if (b === 3) cv = s.v1 - 0.12;
+      put(G, rboxGeo(b < 2 ? 0.12 : 0.42, 0.4, b < 2 ? 0.42 : 0.12, 0.06), mt.accent, cu, baseTop + 0.35, cv, 0, 0);
+    }
+    return true;
+  }
+
+  // Beds: headboard on the tallest side, mattress from the run of columns at mattress height,
+  // nightstands from what is left beside the headboard.
+  function buildBed(m, G, mt) {
+    var r = occRect(m, function () { return true; }); if (!r) return false;
+    var best = -1, head = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.15, 0); if (st.maxh > best) { best = st.maxh; head = s; } });
+    var headTop = best, wAxisU = head >= 2; // the bed's width runs along the head side
+    var nW = wAxisU ? m.nu : m.nv, nL = wAxisU ? m.nv : m.nu, cell = function (w, l) {
+      var i = wAxisU ? w : (head === 0 ? l : m.nu - 1 - l), j = wAxisU ? (head === 2 ? l : m.nv - 1 - l) : w;
+      return hAt(m, i, j);
+    };
+    var colOK = [];
+    for (var w = 0; w < nW; w++) { var ok = 0, tot = 0; for (var l = Math.floor(nL * 0.45); l < Math.floor(nL * 0.95); l++) { tot++; var h = cell(w, l); if (h > 0.25 && h < 0.85) ok++; } colOK.push(tot && ok / tot > 0.5); }
+    var runA = 0, runB = -1, a = -1; colOK.concat([false]).forEach(function (v, i) { if (v && a < 0) a = i; if (!v && a >= 0) { if (i - a > runB - runA + 1) { runA = a; runB = i - 1; } a = -1; } });
+    if (runB < runA) return false;
+    var mats = []; for (w = runA; w <= runB; w++) for (l = Math.floor(nL * 0.4); l < nL; l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) mats.push(h); }
+    var mTop = median(mats) || 0.55, footL = 0; for (w = runA; w <= runB; w++) for (l = 0; l < nL; l++) if (cell(w, l) > 0.1) footL = Math.max(footL, l + 1);
+    var W = (runB - runA + 1) * CELL, L = footL * CELL, w0 = (wAxisU ? m.u0 : m.v0) + runA * CELL;
+    // bed frame in (x = across width, z = from head toward foot), mapped to (u, v)
+    function at(x, z) {
+      var wc = w0 + x, lc = z;
+      if (head === 2) return [wc, m.v0 + lc]; if (head === 3) return [wc, m.v1 - lc];
+      if (head === 0) return [m.u0 + lc, wc]; return [m.u1 - lc, wc];
+    }
+    function bx(gx, gy, gz, x, y, z, mat, rx) { // box of size (gx across, gy up, gz along length)
+      var p = at(x, z), m2 = put(G, rboxGeo(wAxisU ? gx : gz, gy, wAxisU ? gz : gx, Math.min(0.06, gy / 2, gx / 2, gz / 2)), mat, p[0], y, p[1]);
+      if (rx) { if (wAxisU) m2.rotation.x = head === 2 ? -rx : rx; else m2.rotation.z = head === 0 ? rx : -rx; } // tops lean toward the headboard
+      return m2;
+    }
+    var baseTop = Math.max(0.28, mTop - 0.24);
+    bx(W + 0.04, baseTop - 0.08, L - 0.08, W / 2, 0.08 + (baseTop - 0.08) / 2, 0.08 + (L - 0.08) / 2, mt.body);
+    bx(W - 0.03, 0.24, L - 0.14, W / 2, baseTop + 0.12, 0.12 + (L - 0.14) / 2, mt.linen);
+    var duvL = (L - 0.14) * 0.72;
+    bx(W + 0.07, 0.07, duvL, W / 2, baseTop + 0.255, L - 0.02 - duvL / 2, mt.cushion);
+    bx(W + 0.08, 0.08, 0.26, W / 2, baseTop + 0.29, L - 0.02 - duvL + 0.13, mt.cushion);
+    bx(W + 0.1, 0.03, 0.45, W / 2, baseTop + 0.3, L - 0.3, mt.accent); // throw at the foot
+    var np = W > 1.3 ? 2 : 1, pw = (W - 0.12) / np;
+    for (var k = 0; k < np; k++) bx(pw - 0.06, 0.15, 0.42, 0.06 + pw * (k + 0.5), baseTop + 0.32, 0.36, mt.linen, 0.35);
+    if (W > 1.3) bx(0.5, 0.32, 0.12, W / 2, baseTop + 0.38, 0.58, mt.accent, 0.25);
+    var hbW = W + 0.2, nch = Math.max(3, Math.round(hbW / 0.24)), cw = hbW / nch, hbTop = Math.max(headTop, mTop + 0.45);
+    for (k = 0; k < nch; k++) bx(cw - 0.012, hbTop - 0.12, 0.1, -0.1 + cw * (k + 0.5), 0.12 + (hbTop - 0.12) / 2, 0.06, mt.body);
+    // nightstands: columns outside the mattress run, near the head
+    [[0, runA - 1], [runB + 1, nW - 1]].forEach(function (rg) {
+      if (rg[1] - rg[0] < 6) return;
+      var top2 = 0, wa = Infinity, wb = -1, lb = 0;
+      for (w = rg[0]; w <= rg[1]; w++) for (l = 0; l < Math.min(nL, Math.round(0.8 / CELL)); l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) { top2 = Math.max(top2, h); wa = Math.min(wa, w); wb = Math.max(wb, w); lb = Math.max(lb, l + 1); } }
+      if (wb < wa) return;
+      var nx = (wa - runA) * CELL, nw = (wb - wa + 1) * CELL, nd = Math.min(lb * CELL, 0.5), nh = Math.min(top2, 0.65);
+      bx(nw - 0.04, nh - 0.08, nd - 0.04, nx + nw / 2, 0.08 + (nh - 0.08) / 2, 0.04 + nd / 2, mt.wood);
+      bx(nw - 0.1, 0.006, 0.01, nx + nw / 2, 0.08 + (nh - 0.08) * 0.62, 0.04 + nd - 0.02, mt.plinth); // drawer line
+      var p = at(nx + nw / 2, 0.04 + nd / 2);
+      put(G, new THREE.CylinderGeometry(0.06, 0.07, 0.3, 20), mt.metal, p[0], nh + 0.15, p[1]); // lamp
+      put(G, new THREE.CylinderGeometry(0.13, 0.17, 0.22, 28, 1, true), mt.shade, p[0], nh + 0.38, p[1]);
+    });
+    return true;
+  }
+
+  // Tables: marble top at the measured height; round when the top's corners are empty.
+  function tableAt(G, mt, rect, topH, round, dining) {
+    var t = dining ? 0.05 : 0.04, cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
+    if (round) {
+      var top = put(G, new THREE.CylinderGeometry(0.5, 0.5, t, 48), mt.top, cu, topH - t / 2, cv); top.scale.set(du, 1, dv);
+      var ped = put(G, new THREE.CylinderGeometry(0.05, 0.12, topH - t, 24), mt.metal, cu, (topH - t) / 2, cv);
+      return;
+    }
+    put(G, rboxGeo(du, t, dv, 0.008), mt.top, cu, topH - t / 2, cv);
+    var inset = Math.min(0.08, du * 0.15, dv * 0.15), lh = topH - t, leg = new THREE.BoxGeometry(0.035, lh, 0.035);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg, mt.metal, cu + s[0] * (du / 2 - inset), lh / 2, cv + s[1] * (dv / 2 - inset)); });
+  }
+  function buildTable(m, G, mt) {
+    var topH = 0; cellsWhere(m, function (h) { if (h > topH) topH = h; return false; });
+    var rect = occRect(m, function (h) { return h > topH - 0.04; }); if (!rect) return false;
+    var area = ((rect.u1 - rect.u0) / CELL) * ((rect.v1 - rect.v0) / CELL);
+    tableAt(G, mt, rect, topH, rect.n / area < 0.86, false);
+    return true;
+  }
+  // Dining chair facing direction (fu, fv) in the frame, centred at (cu, cv).
+  function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
+    var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
+    w = Math.min(Math.max(w, 0.44), 0.6); d = Math.min(Math.max(d, 0.46), 0.6); hTop = Math.min(Math.max(hTop, 0.8), 1.05);
+    var seat = 0.47, leg = new THREE.CylinderGeometry(0.016, 0.012, seat - 0.06, 10);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(C, leg, mt.wood, s[0] * (w / 2 - 0.04), (seat - 0.06) / 2, s[1] * (d / 2 - 0.04)); });
+    put(C, rboxGeo(w, 0.08, d, 0.03), mt.cushion, 0, seat - 0.02, 0.01);
+    var back = put(C, rboxGeo(w - 0.02, hTop - seat - 0.04, 0.06, 0.03), mt.cushion, 0, seat + (hTop - seat) / 2, -d / 2 + 0.04);
+    back.rotation.x = -0.1;
+    return C;
+  }
+  function buildChair(m, G, mt) {
+    var r = occRect(m, function () { return true; }); if (!r) return false;
+    var best = -1, bs = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.1, 0); if (st.maxh > best) { best = st.maxh; bs = s; } });
+    var f = [[1, 0], [-1, 0], [0, 1], [0, -1]][bs];
+    chairAt(G, mt, (r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2, bs < 2 ? r.v1 - r.v0 : r.u1 - r.u0, bs < 2 ? r.u1 - r.u0 : r.v1 - r.v0, best, f[0], f[1]);
+    return true;
+  }
+  // Dining set in one family: the table top at the most common height between 0.65 and 0.82 m,
+  // every other cluster of cells a chair facing the table.
+  function buildDiningSet(m, G, mt) {
+    var hs = cellsWhere(m, function (h) { return h > 0.65 && h < 0.82; }).map(function (c) { return Math.round(c[2] * 50) / 50; });
+    if (!hs.length) return false;
+    var cnt = {}, topH = 0.75, bc = 0; hs.forEach(function (h) { cnt[h] = (cnt[h] || 0) + 1; if (cnt[h] > bc) { bc = cnt[h]; topH = h; } });
+    var rect = occRect(m, function (h) { return Math.abs(h - topH) < 0.03; }); if (!rect) return false;
+    // keep the biggest rectangle of table cells: drop chair seats that happen to be at that height
+    var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, inTable = function (u, v) { return u > rect.u0 - 0.05 && u < rect.u1 + 0.05 && v > rect.v0 - 0.05 && v < rect.v1 + 0.05; };
+    tableAt(G, mt, rect, topH, false, true);
+    var seen = new Uint8Array(m.nu * m.nv), q = [];
+    for (var i = 0; i < m.nu; i++) for (var j = 0; j < m.nv; j++) {
+      var idx = i * m.nv + j, u = m.u0 + (i + 0.5) * CELL, v = m.v0 + (j + 0.5) * CELL;
+      if (seen[idx] || m.H[idx] <= 0.05 || inTable(u, v)) continue;
+      var comp = [], top = 0; q = [[i, j]]; seen[idx] = 1;
+      while (q.length) {
+        var c = q.pop(); comp.push(c); top = Math.max(top, m.H[c[0] * m.nv + c[1]]);
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (dd) {
+          var a = c[0] + dd[0], b = c[1] + dd[1], k = a * m.nv + b;
+          if (a < 0 || b < 0 || a >= m.nu || b >= m.nv || seen[k] || m.H[k] <= 0.05) return;
+          var uu = m.u0 + (a + 0.5) * CELL, vv = m.v0 + (b + 0.5) * CELL; if (inTable(uu, vv)) return;
+          seen[k] = 1; q.push([a, b]);
+        });
+      }
+      if (comp.length * CELL * CELL < 0.06) continue;
+      var a0 = Infinity, a1 = -1, b0 = Infinity, b1 = -1; comp.forEach(function (c) { a0 = Math.min(a0, c[0]); a1 = Math.max(a1, c[0]); b0 = Math.min(b0, c[1]); b1 = Math.max(b1, c[1]); });
+      var ccu = m.u0 + (a0 + a1 + 1) / 2 * CELL, ccv = m.v0 + (b0 + b1 + 1) / 2 * CELL, fu = cu - ccu, fv = cv - ccv, fl = Math.hypot(fu, fv) || 1;
+      var horiz = Math.abs(fu) > Math.abs(fv); // chairs at the ends face along u
+      fu = horiz ? Math.sign(fu) : 0; fv = horiz ? 0 : Math.sign(fv);
+      chairAt(G, mt, ccu - fu * 0.05, ccv - fv * 0.05, (horiz ? b1 - b0 + 1 : a1 - a0 + 1) * CELL, (horiz ? a1 - a0 + 1 : b1 - b0 + 1) * CELL, top, fu, fv);
+    }
+    return true;
+  }
+  function redressKind(name) {
+    var n = name.toLowerCase();
+    if (/bed|letto/.test(n)) return 'bed';
+    if (/dining_table|chairs\)|tavolo da pranzo/.test(n)) return 'dining';
+    if (/chair|sedia|katakana/.test(n)) return 'chair';
+    if (/table|tavol|coffee/.test(n)) return 'table';
+    if (/sofa|couch|divano|poltrona|armchair|corner/.test(n)) return 'seat';
+    return '';
+  }
+  function buildRealFurniture() {
+    if (realBuilt || !D.furniture || !D.furniture.length) return;
+    realBuilt = true;
+    var mt = M(), up = new THREE.Vector3(0, 1, 0), made = 0;
+    D.furniture.forEach(function (f) {
+      var tris = elemTris[f.id], kind = redressKind(f.name); if (!tris || !kind) return;
+      var al = Math.hypot(f.ax[0], f.ax[1]) || 1, A = new THREE.Vector3(f.ax[0] / al, 0, -f.ax[1] / al), Cv = new THREE.Vector3().crossVectors(A, up);
+      var O = P(f.p[0], f.p[1]), m = heightMap(tris, O, A, Cv), G = new THREE.Group();
+      var ok = ({ seat: buildSeat, bed: buildBed, table: buildTable, chair: buildChair, dining: buildDiningSet })[kind](m, G, mt);
+      if (!ok) return;
+      G.matrixAutoUpdate = false; G.matrix.makeBasis(A, up, Cv).setPosition(O.x, m.base, O.z);
+      G.userData.elem = f.id; realGroup.add(G); made++;
+      if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true;
+    });
+    applyRealFurniture();
+    return made;
+  }
+  function applyRealFurniture() {
+    realGroup.visible = S.realFurn && S.furn;
+    Object.keys(elemGroups).forEach(function (id) { var g = elemGroups[id]; g.visible = !(S.realFurn && g.userData.replaced); });
   }
 
   if (MESH) loadMesh();
