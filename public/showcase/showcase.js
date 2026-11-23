@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -80,7 +80,7 @@
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  if (D.mesh) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95; }
+  if (D.mesh) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.82; }
   // Section plane: everything above it is cut away, like a Revit plan cut / section box top.
   renderer.localClippingEnabled = true;
   var cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
@@ -303,7 +303,7 @@
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
     if (MESH) {
       scene.environment = S.night ? ENV.night : ENV.day;
-      hemi.intensity = S.night ? 0.08 : 0.35; sun.intensity = S.night ? 0.03 : 1.1;
+      hemi.intensity = S.night ? 0.08 : 0.22; sun.intensity = S.night ? 0.03 : 1.25;
       if (meshReady) applyCeiling();
     }
   }
@@ -780,7 +780,23 @@
         var glass = b.opacity < 1;
         if (b.grp === 'floor') addUV(g); // floor finishes are textures laid in plan
         // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
-        var m = new THREE.Mesh(g, glass ? glassMat : lookMaterial(b));
+        var smooth = false;
+        if (b.grp === 'furn' && !glass) { // rugs split off; the rest smooth-shaded
+          var fp = furnParts(g);
+          if (fp.rug) {
+            var rm = new THREE.Mesh(fp.rug, makeMaterial(finish('rug', new THREE.Color(b.color), {}), false));
+            rm.receiveShadow = true; parent.add(rm);
+          }
+          if (fp.wet) {
+            var wc = new THREE.Color(b.color), whsl = {}; wc.getHSL(whsl);
+            var wp = whsl.l > 0.6 && whsl.s < 0.3 ? finish('porcelain', wc, whsl) : proposal(b);
+            var wm = new THREE.Mesh(fp.wet, makeMaterial(wp, true));
+            wm.castShadow = wm.receiveShadow = true; parent.add(wm); parent.add(new THREE.Mesh(fp.wet, cap));
+          }
+          if (!fp.main) return;
+          g = fp.main; smooth = true;
+        }
+        var m = new THREE.Mesh(g, glass ? glassMat : lookMaterial(b, smooth));
         m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
         if (!glass) parent.add(new THREE.Mesh(g, cap));
         if (!glass && FINISH_KIND[b.grp]) finishMeshes.push({ m: m, kind: FINISH_KIND[b.grp], color: b.color });
@@ -1151,58 +1167,108 @@
     setTimeout(function () { buildCeilings(); applyCeiling(); }, 80);
   }
 
-  /* Revit render appearance per material (exported as MESH.looks): real textures at their
-     real-world size via world-space (triplanar) mapping, since the mesh carries no UVs;
-     glossiness and metal from the appearance; untextured wood and fabric get a generated
-     grain or weave so they read as the material, tinted by its colour. Walls and slabs keep
-     their shading colour (finish schemes recolour them). */
-  var LOOK_GROUPS = { furn: 1, door: 1, leaf: 1 }, loadedTex = {}, procTex = {};
+  /* ---------- proposed materials ----------
+     Revit families carry flat shading colours (a yellow "teak", a cyan "stone", saturated
+     fabric blues). Instead of copying them, each furniture colour is read as the material it
+     most likely is (wood, fabric, foliage, stone, metal, porcelain...) and given a realistic
+     finish: a natural colour in that family, a generated texture at a real-world scale laid in
+     world space (the mesh has no UVs), and a fitting roughness. Material names from the export,
+     when present, sharpen the guess. Walls and slabs keep their colours (finish schemes apply). */
+  var PROPOSE = { furn: 1, door: 1, leaf: 1 }, procTex = {};
   function lookOf(b) { return b.look != null && MESH.looks ? MESH.looks[b.look] : null; }
-  function kindOf(l) {
-    var t = ((l.cls || '') + ' ' + (l.schema || '') + ' ' + (l.name || '')).toLowerCase();
+  function nameKind(l) {
+    var t = l ? ((l.cls || '') + ' ' + (l.schema || '') + ' ' + (l.name || '')).toLowerCase() : '';
     if (/metal|steel|chrome|alumin|acciaio|allumin|brass|iron/.test(t)) return 'metal';
     if (/wood|teak|oak|walnut|birch|pine|abete|pioppo|legno|hardwood|veneer/.test(t)) return 'wood';
-    if (/fabric|textile|tessuto|linen|lino|cotton|velvet|carpet|rug|leather|cuscino/.test(t)) return 'fabric';
-    if (/stone|marble|granite|ceramic|porcelain|tile/.test(t)) return 'stone';
-    if (/plastic|vinyl|laminate/.test(t)) return 'plastic';
+    if (/carpet|rug|tappeto/.test(t)) return 'rug';
+    if (/fabric|textile|tessuto|linen|lino|cotton|velvet|leather|cuscino|cushion/.test(t)) return 'fabric';
+    if (/leaf|vegetation|plant|ficus|grass/.test(t)) return 'foliage';
+    if (/stone|marble|granite|concrete|terrazzo/.test(t)) return 'stone';
+    if (/porcelain|ceramic|toilet|basin/.test(t)) return 'porcelain';
     return '';
   }
-  function texFile(path) {
-    if (!loadedTex[path]) {
-      var base = MESH.file.replace(/[^\/?]*(\?.*)?$/, ''), t = new THREE.TextureLoader().load(base + path);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      loadedTex[path] = t;
-    }
-    return loadedTex[path];
+  // Colour → most likely material, by hue/saturation/lightness.
+  function colourKind(hsl) {
+    var h = hsl.h * 360, s = hsl.s, l = hsl.l;
+    if (l < 0.1) return 'black';
+    if (s > 0.2 && h >= 70 && h <= 160) return 'foliage';
+    if (s > 0.22 && h >= 15 && h < 55 && l < 0.75) return 'wood';
+    if (s > 0.25 && h >= 160 && h < 200 && l > 0.35) return 'stone'; // Revit's cyan "Stone"
+    if (s > 0.3) return 'accent';
+    if (l > 0.62) return 'fabric'; // white/light upholstery; sanitary ware is picked out by room (furnParts)
+    if (l > 0.3) return s < 0.06 ? 'metal' : 'fabric';
+    return 'charcoal';
   }
-  function grain(c, n, r) { // light greyscale wood grain; the material colour tints it
-    c.fillStyle = '#e8e0d6'; c.fillRect(0, 0, n, n);
-    for (var i = 0; i < 140; i++) {
-      var y = r() * n, a = 0.05 + r() * 0.12; c.strokeStyle = 'rgba(70,50,35,' + a + ')'; c.lineWidth = 1 + r() * 3;
-      c.beginPath(); c.moveTo(0, y);
-      for (var x = 0; x <= n; x += 64) c.lineTo(x, y + Math.sin(x / 90 + i) * 6 + (r() - 0.5) * 4);
+  function finish(kind, c, hsl) {
+    var out = { kind: kind, color: c.clone(), rough: 0.85, metal: 0, tex: null, scale: 1 };
+    switch (kind) {
+      case 'wood': // light oak / teak-walnut / dark walnut by lightness
+        out.color.set(hsl.l > 0.6 ? '#C9A67C' : hsl.l > 0.33 ? '#8A5A36' : '#4A3222'); out.rough = 0.5; out.tex = 'wood'; out.scale = 0.8; break;
+      case 'foliage':
+        out.color.setHSL(0.22 + (hsl.h - 0.22) * 0.4, Math.min(hsl.s, 0.45), Math.min(Math.max(hsl.l * 0.8, 0.18), 0.36)); out.rough = 0.6; break;
+      case 'stone': out.color.set('#CFC6B8'); out.rough = 0.4; out.tex = 'stone'; out.scale = 0.5; break;
+      case 'black': out.color.set('#161616'); out.rough = 0.35; out.metal = 0.25; break;
+      case 'metal': out.color.set('#B8BABC'); out.rough = 0.3; out.metal = 0.9; break;
+      case 'porcelain': out.color.set('#F4F2EE'); out.rough = 0.3; break;
+      case 'fabric': // linen / boucle in the same light family
+        out.color.setHSL(hsl.h, Math.min(hsl.s, 0.12), Math.min(Math.max(hsl.l, 0.55), 0.88)); out.rough = 0.95; out.tex = 'fabric'; out.scale = 0.18; break;
+      case 'charcoal': out.color.set(hsl.l < 0.2 ? '#2B2B2D' : '#4A4947'); out.rough = 0.95; out.tex = 'fabric'; out.scale = 0.18; break;
+      case 'accent': // saturated upholstery reads better as a muted velvet of the same hue
+        out.color.setHSL(hsl.h, Math.min(hsl.s * 0.55, 0.45), Math.min(Math.max(hsl.l, 0.22), 0.45)); out.rough = 0.85; out.tex = 'fabric'; out.scale = 0.18; break;
+      case 'rug': out.color.set('#E2D9CB'); out.rough = 1; out.tex = 'rug'; out.scale = 1.2; break;
+    }
+    return out;
+  }
+  function proposal(b) {
+    var c = new THREE.Color(b.color), hsl = {}; c.getHSL(hsl);
+    return finish(nameKind(lookOf(b)) || colourKind(hsl), c, hsl);
+  }
+  // Generated textures: light, near-neutral, so the proposed colour tints them.
+  function grain(c, n, r) {
+    c.fillStyle = '#efe7dc'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 220; i++) { // long fibres with slow waves, some darker growth rings
+      var y = r() * n, dark = r() < 0.25; c.strokeStyle = 'rgba(60,40,25,' + (dark ? 0.18 + r() * 0.12 : 0.04 + r() * 0.08) + ')';
+      c.lineWidth = dark ? 1.5 + r() * 2.5 : 0.6 + r() * 1.2; c.beginPath(); c.moveTo(0, y);
+      for (var x = 0; x <= n; x += 32) c.lineTo(x, y + Math.sin(x / 140 + i * 0.7) * 9 + Math.sin(x / 37 + i) * 1.5);
       c.stroke();
     }
+    for (var k = 0; k < 3; k++) { // a few knots
+      var kx = r() * n, ky = r() * n; c.strokeStyle = 'rgba(60,40,25,.22)';
+      for (var j = 1; j < 6; j++) { c.beginPath(); c.ellipse(kx, ky, j * 5, j * 2, 0, 0, Math.PI * 2); c.stroke(); }
+    }
   }
-  function weave(c, n, r) { // fine fabric weave, light
-    c.fillStyle = '#eeeae4'; c.fillRect(0, 0, n, n);
-    for (var y = 0; y < n; y += 4) { c.fillStyle = 'rgba(0,0,0,' + (0.03 + r() * 0.03) + ')'; c.fillRect(0, y, n, 2); }
-    for (var x = 0; x < n; x += 4) { c.fillStyle = 'rgba(255,255,255,' + (0.03 + r() * 0.04) + ')'; c.fillRect(x, 0, 2, n); }
-    for (var i = 0; i < 4000; i++) { c.fillStyle = 'rgba(0,0,0,.04)'; c.fillRect(r() * n, r() * n, 1.5, 1.5); }
+  function weave(c, n, r) {
+    c.fillStyle = '#f2eee8'; c.fillRect(0, 0, n, n);
+    for (var y = 0; y < n; y += 3) { c.fillStyle = 'rgba(0,0,0,' + (0.03 + r() * 0.04) + ')'; c.fillRect(0, y, n, 1.5); }
+    for (var x = 0; x < n; x += 3) { c.fillStyle = 'rgba(0,0,0,' + (0.02 + r() * 0.03) + ')'; c.fillRect(x, 0, 1.5, n); }
+    for (var i = 0; i < 9000; i++) { c.fillStyle = 'rgba(' + (r() < 0.5 ? '0,0,0' : '255,255,255') + ',.06)'; c.fillRect(r() * n, r() * n, 2, 2); } // slub
+  }
+  function speckle(c, n, r) { // honed travertine / terrazzo
+    c.fillStyle = '#eeeae3'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 2600; i++) {
+      var g = 120 + r() * 100 | 0; c.fillStyle = 'rgba(' + g + ',' + (g - 8) + ',' + (g - 18) + ',' + (0.15 + r() * 0.35) + ')';
+      c.beginPath(); c.arc(r() * n, r() * n, 0.8 + r() * 3, 0, Math.PI * 2); c.fill();
+    }
+    for (var k = 0; k < 18; k++) { c.fillStyle = 'rgba(170,160,145,.12)'; c.fillRect(0, r() * n, n, 2 + r() * 6); } // travertine banding
+  }
+  function wool(c, n, r) { // hand-tufted rug: soft field with a quiet lattice
+    c.fillStyle = '#f1ece3'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 26000; i++) { c.fillStyle = 'rgba(' + (r() < 0.5 ? '0,0,0' : '255,255,255') + ',.05)'; c.fillRect(r() * n, r() * n, 2.5, 2.5); }
+    c.strokeStyle = 'rgba(110,100,85,.18)'; c.lineWidth = 6;
+    for (var d = -n; d < n * 2; d += n / 4) {
+      c.beginPath(); c.moveTo(d, 0); c.lineTo(d + n, n); c.stroke();
+      c.beginPath(); c.moveTo(d + n, 0); c.lineTo(d, n); c.stroke();
+    }
   }
   function procFor(kind) {
     if (!procTex[kind]) {
       var c = document.createElement('canvas'); c.width = c.height = 512;
-      (kind === 'wood' ? grain : weave)(c.getContext('2d'), 512, rng(kind === 'wood' ? 11 : 13));
+      ({ wood: grain, fabric: weave, stone: speckle, rug: wool })[kind](c.getContext('2d'), 512, rng({ wood: 11, fabric: 13, stone: 17, rug: 19 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
     }
     return procTex[kind];
-  }
-  // Wood shading colours in Revit are often saturated yellows: pull them toward a real wood.
-  function woodTone(hex) {
-    var c = new THREE.Color(hex), hsl = {}; c.getHSL(hsl);
-    return c.setHSL(Math.min(hsl.h, 0.09), Math.min(hsl.s, 0.45), Math.min(Math.max(hsl.l, 0.28), 0.62));
   }
   // World-space texture projection blended by the face's normal (works without UVs).
   function triplanar(mat, tex, sx, sy) {
@@ -1221,22 +1287,67 @@
     mat.extensions = { derivatives: true };
     return mat;
   }
-  function lookMaterial(b) {
-    var base = { color: b.color, roughness: 0.85, flatShading: true, side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true };
-    var l = lookOf(b);
-    if (!l) return new THREE.MeshStandardMaterial(base);
-    var kind = kindOf(l), full = LOOK_GROUPS[b.grp];
-    if (l.metal || kind === 'metal') { base.metalness = 0.85; base.roughness = 0.3; }
-    else if (l.gloss != null) base.roughness = Math.min(0.95, Math.max(0.12, 1 - l.gloss * 0.85));
-    else base.roughness = { wood: 0.55, fabric: 0.95, stone: 0.25, plastic: 0.4 }[kind] || 0.85;
-    if (!full) return new THREE.MeshStandardMaterial(base); // walls/slabs: keep the shading colour
-    if (l.rgb && /generic/i.test(l.schema || '') && !l.tex) base.color = new THREE.Color(l.rgb[0] / 255, l.rgb[1] / 255, l.rgb[2] / 255);
-    if (kind === 'wood' && !l.tex) base.color = woodTone(b.color);
-    var mat = new THREE.MeshStandardMaterial(base);
-    if (l.tex) { mat.color.set('#ffffff'); return triplanar(mat, texFile(l.tex), l.sx || 0.3, l.sy || l.sx || 0.3); }
-    if (kind === 'wood') return triplanar(mat, procFor('wood'), 0.9, 0.9);
-    if (kind === 'fabric') return triplanar(mat, procFor('fabric'), 0.12, 0.12);
-    return mat;
+  function makeMaterial(p, smooth) {
+    var mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.rough, metalness: p.metal, flatShading: !smooth,
+      envMapIntensity: p.metal ? 1 : 0.7, side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
+    return p.tex ? triplanar(mat, procFor(p.tex), p.scale, p.scale) : mat;
+  }
+  function lookMaterial(b, smooth) {
+    if (!PROPOSE[b.grp]) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, flatShading: true, envMapIntensity: 0.75,
+      side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
+    return makeMaterial(proposal(b), smooth);
+  }
+
+  /* Furniture geometry: rugs (thin horizontal pieces lying on a floor) are split off and dressed
+     as wool; the rest gets smooth shading with a 35-degree crease, so cushions, chairs and plants
+     read as soft forms while box edges stay crisp. */
+  var COS_CREASE = Math.cos(35 * Math.PI / 180), WET = { wet: 1 };
+  function furnParts(g) {
+    var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
+    var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
+    function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.04) return true; return false; }
+    var keep = [], rug = [], wet = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
+    for (var t = 0; t < idx.length; t += 3) {
+      var a = idx[t], b = idx[t + 1], c = idx[t + 2];
+      if (onFloor(p[a * 3 + 1] * k + oy) && onFloor(p[b * 3 + 1] * k + oy) && onFloor(p[c * 3 + 1] * k + oy)) { rug.push(a, b, c); continue; }
+      // pieces standing in bathrooms/WCs are sanitary ware: porcelain, not fabric
+      var cx = (p[a * 3] + p[b * 3] + p[c * 3]) / 3 * k + ox, cy = (p[a * 3 + 1] + p[b * 3 + 1] + p[c * 3 + 1]) / 3 * k + oy, cz = (p[a * 3 + 2] + p[b * 3 + 2] + p[c * 3 + 2]) / 3 * k + oz;
+      (roomAt(cx - CX, cy, cz + CY, WET) ? wet : keep).push(a, b, c);
+    }
+    var rugGeo = null;
+    if (rug.length >= 6) { rugGeo = new THREE.BufferGeometry(); rugGeo.setAttribute('position', g.attributes.position); rugGeo.setIndex(rug); }
+    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null };
+  }
+  function creased(p, idx) {
+    var F = idx.length / 3, nv = p.length / 3, fn = new Float32Array(F * 3);
+    for (var f = 0; f < F; f++) {
+      var a = idx[f * 3] * 3, b = idx[f * 3 + 1] * 3, c = idx[f * 3 + 2] * 3;
+      var ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+      fn[f * 3] = uy * vz - uz * vy; fn[f * 3 + 1] = uz * vx - ux * vz; fn[f * 3 + 2] = ux * vy - uy * vx; // area-weighted
+    }
+    var start = new Uint32Array(nv + 1), list = new Uint32Array(idx.length);
+    for (var i = 0; i < idx.length; i++) start[idx[i] + 1]++;
+    for (i = 0; i < nv; i++) start[i + 1] += start[i];
+    var fill = start.slice(0, nv);
+    for (i = 0; i < idx.length; i++) list[fill[idx[i]]++] = (i / 3) | 0;
+    var pos = new Int16Array(idx.length * 3), nrm = new Float32Array(idx.length * 3);
+    for (f = 0; f < F; f++) {
+      var fx = fn[f * 3], fy = fn[f * 3 + 1], fz = fn[f * 3 + 2], fl = Math.hypot(fx, fy, fz) || 1;
+      for (var corner = 0; corner < 3; corner++) {
+        var v = idx[f * 3 + corner], sx = 0, sy = 0, sz = 0;
+        for (var j = start[v]; j < start[v + 1]; j++) {
+          var g2 = list[j], gx = fn[g2 * 3], gy = fn[g2 * 3 + 1], gz = fn[g2 * 3 + 2];
+          if ((fx * gx + fy * gy + fz * gz) / (fl * (Math.hypot(gx, gy, gz) || 1)) >= COS_CREASE) { sx += gx; sy += gy; sz += gz; }
+        }
+        var sl = Math.hypot(sx, sy, sz) || 1, o = (f * 3 + corner) * 3;
+        pos[o] = p[v * 3]; pos[o + 1] = p[v * 3 + 1]; pos[o + 2] = p[v * 3 + 2];
+        nrm[o] = sx / sl; nrm[o + 1] = sy / sl; nrm[o + 2] = sz / sl;
+      }
+    }
+    var out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+    return out;
   }
 
   if (MESH) loadMesh();
