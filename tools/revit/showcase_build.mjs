@@ -34,7 +34,8 @@ const out = {
   partialRooms: cfg.partialRooms ?? false,
   project: {...ex.project, ...(cfg.project || {})},
   levels: [],
-  site: []
+  site: [],
+  views: ex.views || [] // Revit perspective views: {name, eye:[x,y,z], dir:[x,y,z]} in metres
 };
 for (const L of ex.levels) {
   const n = names[L.name];

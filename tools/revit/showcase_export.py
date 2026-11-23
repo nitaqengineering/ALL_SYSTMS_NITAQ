@@ -166,7 +166,18 @@ for i, lv in enumerate(levels):
     if L['rooms'] or L['walls'] or L['slabs']:
         out.append(L)
 
+# Perspective 3D views (Revit cameras) become ready-made scenes in the viewer: eye position and
+# look direction in metres. Model coordinates match the rooms and slabs above.
+views = []
+for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D):
+    if v.IsTemplate or not v.IsPerspective:
+        continue
+    o = v.GetOrientation()
+    e, d = o.EyePosition, o.ForwardDirection
+    views.append({'name': v.Name, 'eye': [r3(e.X), r3(e.Y), r3(e.Z)],
+                  'dir': [round(d.X, 3), round(d.Y, 3), round(d.Z, 3)]})
+views.sort(key=lambda x: x['name'])
 pi = doc.ProjectInformation
 result = {'project': {'name': pi.Name or doc.Title, 'ref': pi.Number or '', 'location': pi.Address or ''},
-          'levels': out,
+          'levels': out, 'views': views,
           'unplacedRooms': [r.get_Parameter(DB.BuiltInParameter.ROOM_NAME).AsString() for r in all_rooms if r.Area <= 0]}

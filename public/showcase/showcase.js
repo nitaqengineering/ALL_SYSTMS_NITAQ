@@ -13,7 +13,7 @@
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
       rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
-      facts: 'بيانات المشروع', rooms: 'الفراغات', total: 'مجموع الفراغات',
+      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
@@ -22,7 +22,7 @@
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
-      facts: 'Project facts', rooms: 'Spaces', total: 'Spaces total',
+      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
@@ -341,6 +341,17 @@
     });
     $('totalV').textContent = fmt(sum) + ' ' + T('m') + ' · ' + fmt(sum * SQFT) + ' ' + T('ft');
     $('totalK').parentNode.hidden = !L.rooms.length;
+    var views = D.views || [], sl = $('scenes');
+    $('scenesSec').hidden = !views.length; $('kScenes').textContent = T('scenes'); sl.innerHTML = '';
+    views.forEach(function (v, i) {
+      var li = document.createElement('li'), a = document.createElement('b'), sp = document.createElement('span');
+      var lv = D.levels[sceneLevel(v)];
+      a.style.fontWeight = 400; a.textContent = T('scene') + ' ' + (i + 1) + ' · ' + sceneName(v);
+      sp.textContent = nm(lv);
+      li.appendChild(a); li.appendChild(sp);
+      li.onclick = function () { goScene(v); };
+      sl.appendChild(li);
+    });
     // Plan text notes (spaces with no Revit room): name-only labels, not clickable.
     noteLbls = (L.notes || []).map(function (n) {
       var d = document.createElement('div');
@@ -457,6 +468,37 @@
     }
     syncDock();
   }
+  // Revit perspective views: the level is the highest one at least 1 m below the camera.
+  function sceneLevel(v) {
+    var li = 0;
+    D.levels.forEach(function (L, i) { if (L.elevation <= v.eye[2] - 1) li = i; });
+    return li;
+  }
+  // Scene label: the space it stands in; else, inside the house, the nearest named space; else outside.
+  function sceneName(v) {
+    var L = D.levels[sceneLevel(v)], x = v.eye[0], y = v.eye[1], n = nameAt(L, x, y);
+    if (n) return n;
+    var inside = (L.slabs || []).some(function (sl) { return inPoly(x, y, sl.poly); });
+    if (!inside) return T('outside');
+    var best = Infinity, name = '';
+    L.rooms.map(function (r) { return { x: r._c[0], y: r._c[1], o: r }; })
+      .concat((L.notes || []).map(function (n) { return { x: n.x, y: n.y, o: n }; }))
+      .forEach(function (c) { var d = (c.x - x) * (c.x - x) + (c.y - y) * (c.y - y); if (d < best) { best = d; name = nm(c.o); } });
+    return name ? T('near') + ' ' + name : T('outside');
+  }
+  function goScene(v) {
+    if (MESH && !meshGroups.arch) return;
+    var li = sceneLevel(v);
+    if (li !== S.level) { S.level = li; S.sel = null; renderUI(); }
+    if (!S.walk) setWalk(true);
+    applyLevel();
+    var w = P(v.eye[0], v.eye[1]);
+    W.floor = v.eye[2] - EYE; W.target = null;
+    W.pos.set(w.x, W.floor, w.z); W.eye.set(w.x, v.eye[2], w.z);
+    W.yaw = Math.atan2(v.dir[0], v.dir[1]);
+    W.pitch = -Math.asin(Math.max(-1, Math.min(1, v.dir[2])));
+    lastRoom = null;
+  }
   function walkTo(e) {
     var b = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
@@ -544,14 +586,15 @@
   });
   // Name of the space under the walker: a Revit room, else the nearest plan note within 4 m.
   var lastRoom = null;
+  function nameAt(L, x, y) {
+    var r = L.rooms.filter(function (r) { return inPoly(x, y, r.poly); })[0], name = '';
+    if (r) return nm(r);
+    var best = 16;
+    (L.notes || []).forEach(function (n) { var d = (n.x - x) * (n.x - x) + (n.y - y) * (n.y - y); if (d < best) { best = d; name = nm(n); } });
+    return name;
+  }
   function showRoom() {
-    var L = D.levels[S.level], x = W.pos.x + CX, y = -W.pos.z + CY, name = '';
-    var r = L.rooms.filter(function (r) { return inPoly(x, y, r.poly); })[0];
-    if (r) name = nm(r);
-    else {
-      var best = 16;
-      (L.notes || []).forEach(function (n) { var d = (n.x - x) * (n.x - x) + (n.y - y) * (n.y - y); if (d < best) { best = d; name = nm(n); } });
-    }
+    var name = nameAt(D.levels[S.level], W.pos.x + CX, -W.pos.z + CY);
     if (name === lastRoom) return;
     lastRoom = name;
     $('here').hidden = !name; $('here').textContent = T('inRoom') + ': ' + name;

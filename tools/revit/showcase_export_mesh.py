@@ -103,7 +103,8 @@ for e in DB.FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType(
     fb = DEFAULT
     if c.Material is not None:
         fb = material(c.Material.Id, DEFAULT)
-    grp = 'furn' if c.Name in FURN else 'arch'
+    # doors are their own group: the walk mode lets the visitor pass through them
+    grp = 'furn' if c.Name in FURN else 'door' if c.Name == 'Doors' else 'arch'
     n = walk(geo, grp, fb)
     if n:
         stats['elements'] += 1
