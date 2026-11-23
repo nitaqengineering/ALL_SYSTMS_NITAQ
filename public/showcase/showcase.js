@@ -11,20 +11,22 @@
 
   var STR = {
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
-      rotate: 'دوران', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
+      rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
       facts: 'بيانات المشروع', rooms: 'الفراغات', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
+      walkHint: 'اسحب للنظر حولك · اضغط على الأرض للانتقال · W A S D أو عصا التحكم للمشي', inRoom: 'أنت في',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
-      rotate: 'Rotate', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
+      rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
       facts: 'Project facts', rooms: 'Spaces', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
+      walkHint: 'Drag to look around · tap the floor to move there · W A S D or the joystick to walk', inRoom: 'You are in',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -33,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -201,14 +203,15 @@
   canvas.addEventListener('pointerdown', function (e) { canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId] = [e.clientX, e.clientY]; moved = 0; });
   canvas.addEventListener('pointermove', function (e) {
     var p = ptrs[e.pointerId];
-    if (!p) { pick(e); return; }
+    if (!p) { if (!S.walk) pick(e); return; }
     var dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs[e.pointerId] = [e.clientX, e.clientY];
     var ids = Object.keys(ptrs);
     if (ids.length === 2) {
       var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      if (pinch) goal.r = clampR(goal.r * pinch / d); pinch = d; return;
+      if (pinch && !S.walk) goal.r = clampR(goal.r * pinch / d); pinch = d; return;
     }
     moved += Math.abs(dx) + Math.abs(dy);
+    if (S.walk) { W.yaw -= dx * 0.004; W.pitch = Math.max(-1.2, Math.min(1.2, W.pitch - dy * 0.004)); return; }
     if (e.shiftKey || e.buttons === 2) {
       var k = cam.r * 0.0012, right = new THREE.Vector3(Math.cos(cam.th), 0, -Math.sin(cam.th)), fwd = new THREE.Vector3(Math.sin(cam.th), 0, Math.cos(cam.th));
       goal.t.addScaledVector(right, -dx * k).addScaledVector(fwd, -dy * k);
@@ -217,12 +220,17 @@
       S.auto = false; syncDock();
     }
   });
-  function up(e) { delete ptrs[e.pointerId]; pinch = 0; if (moved < 5 && e.type === 'pointerup') { pick(e); select(S.hover, true); } }
+  function up(e) {
+    delete ptrs[e.pointerId]; pinch = 0;
+    if (moved >= 5 || e.type !== 'pointerup') return;
+    if (S.walk) { walkTo(e); return; }
+    pick(e); select(S.hover, true);
+  }
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('pointerleave', function () { setHover(null); });
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   function clampR(r) { return Math.min(SIZE * 7, Math.max(SIZE * 0.5, r)); }
-  canvas.addEventListener('wheel', function (e) { e.preventDefault(); goal.r = clampR(goal.r * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
+  canvas.addEventListener('wheel', function (e) { e.preventDefault(); if (S.walk) return; goal.r = clampR(goal.r * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
 
   /* ---------- picking / selection ---------- */
   var ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -258,19 +266,22 @@
   function syncDock() {
     $('bRotate').classList.toggle('on', S.auto);
     $('bWalls').classList.toggle('on', S.full);
+    $('bWalk').classList.toggle('on', S.walk);
+    $('app').classList.toggle('walking', S.walk);
+    $('hint').textContent = S.walk ? T('walkHint') : T('hint');
     $('bFurn').classList.toggle('on', S.furn); $('bFurn').hidden = !MESH;
   }
   function applyLevel() {
     levelGroups.forEach(function (g, i) {
-      g.G.visible = i <= S.level;
-      var cut = i === S.level && !S.full;
+      g.G.visible = S.walk || i <= S.level;
+      var cut = i === S.level && !S.full && !S.walk;
       g.cut.visible = cut; g.full.visible = !cut;
     });
     lamps.children.forEach(function (l) { l.visible = l.userData.level === S.level; });
     site.visible = levelY() >= -0.5; // site paving would cover a basement
     // Cut at plan height on the current level; "full walls" cuts just under the next floor slab.
     var L = D.levels[S.level], next = D.levels[S.level + 1];
-    cutPlane.constant = S.full ? (next ? next.elevation - 0.45 : 1e6) : L.elevation + (L._slabTop || 0) + CUT;
+    cutPlane.constant = S.walk ? 1e6 : S.full ? (next ? next.elevation - 0.45 : 1e6) : L.elevation + (L._slabTop || 0) + CUT;
     if (meshGroups.furn) meshGroups.furn.visible = S.furn;
     goal.t.y = levelY();
   }
@@ -287,8 +298,8 @@
     $('tLoc').textContent = S.lang === 'ar' ? (p.locationAr || p.location || '') : (p.location || '');
     $('tSample').hidden = !D.sample; $('tSample').textContent = T('sample');
     $('btnNight').textContent = S.night ? T('day') : T('night'); $('btnLang').textContent = T('lang');
-    ['Rotate', 'Doll', 'Plan', 'Walls', 'Furn', 'Reset'].forEach(function (k) { $('b' + k).textContent = T(k.toLowerCase()); });
-    $('hint').textContent = T('hint'); $('kFacts').textContent = T('facts'); $('kRooms').textContent = T('rooms');
+    ['Rotate', 'Walk', 'Doll', 'Plan', 'Walls', 'Furn', 'Reset'].forEach(function (k) { $('b' + k).textContent = T(k.toLowerCase()); });
+    $('kFacts').textContent = T('facts'); $('kRooms').textContent = T('rooms');
     $('cta').textContent = T('cta'); $('foot').textContent = T('foot'); $('totalK').textContent = T('total');
 
     var all = [].concat.apply([], D.levels.map(function (l) { return l.rooms; }));
@@ -306,7 +317,7 @@
     D.levels.slice().reverse().forEach(function (l) {
       var i = D.levels.indexOf(l), b = document.createElement('button');
       b.className = 'btn' + (i === S.level ? ' on' : ''); b.textContent = nm(l);
-      b.onclick = function () { S.level = i; S.sel = null; applyLevel(); renderUI(); paint(); };
+      b.onclick = function () { S.level = i; S.sel = null; applyLevel(); renderUI(); paint(); if (S.walk) placeWalker(W.pos.x, W.pos.z); };
       lv.appendChild(b);
     });
 
@@ -336,17 +347,184 @@
     syncDock(); paint();
   }
   function mode(plan) {
+    if (S.walk) setWalk(false);
     $('bDoll').classList.toggle('on', !plan); $('bPlan').classList.toggle('on', plan);
     S.auto = false; S.sel = null; home(plan ? 0.02 : HOME.ph); if (plan) goal.th = 0; syncDock(); paint();
   }
   $('bDoll').onclick = function () { mode(false); };
   $('bPlan').onclick = function () { mode(true); };
   $('bReset').onclick = function () { S.full = false; applyLevel(); mode(false); };
-  $('bRotate').onclick = function () { S.auto = !S.auto; syncDock(); };
+  $('bRotate').onclick = function () { if (S.walk) setWalk(false); S.auto = !S.auto; syncDock(); };
+  $('bWalk').onclick = function () { if (S.walk) mode(false); else setWalk(true); };
   $('bWalls').onclick = function () { S.full = !S.full; applyLevel(); syncDock(); };
   $('bFurn').onclick = function () { S.furn = !S.furn; applyLevel(); syncDock(); };
   $('btnNight').onclick = function () { S.night = !S.night; applyNight(); renderUI(); };
   $('btnLang').onclick = function () { S.lang = S.lang === 'ar' ? 'en' : 'ar'; renderUI(); };
+
+  /* ---------- walk mode ----------
+     First-person view at eye height. Drag to look, tap the floor to move there,
+     WASD/arrows or the on-screen joystick to walk. Walls block; door leaves and glass
+     (surfaces thinner than 8 cm) do not, so the walker passes through closed doors.
+     The floor or stair tread under the walker sets its height, so stairs can be climbed. */
+  var EYE = 1.6, CHEST = 1.2, RADIUS = 0.3, SPEED = 1.5, MAX_STEP = 0.35;
+  var W = { pos: new THREE.Vector3(), eye: new THREE.Vector3(), target: null, yaw: 0, pitch: 0.05, floor: 0, keys: {}, joy: [0, 0] };
+  var hit = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0), tmp = new THREE.Vector3(), org = new THREE.Vector3();
+  var solids = [], backs = [];
+  function colliders() {
+    solids = []; backs = [];
+    // Real geometry: the arch group (furniture does not block). Sample model: walls and floors.
+    var roots = MESH ? [meshGroups.arch] : levelGroups.map(function (g) { return g.full; }).concat(levelGroups.map(function (g) { return g.G.children[0]; }));
+    roots.forEach(function (r) {
+      if (r) r.traverse(function (o) {
+        if (!o.isMesh) return;
+        if (o.material.side === THREE.BackSide) backs.push(o); else solids.push(o);
+      });
+    });
+  }
+  function isGlass(o) { return o.material.transparent; }
+  // Distance to the first blocking surface along dir from p, or Infinity.
+  function blockedAt(p, dir, far) {
+    hit.set(p, dir); hit.near = 0; hit.far = far;
+    var front = hit.intersectObjects(solids, false);
+    for (var i = 0; i < front.length; i++) {
+      var f = front[i];
+      if (isGlass(f.object)) continue;
+      if (backs.length) { // the navy back-face copies tell us where this surface ends
+        hit.far = f.distance + 0.5;
+        var back = hit.intersectObjects(backs, false).filter(function (b) { return b.distance > f.distance + 0.001; })[0];
+        hit.far = far;
+        if (back && back.distance - f.distance < 0.08) continue; // a door leaf or thin panel: pass through
+      }
+      return f.distance;
+    }
+    return Infinity;
+  }
+  // Height of the walkable surface under (x, z), searching down from `from`; null if none.
+  function floorAt(x, z, from) {
+    hit.set(org.set(x, from, z), down); hit.near = 0; hit.far = 6;
+    var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object) && h.face && h.face.normal.y > 0; })[0];
+    return f ? f.point.y : null;
+  }
+  function levelFloor() { var L = D.levels[S.level]; return L.elevation + (L._slabTop || 0); }
+  function placeWalker(x, z) {
+    var base = levelFloor(), f = floorAt(x, z, base + 1.2);
+    W.floor = f != null && Math.abs(f - base) < 1.5 ? f : base;
+    W.pos.set(x, W.floor, z); W.target = null;
+    W.eye.set(x, W.floor + EYE, z);
+  }
+  function startPoint() {
+    var L = D.levels[S.level];
+    if (S.sel) return P(S.sel._c[0], S.sel._c[1]);
+    var n = (L.notes || [])[0];
+    if (n) return P(n.x, n.y);
+    var big = L.rooms.slice().sort(function (a, b) { return b.area - a.area; })[0];
+    return big ? P(big._c[0], big._c[1]) : new THREE.Vector3();
+  }
+  function setWalk(on) {
+    if (on && MESH && !meshGroups.arch) return; // geometry still loading
+    S.walk = on; S.auto = false; lastRoom = null;
+    camera.fov = on ? 70 : 32; camera.near = on ? 0.05 : 0.1; camera.updateProjectionMatrix();
+    applyLevel();
+    if (on) {
+      $('bDoll').classList.remove('on'); $('bPlan').classList.remove('on');
+      colliders();
+      var p = startPoint(); placeWalker(p.x, p.z);
+      W.yaw = -cam.th; W.pitch = 0.05; W.keys = {};
+    }
+    syncDock();
+  }
+  function walkTo(e) {
+    var b = canvas.getBoundingClientRect();
+    ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
+    hit.setFromCamera(ndc, camera); hit.near = 0; hit.far = 60;
+    var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object); })[0];
+    if (!f || !f.face) return;
+    if (f.face.normal.y > 0.6 && f.point.y < W.floor + 1.2) W.target = f.point.clone();
+    else { // tapped a wall: walk up to just in front of it
+      tmp.copy(f.point).sub(W.pos); tmp.y = 0;
+      var d = tmp.length(); if (d < 0.6) return;
+      W.target = W.pos.clone().addScaledVector(tmp.normalize(), d - 0.5);
+    }
+  }
+  var move = new THREE.Vector3(), dir = new THREE.Vector3();
+  function stepWalk(dt) {
+    var fwd = (W.keys.w || W.keys.arrowup ? 1 : 0) - (W.keys.s || W.keys.arrowdown ? 1 : 0) + W.joy[1];
+    var side = (W.keys.d ? 1 : 0) - (W.keys.a ? 1 : 0) + W.joy[0];
+    W.yaw += ((W.keys.arrowright ? 1 : 0) - (W.keys.arrowleft ? 1 : 0)) * dt * 1.6;
+    move.set(0, 0, 0);
+    if (fwd || side) {
+      W.target = null;
+      var sy = Math.sin(W.yaw), cy = Math.cos(W.yaw);
+      move.set(sy * fwd + cy * side, 0, -cy * fwd + sy * side);
+      if (move.length() > 1) move.normalize();
+      move.multiplyScalar(SPEED * (W.keys.shift ? 2 : 1) * dt);
+    } else if (W.target) {
+      move.copy(W.target).sub(W.pos); move.y = 0;
+      var d = move.length();
+      if (d < 0.05) W.target = null;
+      else move.multiplyScalar(Math.min(1, SPEED * 1.6 * dt / d));
+    }
+    var len = move.length();
+    if (len > 1e-5) {
+      dir.copy(move).divideScalar(len);
+      var wall = blockedAt(org.set(W.pos.x, W.floor + CHEST, W.pos.z), dir, len + RADIUS);
+      if (wall < len + RADIUS) { len = Math.max(0, wall - RADIUS); W.target = null; }
+      var nx = W.pos.x + dir.x * len, nz = W.pos.z + dir.z * len;
+      var f = floorAt(nx, nz, W.floor + MAX_STEP + 0.05);
+      if (f == null || f - W.floor <= MAX_STEP) { // no step too high; a drop or a gap is fine
+        W.pos.x = nx; W.pos.z = nz;
+        if (f != null && W.floor - f < 1.5) W.floor = f;
+      } else W.target = null;
+    }
+    W.pos.y = W.floor;
+    W.eye.lerp(tmp.set(W.pos.x, W.floor + EYE, W.pos.z), Math.min(1, dt * 12));
+    showRoom();
+  }
+  // Name of the space under the walker: a Revit room, else the nearest plan note within 4 m.
+  var lastRoom = null;
+  function showRoom() {
+    var L = D.levels[S.level], x = W.pos.x + CX, y = -W.pos.z + CY, name = '';
+    var r = L.rooms.filter(function (r) { return inPoly(x, y, r.poly); })[0];
+    if (r) name = nm(r);
+    else {
+      var best = 16;
+      (L.notes || []).forEach(function (n) { var d = (n.x - x) * (n.x - x) + (n.y - y) * (n.y - y); if (d < best) { best = d; name = nm(n); } });
+    }
+    if (name === lastRoom) return;
+    lastRoom = name;
+    $('here').hidden = !name; $('here').textContent = T('inRoom') + ': ' + name;
+  }
+  function inPoly(x, y, p) {
+    var c = false;
+    for (var i = 0, j = p.length - 1; i < p.length; j = i++)
+      if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
+    return c;
+  }
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; } };
+  window.addEventListener('keydown', function (e) {
+    if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
+    var k = e.key.toLowerCase();
+    if (k === 'escape') { mode(false); return; }
+    W.keys[k] = true; W.keys.shift = e.shiftKey;
+    if (/^arrow/.test(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', function (e) { W.keys[e.key.toLowerCase()] = false; W.keys.shift = e.shiftKey; });
+  window.addEventListener('blur', function () { W.keys = {}; });
+  // On-screen joystick (touch or mouse).
+  (function () {
+    var pad = $('joy'), knob = pad.firstElementChild, id = null;
+    function set(e) {
+      var b = pad.getBoundingClientRect(), r = b.width / 2;
+      var x = (e.clientX - b.left - r) / r, y = (e.clientY - b.top - r) / r, d = Math.hypot(x, y);
+      if (d > 1) { x /= d; y /= d; }
+      W.joy = [x, -y];
+      knob.style.transform = 'translate(' + (x * r * 0.55) + 'px,' + (y * r * 0.55) + 'px)';
+    }
+    pad.addEventListener('pointerdown', function (e) { id = e.pointerId; try { pad.setPointerCapture(id); } catch (err) { /* synthetic or ended pointer */ } set(e); e.stopPropagation(); });
+    pad.addEventListener('pointermove', function (e) { if (e.pointerId === id) set(e); });
+    function end(e) { if (e.pointerId !== id) return; id = null; W.joy = [0, 0]; knob.style.transform = ''; }
+    pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+  })();
 
   /* ---------- loop ---------- */
   function resize() {
@@ -359,14 +537,23 @@
   }
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
   var v = new THREE.Vector3();
+  var clock = new THREE.Clock();
   function frame() {
-    if (S.auto) goal.th += 0.0035;
-    var k = 0.12;
-    cam.th += (goal.th - cam.th) * k; cam.ph += (goal.ph - cam.ph) * k; cam.r += (goal.r - cam.r) * k; cam.t.lerp(goal.t, k);
-    var sp = Math.sin(cam.ph);
-    camera.position.set(cam.t.x + cam.r * sp * Math.sin(cam.th), cam.t.y + cam.r * Math.cos(cam.ph), cam.t.z + cam.r * sp * Math.cos(cam.th));
-    camera.lookAt(cam.t);
+    var dt = Math.min(clock.getDelta(), 0.1);
+    if (S.walk) {
+      stepWalk(dt);
+      camera.position.copy(W.eye);
+      camera.rotation.set(-W.pitch, -W.yaw, 0, 'YXZ');
+    } else {
+      if (S.auto) goal.th += 0.0035;
+      var k = 0.12;
+      cam.th += (goal.th - cam.th) * k; cam.ph += (goal.ph - cam.ph) * k; cam.r += (goal.r - cam.r) * k; cam.t.lerp(goal.t, k);
+      var sp = Math.sin(cam.ph);
+      camera.position.set(cam.t.x + cam.r * sp * Math.sin(cam.th), cam.t.y + cam.r * Math.cos(cam.ph), cam.t.z + cam.r * sp * Math.cos(cam.th));
+      camera.lookAt(cam.t);
+    }
     renderer.render(scene, camera);
+    $('labels').style.visibility = S.walk ? 'hidden' : '';
     var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
     L.rooms.forEach(function (r) {
       if (!r._lbl) return;
