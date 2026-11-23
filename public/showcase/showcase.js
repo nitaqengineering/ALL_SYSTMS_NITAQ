@@ -724,7 +724,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -789,6 +789,45 @@
   // Each bucket is one material colour: Int16 positions (quantised, see showcase_build.mjs)
   // and Uint16/Uint32 triangle indices. Opaque buckets get a navy back-face pass, so walls
   // cut by the section plane read as solid navy poché instead of hollow shells.
+  /* Outline edges: only real corners, i.e. edges shared by exactly two faces that meet at more
+     than `deg` degrees. THREE.EdgesGeometry also draws every edge with a single face, which in
+     Revit meshes includes the diagonals of faces split around openings (their triangles do not
+     share vertices across the split): those showed as stray diagonal lines on floors and walls
+     near doors. Vertices are matched by their (integer) position, so split pieces still join. */
+  function creaseEdges(g, deg) {
+    var p = g.attributes.position.array, idx = g.index ? g.index.array : null, n = idx ? idx.length : p.length / 3;
+    var ids = new Map(), vid = new Int32Array(p.length / 3), next = 0;
+    for (var v = 0; v < p.length / 3; v++) {
+      var key = p[v * 3] + ',' + p[v * 3 + 1] + ',' + p[v * 3 + 2], id = ids.get(key);
+      if (id === undefined) { id = next++; ids.set(key, id); }
+      vid[v] = id;
+    }
+    var fn = new Float32Array(n), edges = new Map(), cos = Math.cos(deg * Math.PI / 180), out = [];
+    for (var t = 0; t < n; t += 3) {
+      var a = idx ? idx[t] : t, b = idx ? idx[t + 1] : t + 1, c = idx ? idx[t + 2] : t + 2;
+      var ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2];
+      var wx = p[c * 3] - p[a * 3], wy = p[c * 3 + 1] - p[a * 3 + 1], wz = p[c * 3 + 2] - p[a * 3 + 2];
+      var nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx, l = Math.hypot(nx, ny, nz) || 1;
+      fn[t] = nx / l; fn[t + 1] = ny / l; fn[t + 2] = nz / l;
+      [[a, b], [b, c], [c, a]].forEach(function (e) {
+        var i = vid[e[0]], j = vid[e[1]];
+        if (i === j) return;
+        var k = i < j ? i * 4194304 + j : j * 4194304 + i, rec = edges.get(k);
+        if (!rec) edges.set(k, rec = { a: e[0], b: e[1], f: [] });
+        rec.f.push(t);
+      });
+    }
+    edges.forEach(function (e) {
+      if (e.f.length !== 2) return;
+      var f0 = e.f[0], f1 = e.f[1];
+      if (fn[f0] * fn[f1] + fn[f0 + 1] * fn[f1 + 1] + fn[f0 + 2] * fn[f1 + 2] > cos) return;
+      out.push(p[e.a * 3], p[e.a * 3 + 1], p[e.a * 3 + 2], p[e.b * 3], p[e.b * 3 + 1], p[e.b * 3 + 2]);
+    });
+    if (!out.length) return null;
+    var eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+    return eg;
+  }
   function loadMesh() {
     var note = $('loading'); note.hidden = false; note.textContent = T('loading');
     fetch(MESH.file).then(function (r) {
@@ -835,7 +874,7 @@
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
       setTimeout(function () {
-        edgeQueue.forEach(function (e) { e.grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(e.g, 30), edgeMat)); });
+        edgeQueue.forEach(function (e) { var eg = creaseEdges(e.g, 30); if (eg) e.grp.add(new THREE.LineSegments(eg, edgeMat)); });
         edgeQueue = [];
       }, 50);
     }).catch(function () { note.textContent = 'تعذّر تحميل المجسّم'; });
