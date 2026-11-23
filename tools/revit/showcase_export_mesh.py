@@ -5,7 +5,9 @@
 # Coordinates are written in millimetres, already in viewer axes: (x, z, -y).
 from pyrevit.api import DB
 from System.Collections.Generic import List
+from Autodesk.Revit.DB import Visual
 import io
+import os
 import json
 
 FT_MM = 304.8
@@ -27,7 +29,7 @@ opts = DB.Options()
 opts.DetailLevel = DB.ViewDetailLevel.Medium
 opts.IncludeNonVisibleObjects = False
 
-DEFAULT = ((214, 210, 202), 0)
+DEFAULT = ((214, 210, 202), 0, '')
 mats = {}
 
 
@@ -35,15 +37,100 @@ def eid(i):
     return i.IntegerValue if hasattr(i, 'IntegerValue') else i.Value
 
 
+# Render appearance of each material (what Revit's realistic view and renderer use):
+# diffuse colour, texture image with its real-world size, glossiness and metal flag.
+# Textures are looked up in the Autodesk material library (lowest resolution set first,
+# to keep the web page light), then next to the project file.
+looks = {}
+LIB = [os.path.join(os.environ.get('CommonProgramFiles', r'C:\Program Files\Common Files'), 'Autodesk Shared', 'Materials', 'Textures'),
+       os.path.join(os.environ.get('CommonProgramFiles(x86)', r'C:\Program Files (x86)\Common Files'), 'Autodesk Shared', 'Materials', 'Textures')]
+TO_M = {'inches': 0.0254, 'feet': 0.3048, 'millimeters': 0.001, 'centimeters': 0.01, 'meters': 1.0}
+
+
+def ascii_only(text):
+    # IronPython's json encoder fails on non-ASCII .NET strings (Cyrillic/Italian material names)
+    return ''.join([ch for ch in (text or '') if ord(ch) < 128])
+
+
+def find_texture(value):
+    for cand in [v.strip() for v in value.split('|') if v.strip()]:
+        cand = cand.replace('/', os.sep).replace('\\', os.sep)
+        tries = [cand] if os.path.isabs(cand) else \
+            [os.path.join(b, cand) for b in LIB] + [os.path.join(os.path.dirname(doc.PathName or ''), cand)]
+        for t in tries:
+            if os.path.isfile(t) and ascii_only(t) == t:
+                return t
+    return None
+
+
+def distance_m(prop):
+    try:
+        unit = prop.GetUnitTypeId().TypeId
+    except Exception:
+        unit = 'inches'
+    for k, f in TO_M.items():
+        if k in unit:
+            return float(prop.Value) * f
+    return float(prop.Value) * 0.0254
+
+
+def appearance(m):
+    ae = doc.GetElement(m.AppearanceAssetId) if eid(m.AppearanceAssetId) > 0 else None
+    if ae is None:
+        return None
+    try:
+        a = ae.GetRenderingAsset()
+    except Exception:
+        return None
+    if a is None or a.Size == 0:
+        return None
+    # cls/schema let the viewer give untextured materials a fitting surface (wood, fabric...).
+    look = {'name': ascii_only(m.Name), 'cls': ascii_only(m.MaterialClass), 'schema': ascii_only(a.Name)}
+    colour = a.FindByName('generic_diffuse')  # other schemas keep the material's shading colour
+    if colour is not None:
+        try:
+            c = colour.GetValueAsColor()
+            look['rgb'] = [int(c.Red), int(c.Green), int(c.Blue)]
+        except Exception:
+            pass
+        if colour.NumberOfConnectedProperties:
+            bmp = colour.GetSingleConnectedAsset()
+            path = bmp.FindByName('unifiedbitmap_Bitmap') if bmp is not None else None
+            tex = find_texture(str(path.Value)) if path is not None else None
+            if tex:
+                look['tex'] = tex
+                sx, sy = bmp.FindByName('texture_RealWorldScaleX'), bmp.FindByName('texture_RealWorldScaleY')
+                look['sx'] = round(distance_m(sx), 4) if sx is not None else 0.3
+                look['sy'] = round(distance_m(sy), 4) if sy is not None else look['sx']
+    g = a.FindByName('generic_glossiness')
+    if g is not None:
+        try:
+            look['gloss'] = round(float(g.Value), 3)
+        except Exception:
+            pass
+    mt = a.FindByName('generic_is_metal')
+    if mt is not None:
+        try:
+            look['metal'] = bool(mt.Value)
+        except Exception:
+            pass
+    return look
+
+
 def material(mid, fallback):
     k = eid(mid)
     if k in mats:
         return mats[k]
     m = doc.GetElement(mid) if k > 0 else None
-    r = fallback
+    r = (fallback[0], fallback[1], '')
     if isinstance(m, DB.Material):
         c = m.Color
-        r = ((c.Red, c.Green, c.Blue) if c.IsValid else fallback[0], m.Transparency)
+        look = appearance(m)
+        key = ''
+        if look:
+            key = 'm%d' % k
+            looks[key] = look
+        r = ((c.Red, c.Green, c.Blue) if c.IsValid else fallback[0], m.Transparency, key)
     mats[k] = r
     return r
 
@@ -53,7 +140,7 @@ stats = {'elements': 0, 'tris': 0, 'byCategory': {}}
 
 
 def bucket(grp, m):
-    key = '%s|%d,%d,%d|%d' % (grp, m[0][0], m[0][1], m[0][2], m[1])
+    key = '%s|%d,%d,%d|%d|%s' % (grp, m[0][0], m[0][1], m[0][2], m[1], m[2] if len(m) > 2 else '')
     b = buckets.get(key)
     if b is None:
         b = buckets[key] = {'p': [], 'i': []}
@@ -257,9 +344,11 @@ f = io.open(OUT, 'w', encoding='utf-8')
 f.write(u'{"view":%s,"buckets":{' % json.dumps(view.Name))
 for n, (k, b) in enumerate(buckets.items()):
     f.write(u'%s"%s":{"p":[%s],"i":[%s]}' % (u',' if n else u'', k, u','.join(map(str, b['p'])), u','.join(map(str, b['i']))))
-f.write(u'},"doors":%s}' % json.dumps(doors))
+f.write(u'},"doors":%s,"looks":%s}' % (json.dumps(doors), json.dumps(looks)))
 f.close()
 stats['doors'] = len(doors)
 stats['hingedLeaves'] = sum(len(d['hinges']) for d in doors)
+stats['looks'] = len(looks)
+stats['textured'] = len([l for l in looks.values() if 'tex' in l])
 stats['buckets'] = len(buckets)
 result = stats

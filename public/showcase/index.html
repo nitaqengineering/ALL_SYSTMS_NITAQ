@@ -68,6 +68,12 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .walking .here:not([hidden]){display:block}
 .stage canvas.map{position:absolute;bottom:84px;right:24px;width:170px;height:170px;border-radius:12px;background:#CFCBC3;border:2px solid var(--navy);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
 .walking .stage canvas.map{display:block}
+.walkctl{position:absolute;left:24px;bottom:84px;width:210px;background:rgba(16,23,37,.88);color:#fff;border-radius:12px;padding:10px 12px;display:none;flex-direction:column;gap:6px;font-size:11.5px;box-shadow:0 8px 24px rgba(16,23,37,.25)}
+.walking .walkctl{display:flex}
+.walkctl label{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.walkctl label b{font-weight:500;color:var(--gold);font-variant-numeric:tabular-nums}
+.walkctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--gold)}
+.walkctl .chk{display:flex;gap:6px;align-items:center;color:#C9CED8}
 .walking .title{opacity:0}
 .walking .hint{bottom:78px;inset-inline-start:50%;transform:translateX(50%);background:rgba(16,23,37,.7);color:#fff;padding:6px 12px;border-radius:999px;white-space:nowrap}
 [dir=ltr] .walking .hint{transform:translateX(-50%)}
@@ -94,6 +100,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   .btn{padding:8px 11px;font-size:12px}
   .hint{display:none}
   .stage canvas.map{width:120px;height:120px;bottom:70px;right:12px}
+  .walkctl{left:12px;width:150px;padding:8px 10px;font-size:10.5px}
 }
 </style>
 </head>
@@ -114,6 +121,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="loading" id="loading" hidden></div>
       <div class="here" id="here" hidden></div>
       <canvas class="map" id="map" aria-label="mini map"></canvas>
+      <div class="walkctl" id="walkctl"></div>
       <div class="title">
         <div class="k" id="tK"></div>
         <h1 id="tName"></h1>

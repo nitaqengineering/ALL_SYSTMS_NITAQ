@@ -4,7 +4,8 @@
 // public/showcase/data/<slug>.bin; the viewer then draws that instead of rebuilding walls.
 // config.json (optional): { main: ["GR","1ST"], site: ["0"], levelNames: {GR:["Ground Floor","الطابق الأرضي"]},
 //   project: { name, nameAr, location, locationAr, builtUp, plotArea, floors } }
-import {readFile, writeFile} from 'node:fs/promises';
+import {readFile, writeFile, copyFile, mkdir, rm} from 'node:fs/promises';
+import {extname} from 'node:path';
 
 const [src, slug, cfgPath, meshPath] = process.argv.slice(2);
 if (!src || !/^[a-z0-9-]{1,60}$/.test(slug || '')) {
@@ -83,6 +84,26 @@ if (meshPath) {
 // Pack mesh buckets into one binary: per bucket, Int16 positions (quantised around a shared
 // origin, identical vertices merged) followed by Uint16/Uint32 indices, 4-byte aligned.
 async function packMesh(mesh, binPath) {
+  // Render looks (Revit appearance): textures are copied next to the data as <slug>.tex/<n>.<ext>.
+  const texDir = binPath.replace(/\.bin$/, '.tex');
+  await rm(texDir, {recursive: true, force: true});
+  const looks = [], lookIndex = new Map(), texIndex = new Map();
+  for (const [key, l] of Object.entries(mesh.looks || {})) {
+    const look = {name: l.name, cls: l.cls, schema: l.schema, rgb: l.rgb, gloss: l.gloss, metal: l.metal};
+    if (l.tex) {
+      if (!texIndex.has(l.tex)) {
+        const file = `${texIndex.size}${extname(l.tex).toLowerCase()}`;
+        try {
+          await mkdir(texDir, {recursive: true});
+          await copyFile(l.tex, `${texDir}/${file}`);
+          texIndex.set(l.tex, file);
+        } catch { texIndex.set(l.tex, null); }
+      }
+      const file = texIndex.get(l.tex);
+      if (file) Object.assign(look, {tex: `${texDir.split('/').pop()}/${file}`, sx: l.sx, sy: l.sy});
+    }
+    lookIndex.set(key, looks.length); looks.push(look);
+  }
   const keys = Object.keys(mesh.buckets);
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const k of keys) {
@@ -101,7 +122,7 @@ async function packMesh(mesh, binPath) {
     const at = offset; offset += bytes.length + pad; return at;
   };
   for (const k of keys) {
-    const [grpKey, rgb, transp] = k.split('|');
+    const [grpKey, rgb, transp, lookKey] = k.split('|');
     // 'leaf:<door>:<hinge>' buckets are door leaves that the viewer swings open
     const [grp, door, hinge] = grpKey.split(':');
     const {p, i: idx} = mesh.buckets[k];
@@ -121,7 +142,7 @@ async function packMesh(mesh, binPath) {
     if (!tris.length) continue;
     const wide = pos.length / 3 > 65535;
     buckets.push({
-      grp, ...(grp === 'leaf' ? {door: +door, hinge: +hinge} : {}), color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
+      grp, ...(grp === 'leaf' ? {door: +door, hinge: +hinge} : {}), ...(lookKey && lookIndex.has(lookKey) ? {look: lookIndex.get(lookKey)} : {}), color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
       opacity: Math.round(100 - +transp) / 100,
       pos: push(Int16Array.from(pos)), verts: pos.length / 3,
       idx: push(wide ? Uint32Array.from(tris) : Uint16Array.from(tris)), count: tris.length, wide
@@ -132,7 +153,8 @@ async function packMesh(mesh, binPath) {
   console.log(`wrote ${binPath} — ${buckets.length} buckets, ${(bin.length / 1048576).toFixed(1)} MB, step ${step} mm`);
   // origin is in viewer axes (x, z, -y), millimetres; the viewer re-centres it.
   // hinges: [x, y (m, model plan), sign (+1 = counter-clockwise seen from above), angle (rad)]
-  return {origin, step, bytes: bin.length, buckets, doors: (mesh.doors || []).map((d) => d.hinges)};
+  console.log(`looks: ${looks.length}, textures copied: ${[...texIndex.values()].filter(Boolean).length}`);
+  return {origin, step, bytes: bin.length, buckets, doors: (mesh.doors || []).map((d) => d.hinges), looks};
 }
 
 const body = `/* NITAQ Showcase — ${out.project.name} (${out.project.ref || slug}).

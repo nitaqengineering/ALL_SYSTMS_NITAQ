@@ -17,7 +17,7 @@
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
-      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في',
+      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في', eyeH: 'ارتفاع النظر', lens: 'العدسة', pace: 'سرعة المشي', bob: 'حركة طبيعية للرأس', mUnit: 'م', mm: 'مم', ms: 'م/ث',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
@@ -26,7 +26,7 @@
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
-      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in',
+      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in', eyeH: 'Eye height', lens: 'Lens', pace: 'Walking speed', bob: 'Natural head motion', mUnit: 'm', mm: 'mm', ms: 'm/s',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', ceil: 'spots', auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', ceil: 'spots', eye: 1.6, lens: 24, pace: 1.4, bob: true, auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -222,7 +222,7 @@
       if (pinch && !S.walk) goal.r = clampR(goal.r * pinch / d); pinch = d; return;
     }
     moved += Math.abs(dx) + Math.abs(dy);
-    if (S.walk) { W.yaw -= dx * 0.004; W.pitch = Math.max(-1.2, Math.min(1.2, W.pitch - dy * 0.004)); return; }
+    if (S.walk) { W.yaw -= dx * 0.003; W.pitch = Math.max(-1.2, Math.min(1.2, W.pitch - dy * 0.003)); return; } // eased in stepWalk
     if (e.shiftKey || e.buttons === 2) {
       var k = cam.r * 0.0012, right = new THREE.Vector3(Math.cos(cam.th), 0, -Math.sin(cam.th)), fwd = new THREE.Vector3(Math.sin(cam.th), 0, Math.cos(cam.th));
       goal.t.addScaledVector(right, -dx * k).addScaledVector(fwd, -dy * k);
@@ -373,7 +373,7 @@
       d.className = 'lbl note'; d.textContent = nm(n); lb.appendChild(d);
       return { el: d, x: n.x, y: n.y };
     });
-    syncDock(); paint();
+    syncDock(); paint(); renderWalkCtl();
   }
   function mode(plan) {
     if (S.walk) setWalk(false);
@@ -395,8 +395,11 @@
      WASD/arrows or the on-screen joystick to walk. Walls block; door leaves and glass
      (surfaces thinner than 8 cm) do not, so the walker passes through closed doors.
      The floor or stair tread under the walker sets its height, so stairs can be climbed. */
-  var EYE = 1.6, CHEST = 1.2, RADIUS = 0.3, SPEED = 1.5, MAX_STEP = 0.35;
-  var W = { pos: new THREE.Vector3(), eye: new THREE.Vector3(), target: null, yaw: 0, pitch: 0.05, floor: 0, keys: {}, joy: [0, 0], turn: 0, glide: 0 };
+  // Eye height and pace come from the walk controls (S.eye, S.pace); 1.4 m/s is an adult's
+  // indoor walking pace, Shift doubles it. A stride is ~0.7 m: one head bob per step.
+  var EYE = 1.6, CHEST = 1.2, RADIUS = 0.3, MAX_STEP = 0.35, STRIDE = 0.7;
+  var W = { pos: new THREE.Vector3(), eye: new THREE.Vector3(), target: null, yaw: 0, pitch: 0.05, floor: 0, keys: {}, joy: [0, 0], turn: 0, glide: 0,
+    vel: new THREE.Vector3(), vy: 0, vp: 0.05, phase: 0, amp: 0, bobY: 0, bobX: 0 };
   var hit = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0), tmp = new THREE.Vector3(), org = new THREE.Vector3();
   var solids = [], backs = [];
   function colliders() {
@@ -470,16 +473,39 @@
     var big = L.rooms.slice().sort(function (a, b) { return b.area - a.area; })[0];
     return big ? P(big._c[0], big._c[1]) : new THREE.Vector3();
   }
+  function applyLens() {
+    if (S.walk) { camera.filmGauge = 36; camera.setFocalLength(S.lens); } else { camera.fov = 32; camera.updateProjectionMatrix(); }
+  }
+  // Walk controls: eye height, lens, pace and head motion.
+  function renderWalkCtl() {
+    var box = $('walkctl'); box.innerHTML = '';
+    [['eye', T('eyeH'), 1.0, 1.9, 0.05, T('mUnit'), 2], ['lens', T('lens'), 14, 50, 1, T('mm'), 0], ['pace', T('pace'), 0.6, 2.4, 0.1, T('ms'), 1]].forEach(function (c) {
+      var row = document.createElement('label'), name = document.createElement('span'), val = document.createElement('b'), inp = document.createElement('input');
+      inp.type = 'range'; inp.min = c[2]; inp.max = c[3]; inp.step = c[4]; inp.value = S[c[0]];
+      function show() { val.textContent = (+S[c[0]]).toFixed(c[6]) + ' ' + c[5]; }
+      inp.oninput = function () {
+        S[c[0]] = +inp.value; show();
+        if (c[0] === 'eye') EYE = S.eye;
+        if (c[0] === 'lens') applyLens();
+      };
+      name.textContent = c[1]; show();
+      row.appendChild(name); row.appendChild(val); row.appendChild(inp); box.appendChild(row);
+    });
+    var bob = document.createElement('label'), cb = document.createElement('input');
+    bob.className = 'chk'; cb.type = 'checkbox'; cb.checked = S.bob;
+    cb.onchange = function () { S.bob = cb.checked; };
+    bob.appendChild(cb); bob.appendChild(document.createTextNode(' ' + T('bob'))); box.appendChild(bob);
+  }
   function setWalk(on) {
     if (on && MESH && !meshGroups.arch) return; // geometry still loading
     S.walk = on; S.auto = false; lastRoom = null;
-    camera.fov = on ? 70 : 32; camera.near = on ? 0.05 : 0.1; camera.updateProjectionMatrix();
+    camera.near = on ? 0.05 : 0.1; applyLens();
     applyLevel();
     if (on) {
       $('bDoll').classList.remove('on'); $('bPlan').classList.remove('on');
       colliders();
       var p = startPoint(); placeWalker(p.x, p.z);
-      W.yaw = -cam.th; W.pitch = 0.05; W.keys = {};
+      W.yaw = -cam.th; W.pitch = 0.05; W.keys = {}; W.vy = W.yaw; W.vp = W.pitch; W.vel.set(0, 0, 0);
     } else {
       ring.visible = false;
     }
@@ -514,6 +540,7 @@
     W.pos.set(w.x, W.floor, w.z); W.eye.set(w.x, v.eye[2], w.z);
     W.yaw = Math.atan2(v.dir[0], v.dir[1]);
     W.pitch = -Math.asin(Math.max(-1, Math.min(1, v.dir[2])));
+    W.vy = W.yaw; W.vp = W.pitch; W.vel.set(0, 0, 0);
     lastRoom = null;
   }
   // Gold ring under the pointer: where a click would take the walker (floors only).
@@ -539,31 +566,35 @@
       var d = tmp.length(); if (d < 0.6) return;
       W.target = W.pos.clone().addScaledVector(tmp.normalize(), d - 0.5);
     }
-    if (W.target) { tmp.copy(W.target).sub(W.pos); tmp.y = 0; W.glide = tmp.length() / 0.8; } // there in ~0.8 s
+    if (W.target) { tmp.copy(W.target).sub(W.pos); tmp.y = 0; W.glide = tmp.length() / 2.2; } // far spots: there in ~2 s
   }
   var move = new THREE.Vector3(), dir = new THREE.Vector3();
   function stepWalk(dt) {
     var fwd = (W.keys.w || W.keys.arrowup ? 1 : 0) - (W.keys.s || W.keys.arrowdown ? 1 : 0) + W.joy[1];
     var side = (W.keys.d ? 1 : 0) - (W.keys.a ? 1 : 0) + W.joy[0];
-    W.yaw += ((W.keys.arrowright ? 1 : 0) - (W.keys.arrowleft ? 1 : 0) + W.turn) * dt * 1.6;
+    W.yaw += ((W.keys.arrowright ? 1 : 0) - (W.keys.arrowleft ? 1 : 0) + W.turn) * dt * 1.2;
+    // Desired velocity: keys at walking pace, or toward a clicked spot, slowing on arrival.
     move.set(0, 0, 0);
     if (fwd || side) {
       W.target = null;
       var sy = Math.sin(W.yaw), cy = Math.cos(W.yaw);
       move.set(sy * fwd + cy * side, 0, -cy * fwd + sy * side);
       if (move.length() > 1) move.normalize();
-      move.multiplyScalar(SPEED * (W.keys.shift ? 2 : 1) * dt);
+      move.multiplyScalar(S.pace * (W.keys.shift ? 2 : 1));
     } else if (W.target) {
       move.copy(W.target).sub(W.pos); move.y = 0;
       var d = move.length();
-      if (d < 0.05) W.target = null;
-      else move.multiplyScalar(Math.min(1, Math.max(SPEED * 2, W.glide) * dt / d));
+      if (d < 0.04 && W.vel.length() < 0.15) { W.target = null; move.set(0, 0, 0); }
+      else move.multiplyScalar(Math.min(Math.max(S.pace, W.glide), d * 2.2) / Math.max(d, 1e-6)); // ease out
     }
+    // Ease velocity toward it: a person speeds up and slows down over ~0.3 s, not instantly.
+    W.vel.lerp(move, 1 - Math.exp(-dt * 7));
+    move.copy(W.vel).multiplyScalar(dt);
     var len = move.length();
     if (len > 1e-5) {
       dir.copy(move).divideScalar(len);
       var wall = blockedAt(org.set(W.pos.x, W.floor + CHEST, W.pos.z), dir, len + RADIUS);
-      if (wall < len + RADIUS) { len = Math.max(0, wall - RADIUS); W.target = null; }
+      if (wall < len + RADIUS) { len = Math.max(0, wall - RADIUS); W.target = null; W.vel.set(0, 0, 0); }
       var nx = W.pos.x + dir.x * len, nz = W.pos.z + dir.z * len;
       var f = floorAt(nx, nz, W.floor + MAX_STEP + 0.05);
       if (f == null || f - W.floor <= MAX_STEP) { // no step too high; a drop or a gap is fine
@@ -572,7 +603,15 @@
       } else W.target = null;
     }
     W.pos.y = W.floor;
-    W.eye.lerp(tmp.set(W.pos.x, W.floor + EYE, W.pos.z), Math.min(1, dt * 12));
+    // Head: one bob per step and a slight sway every two, scaled by speed and faded in/out.
+    var speed = W.vel.length();
+    W.amp += ((S.bob ? Math.min(1, speed / 1.4) : 0) - W.amp) * Math.min(1, dt * 5);
+    W.phase += speed / STRIDE * Math.PI * dt;
+    W.bobY = 0.022 * W.amp * Math.sin(2 * W.phase); W.bobX = 0.012 * W.amp * Math.sin(W.phase);
+    W.eye.lerp(tmp.set(W.pos.x, W.floor + EYE, W.pos.z), Math.min(1, dt * 10)); // smooths stairs too
+    // Look: the head turns toward where the pointer drags it, eased.
+    var k = 1 - Math.exp(-dt * 14);
+    W.vy += (W.yaw - W.vy) * k; W.vp += (W.pitch - W.vp) * k;
     showRoom(); drawMap();
   }
 
@@ -674,9 +713,9 @@
   function resize() {
     var w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); camera.aspect = w / h; applyLens();
     // key plan sits just above the bottom bar, however many rows the bar wraps to
-    var dock = document.querySelector('.dock'); if (dock) map.style.bottom = (dock.offsetHeight + (w < 860 ? 20 : 32)) + 'px';
+    var dock = document.querySelector('.dock'); if (dock) map.style.bottom = $('walkctl').style.bottom = (dock.offsetHeight + (w < 860 ? 20 : 32)) + 'px';
     var fit = SIZE * 2.4 * Math.max(1, 1.15 / camera.aspect);
     if (Math.abs(goal.r - HOME.r) < 0.01) goal.r = fit;
     HOME.r = fit;
@@ -689,8 +728,8 @@
     swingDoors(dt); nightLights(performance.now());
     if (S.walk) {
       stepWalk(dt);
-      camera.position.copy(W.eye);
-      camera.rotation.set(-W.pitch, -W.yaw, 0, 'YXZ');
+      camera.position.set(W.eye.x + Math.cos(W.vy) * W.bobX, W.eye.y + W.bobY, W.eye.z + Math.sin(W.vy) * W.bobX);
+      camera.rotation.set(-W.vp, -W.vy, 0, 'YXZ');
     } else {
       if (S.auto) goal.th += 0.0035;
       var k = 0.12;
@@ -741,9 +780,7 @@
         var glass = b.opacity < 1;
         if (b.grp === 'floor') addUV(g); // floor finishes are textures laid in plan
         // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
-        var m = new THREE.Mesh(g, glass ? glassMat : new THREE.MeshStandardMaterial({
-          color: b.color, roughness: 0.85, flatShading: true,
-          side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true }));
+        var m = new THREE.Mesh(g, glass ? glassMat : lookMaterial(b));
         m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
         if (!glass) parent.add(new THREE.Mesh(g, cap));
         if (!glass && FINISH_KIND[b.grp]) finishMeshes.push({ m: m, kind: FINISH_KIND[b.grp], color: b.color });
@@ -1112,6 +1149,94 @@
     root.updateMatrixWorld(true);
     splitZones();
     setTimeout(function () { buildCeilings(); applyCeiling(); }, 80);
+  }
+
+  /* Revit render appearance per material (exported as MESH.looks): real textures at their
+     real-world size via world-space (triplanar) mapping, since the mesh carries no UVs;
+     glossiness and metal from the appearance; untextured wood and fabric get a generated
+     grain or weave so they read as the material, tinted by its colour. Walls and slabs keep
+     their shading colour (finish schemes recolour them). */
+  var LOOK_GROUPS = { furn: 1, door: 1, leaf: 1 }, loadedTex = {}, procTex = {};
+  function lookOf(b) { return b.look != null && MESH.looks ? MESH.looks[b.look] : null; }
+  function kindOf(l) {
+    var t = ((l.cls || '') + ' ' + (l.schema || '') + ' ' + (l.name || '')).toLowerCase();
+    if (/metal|steel|chrome|alumin|acciaio|allumin|brass|iron/.test(t)) return 'metal';
+    if (/wood|teak|oak|walnut|birch|pine|abete|pioppo|legno|hardwood|veneer/.test(t)) return 'wood';
+    if (/fabric|textile|tessuto|linen|lino|cotton|velvet|carpet|rug|leather|cuscino/.test(t)) return 'fabric';
+    if (/stone|marble|granite|ceramic|porcelain|tile/.test(t)) return 'stone';
+    if (/plastic|vinyl|laminate/.test(t)) return 'plastic';
+    return '';
+  }
+  function texFile(path) {
+    if (!loadedTex[path]) {
+      var base = MESH.file.replace(/[^\/?]*(\?.*)?$/, ''), t = new THREE.TextureLoader().load(base + path);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      loadedTex[path] = t;
+    }
+    return loadedTex[path];
+  }
+  function grain(c, n, r) { // light greyscale wood grain; the material colour tints it
+    c.fillStyle = '#e8e0d6'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 140; i++) {
+      var y = r() * n, a = 0.05 + r() * 0.12; c.strokeStyle = 'rgba(70,50,35,' + a + ')'; c.lineWidth = 1 + r() * 3;
+      c.beginPath(); c.moveTo(0, y);
+      for (var x = 0; x <= n; x += 64) c.lineTo(x, y + Math.sin(x / 90 + i) * 6 + (r() - 0.5) * 4);
+      c.stroke();
+    }
+  }
+  function weave(c, n, r) { // fine fabric weave, light
+    c.fillStyle = '#eeeae4'; c.fillRect(0, 0, n, n);
+    for (var y = 0; y < n; y += 4) { c.fillStyle = 'rgba(0,0,0,' + (0.03 + r() * 0.03) + ')'; c.fillRect(0, y, n, 2); }
+    for (var x = 0; x < n; x += 4) { c.fillStyle = 'rgba(255,255,255,' + (0.03 + r() * 0.04) + ')'; c.fillRect(x, 0, 2, n); }
+    for (var i = 0; i < 4000; i++) { c.fillStyle = 'rgba(0,0,0,.04)'; c.fillRect(r() * n, r() * n, 1.5, 1.5); }
+  }
+  function procFor(kind) {
+    if (!procTex[kind]) {
+      var c = document.createElement('canvas'); c.width = c.height = 512;
+      (kind === 'wood' ? grain : weave)(c.getContext('2d'), 512, rng(kind === 'wood' ? 11 : 13));
+      var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+      procTex[kind] = t;
+    }
+    return procTex[kind];
+  }
+  // Wood shading colours in Revit are often saturated yellows: pull them toward a real wood.
+  function woodTone(hex) {
+    var c = new THREE.Color(hex), hsl = {}; c.getHSL(hsl);
+    return c.setHSL(Math.min(hsl.h, 0.09), Math.min(hsl.s, 0.45), Math.min(Math.max(hsl.l, 0.28), 0.62));
+  }
+  // World-space texture projection blended by the face's normal (works without UVs).
+  function triplanar(mat, tex, sx, sy) {
+    mat.onBeforeCompile = function (sh) {
+      sh.uniforms.triMap = { value: tex }; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) };
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nuniform sampler2D triMap;\nuniform vec2 triScale;')
+        .replace('#include <map_fragment>', [
+          'vec3 triN = abs(normalize(cross(dFdx(vTriPos), dFdy(vTriPos))));',
+          'vec3 triW = pow(triN, vec3(4.0)); triW /= (triW.x + triW.y + triW.z);',
+          'vec4 triT = texture2D(triMap, vTriPos.zy * triScale) * triW.x + texture2D(triMap, vTriPos.xz * triScale) * triW.y + texture2D(triMap, vTriPos.xy * triScale) * triW.z;',
+          'diffuseColor *= sRGBToLinear(triT);'].join('\n'));
+    };
+    mat.customProgramCacheKey = function () { return 'triplanar'; };
+    mat.extensions = { derivatives: true };
+    return mat;
+  }
+  function lookMaterial(b) {
+    var base = { color: b.color, roughness: 0.85, flatShading: true, side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true };
+    var l = lookOf(b);
+    if (!l) return new THREE.MeshStandardMaterial(base);
+    var kind = kindOf(l), full = LOOK_GROUPS[b.grp];
+    if (l.metal || kind === 'metal') { base.metalness = 0.85; base.roughness = 0.3; }
+    else if (l.gloss != null) base.roughness = Math.min(0.95, Math.max(0.12, 1 - l.gloss * 0.85));
+    else base.roughness = { wood: 0.55, fabric: 0.95, stone: 0.25, plastic: 0.4 }[kind] || 0.85;
+    if (!full) return new THREE.MeshStandardMaterial(base); // walls/slabs: keep the shading colour
+    if (l.rgb && /generic/i.test(l.schema || '') && !l.tex) base.color = new THREE.Color(l.rgb[0] / 255, l.rgb[1] / 255, l.rgb[2] / 255);
+    if (kind === 'wood' && !l.tex) base.color = woodTone(b.color);
+    var mat = new THREE.MeshStandardMaterial(base);
+    if (l.tex) { mat.color.set('#ffffff'); return triplanar(mat, texFile(l.tex), l.sx || 0.3, l.sy || l.sx || 0.3); }
+    if (kind === 'wood') return triplanar(mat, procFor('wood'), 0.9, 0.9);
+    if (kind === 'fabric') return triplanar(mat, procFor('fabric'), 0.12, 0.12);
+    return mat;
   }
 
   if (MESH) loadMesh();
