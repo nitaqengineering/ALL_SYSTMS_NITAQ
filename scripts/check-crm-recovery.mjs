@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFile} from 'node:fs/promises';
+const source=await readFile('public/crm/password-reset.js','utf8');
+const auth=await readFile('src/crm/04-cloud-splash.jsx','utf8');
+assert.ok(auth.includes("redirectTo:new URL('password-reset.html',window.location.href).href"));
+const config=await readFile('src/crm/02-slice-ar.jsx','utf8');
+const clientConfig=vm.runInNewContext(source.match(/const crmRecoveryConfig=([^;]+);/)[0]+'\ncrmRecoveryConfig');
+assert.ok(config.includes(clientConfig.url)&&config.includes(clientConfig.key),'Recovery must use the CRM project');
+async function scenario({session=true,identity='actor',updateError=false}={}){
+  const elements=Object.fromEntries(['resetForm','message','password','confirmPassword','savePassword'].map(id=>[id,{hidden:id==='resetForm',value:'',disabled:false,textContent:'',reportValidity:()=>true,focus(){},addEventListener(type,fn){this.submit=fn;}}]));
+  let writes=0,payload,cleaned=false;
+  const mock={getSession:async()=>({data:{session:session?{user:{id:'actor'}}:null}}),getUser:async()=>({data:{user:identity?{id:identity,email:'user@example.invalid'}:null}}),updateUser:async input=>{writes++;payload=input;return {error:updateError?{message:'weak password'}:null};}};
+  const context=vm.createContext({window:{supabase:{createClient:()=>({auth:mock})}},document:{getElementById:id=>elements[id]},history:{replaceState:()=>{cleaned=true}},location:{pathname:'/ALL_SYSTMS_NITAQ/crm/password-reset.html'}});
+  vm.runInContext(source.replace('void initializeCrmRecovery();',''),context);
+  await vm.runInContext('initializeCrmRecovery()',context);
+  return {elements,mock,get writes(){return writes;},get payload(){return payload;},get cleaned(){return cleaned;}};
+}
+const invalid=await scenario({session:false});
+assert.equal(invalid.elements.resetForm.hidden,true);assert.equal(invalid.writes,0);assert.equal(invalid.cleaned,true);
+const valid=await scenario();
+assert.equal(valid.elements.resetForm.hidden,false);
+valid.elements.password.value='synthetic-password-12';valid.elements.confirmPassword.value='mismatch';
+await valid.elements.resetForm.submit({preventDefault(){}});assert.equal(valid.writes,0);
+valid.elements.confirmPassword.value=valid.elements.password.value;
+await valid.elements.resetForm.submit({preventDefault(){}});
+assert.equal(valid.writes,1);assert.equal(valid.payload.password,'synthetic-password-12');
+assert.equal(valid.elements.resetForm.hidden,true);assert.equal(valid.elements.password.value,'');assert.equal(valid.elements.confirmPassword.value,'');
+const switched=await scenario();switched.mock.getUser=async()=>({data:{user:{id:'other'}}});
+switched.elements.password.value=switched.elements.confirmPassword.value='synthetic-password-12';
+await switched.elements.resetForm.submit({preventDefault(){}});assert.equal(switched.writes,0);
+const rejected=await scenario({updateError:true});
+rejected.elements.password.value=rejected.elements.confirmPassword.value='synthetic-password-12';
+await rejected.elements.resetForm.submit({preventDefault(){}});
+assert.equal(rejected.elements.resetForm.hidden,false);assert.equal(rejected.elements.savePassword.disabled,false);assert.equal(rejected.elements.password.value,'');
+console.log('PASS CRM recovery: exact callback and project, missing session rejected, confirmed identity, mismatches/account switches cannot change passwords, success/error handling and URL/field cleanup; no live credentials');

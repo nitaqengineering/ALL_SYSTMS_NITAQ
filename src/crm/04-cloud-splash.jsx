@@ -47,9 +47,9 @@ function CloudAuth({sb}){
         const {error}=await sb.auth.signInWithPassword({email:email.trim(),password:pass});
         if(error) throw error;
       }else{
-        const {error}=await sb.auth.resetPasswordForEmail(email.trim());
+        const {error}=await sb.auth.resetPasswordForEmail(email.trim(),{redirectTo:new URL('password-reset.html',window.location.href).href});
         if(error) throw error;
-        setOkMsg('لو الإيميل ده مسجّل، هيوصلك لينك لإعادة تعيين الباسورد.');
+        setOkMsg('تم طلب رابط الاستعادة. لو الإيميل مسجّل، راجع الوارد وSpam وابحث عن noreply@mail.app.supabase.io. انتظر دقيقة قبل طلب رسالة أخرى.');
       }
     }catch(e){ setErr(e.message||'حصل خطأ — جرّب تاني'); }
     setBusy(false);
