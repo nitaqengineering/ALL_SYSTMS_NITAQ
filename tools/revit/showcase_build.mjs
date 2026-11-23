@@ -90,7 +90,9 @@ async function packMesh(mesh, binPath) {
     const at = offset; offset += bytes.length + pad; return at;
   };
   for (const k of keys) {
-    const [grp, rgb, transp] = k.split('|');
+    const [grpKey, rgb, transp] = k.split('|');
+    // 'leaf:<door>:<hinge>' buckets are door leaves that the viewer swings open
+    const [grp, door, hinge] = grpKey.split(':');
     const {p, i: idx} = mesh.buckets[k];
     const map = new Map(), pos = [], remap = new Int32Array(p.length / 3);
     for (let v = 0; v < p.length / 3; v++) {
@@ -108,7 +110,7 @@ async function packMesh(mesh, binPath) {
     if (!tris.length) continue;
     const wide = pos.length / 3 > 65535;
     buckets.push({
-      grp, color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
+      grp, ...(grp === 'leaf' ? {door: +door, hinge: +hinge} : {}), color: '#' + rgb.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join(''),
       opacity: Math.round(100 - +transp) / 100,
       pos: push(Int16Array.from(pos)), verts: pos.length / 3,
       idx: push(wide ? Uint32Array.from(tris) : Uint16Array.from(tris)), count: tris.length, wide
@@ -118,7 +120,8 @@ async function packMesh(mesh, binPath) {
   await writeFile(binPath, bin);
   console.log(`wrote ${binPath} — ${buckets.length} buckets, ${(bin.length / 1048576).toFixed(1)} MB, step ${step} mm`);
   // origin is in viewer axes (x, z, -y), millimetres; the viewer re-centres it.
-  return {origin, step, bytes: bin.length, buckets};
+  // hinges: [x, y (m, model plan), sign (+1 = counter-clockwise seen from above), angle (rad)]
+  return {origin, step, bytes: bin.length, buckets, doors: (mesh.doors || []).map((d) => d.hinges)};
 }
 
 const body = `/* NITAQ Showcase — ${out.project.name} (${out.project.ref || slug}).

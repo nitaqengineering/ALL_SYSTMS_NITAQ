@@ -13,7 +13,7 @@
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
       rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
-      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
+      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
@@ -22,7 +22,7 @@
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
-      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
+      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'revit', auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -83,7 +83,11 @@
   // Section plane: everything above it is cut away, like a Revit plan cut / section box top.
   renderer.localClippingEnabled = true;
   var cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
-  var meshGroups = {}, noteLbls = [], edgeQueue = []; // 'arch' and 'furn' groups once the Revit geometry has loaded
+  var meshGroups = {}, noteLbls = [], edgeQueue = [];
+  // Exported surface groups that make up the building (walk mode collides with these):
+  // arch = everything else built; wall/ext = interior/facade wall faces; floor/pave = interior
+  // floor/open paving tops; ceil = slab and roof undersides.
+  var ARCH = ['arch', 'wall', 'ext', 'floor', 'pave', 'ceil']; // 'arch' and 'furn' groups once the Revit geometry has loaded
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(32, 1, 0.1, 500);
 
@@ -341,6 +345,7 @@
     });
     $('totalV').textContent = fmt(sum) + ' ' + T('m') + ' · ' + fmt(sum * SQFT) + ' ' + T('ft');
     $('totalK').parentNode.hidden = !L.rooms.length;
+    if (typeof renderFinishes === 'function' && meshReady) renderFinishes();
     var views = D.views || [], sl = $('scenes');
     $('scenesSec').hidden = !views.length; $('kScenes').textContent = T('scenes'); sl.innerHTML = '';
     views.forEach(function (v, i) {
@@ -387,7 +392,7 @@
   function colliders() {
     solids = []; backs = [];
     // Real geometry: the arch group (furniture does not block). Sample model: walls and floors.
-    var roots = MESH ? [meshGroups.arch] : levelGroups.map(function (g) { return g.full; }).concat(levelGroups.map(function (g) { return g.G.children[0]; }));
+    var roots = MESH ? ARCH.map(function (k) { return meshGroups[k]; }) : levelGroups.map(function (g) { return g.full; }).concat(levelGroups.map(function (g) { return g.G.children[0]; }));
     roots.forEach(function (r) {
       if (r) r.traverse(function (o) {
         if (!o.isMesh) return;
@@ -559,8 +564,30 @@
     var size = map.clientWidth || 170, dpr = Math.min(window.devicePixelRatio || 1, 2), pad = 10;
     map.width = map.height = size * dpr;
     var k = (size - pad * 2) / Math.max(x1 - x0, y1 - y0, 1);
-    mapFit = { k: k * dpr, ox: (size - (x1 - x0) * k) / 2 * dpr, oy: (size - (y1 - y0) * k) / 2 * dpr, x0: x0, y1: y1, dpr: dpr };
+    mapFit = { k: k * dpr, ox: (size - (x1 - x0) * k) / 2 * dpr, oy: (size - (y1 - y0) * k) / 2 * dpr, x0: x0, y1: y1, dpr: dpr, size: size };
     mapLevel = S.level;
+    planImg = MESH && meshReady ? renderPlan() : null;
+  }
+  // Top-down orthographic render of this level cut at plan height (walls in navy poché,
+  // furniture, stairs, doors), the same section the dollhouse uses, so it is the floor's plan.
+  var planR = null, planImg = null;
+  function renderPlan() {
+    var px = map.width, L = D.levels[S.level], floorY = L.elevation + (L._slabTop || 0);
+    if (!planR) {
+      planR = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      planR.localClippingEnabled = true; planR.outputEncoding = THREE.sRGBEncoding;
+    }
+    planR.setPixelRatio(1); planR.setSize(px, px, false);
+    var a = fromMap(0, 0), b = fromMap(mapFit.size, mapFit.size);
+    var cam = new THREE.OrthographicCamera(a[0] - CX, b[0] - CX, a[1] - CY, b[1] - CY, 0.1, 30 + CUT + 0.6);
+    cam.position.set(0, floorY + 30, 0); cam.up.set(0, 0, -1); cam.lookAt(0, floorY, 0);
+    var keep = cutPlane.constant, hi = hemi.intensity, si = sun.intensity, lv = lamps.visible;
+    cutPlane.constant = floorY + CUT; hemi.intensity = 0.95; sun.intensity = 0.5; lamps.visible = false;
+    planR.render(scene, cam);
+    cutPlane.constant = keep; hemi.intensity = hi; sun.intensity = si; lamps.visible = lv;
+    var img = document.createElement('canvas'); img.width = img.height = px;
+    img.getContext('2d').drawImage(planR.domElement, 0, 0);
+    return img;
   }
   function toMap(x, y) { return [mapFit.ox + (x - mapFit.x0) * mapFit.k, mapFit.oy + (mapFit.y1 - y) * mapFit.k]; }
   function fromMap(px, py) { return [(px * mapFit.dpr - mapFit.ox) / mapFit.k + mapFit.x0, mapFit.y1 - (py * mapFit.dpr - mapFit.oy) / mapFit.k]; }
@@ -570,8 +597,11 @@
     c.clearRect(0, 0, map.width, map.height);
     function path(poly) { c.beginPath(); poly.forEach(function (q, i) { var m = toMap(q[0], q[1]); c[i ? 'lineTo' : 'moveTo'](m[0], m[1]); }); c.closePath(); }
     c.lineWidth = mapFit.dpr;
-    (L.slabs || []).forEach(function (sl) { path(sl.poly); c.fillStyle = 'rgba(238,237,234,.92)'; c.fill(); c.strokeStyle = '#6E7787'; c.stroke(); });
-    L.rooms.forEach(function (r) { path(r.poly); c.strokeStyle = 'rgba(110,119,135,.7)'; c.stroke(); });
+    if (planImg) c.drawImage(planImg, 0, 0);
+    else {
+      (L.slabs || []).forEach(function (sl) { path(sl.poly); c.fillStyle = 'rgba(238,237,234,.92)'; c.fill(); c.strokeStyle = '#6E7787'; c.stroke(); });
+      L.rooms.forEach(function (r) { path(r.poly); c.strokeStyle = 'rgba(110,119,135,.7)'; c.stroke(); });
+    }
     var me = toMap(W.pos.x + CX, -W.pos.z + CY), a = Math.atan2(Math.cos(W.yaw), Math.sin(W.yaw)), r = 26 * mapFit.dpr;
     c.beginPath(); c.moveTo(me[0], me[1]); c.arc(me[0], me[1], r, -a - 0.6, -a + 0.6); c.closePath();
     c.fillStyle = 'rgba(201,162,93,.35)'; c.fill();
@@ -605,7 +635,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -645,6 +675,7 @@
   var clock = new THREE.Clock();
   function frame() {
     var dt = Math.min(clock.getDelta(), 0.1);
+    swingDoors(dt);
     if (S.walk) {
       stepWalk(dt);
       camera.position.copy(W.eye);
@@ -695,17 +726,21 @@
         g.setIndex(new THREE.BufferAttribute(b.wide ? new Uint32Array(buf, b.idx, b.count) : new Uint16Array(buf, b.idx, b.count), 1));
         var grp = meshGroups[b.grp] || (meshGroups[b.grp] = new THREE.Group());
         if (!grp.parent) root.add(grp);
+        var parent = b.grp === 'leaf' ? pivotFor(grp, b.door, b.hinge) : grp;
         var glass = b.opacity < 1;
+        if (b.grp === 'floor') addUV(g); // floor finishes are textures laid in plan
         var m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
           // Revit glass materials are often saturated cyan; show glass as a soft blue-grey tint.
           color: glass ? 0x5E7484 : b.color, roughness: glass ? 0.1 : 0.85, flatShading: true,
           transparent: glass, opacity: glass ? 0.5 : 1, depthWrite: !glass,
           side: glass ? THREE.DoubleSide : THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true }));
-        m.castShadow = !glass; m.receiveShadow = !glass; grp.add(m);
-        if (!glass) grp.add(new THREE.Mesh(g, cap));
-        if (!glass && b.grp === 'arch') edgeQueue.push({ g: g, grp: grp });
+        m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
+        if (!glass) parent.add(new THREE.Mesh(g, cap));
+        if (!glass && FINISH_KIND[b.grp]) finishMeshes.push({ m: m, kind: FINISH_KIND[b.grp], color: b.color });
+        if (!glass && ARCH.indexOf(b.grp) >= 0) edgeQueue.push({ g: g, grp: parent });
       });
       scene.add(root); applyLevel(); note.hidden = true;
+      meshReady = true; mapLevel = -1; renderUI(); applyFinish();
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
       setTimeout(function () {
@@ -714,6 +749,126 @@
       }, 50);
     }).catch(function () { note.textContent = 'تعذّر تحميل المجسّم'; });
   }
+  /* ---------- doors ----------
+     Each leaf turns about its hinge (the centre of the door's plan swing arc in Revit) by the
+     arc's angle, in the arc's direction, when the walker comes within 2 m. */
+  var meshReady = false, leafPivots = [], leafByKey = {};
+  function pivotFor(grp, d, h) {
+    var key = d + ':' + h;
+    if (leafByKey[key]) return leafByKey[key].inner;
+    var hg = MESH.doors[d][h];
+    var lx = (hg[0] * 1000 - MESH.origin[0]) / MESH.step, lz = (-hg[1] * 1000 - MESH.origin[2]) / MESH.step;
+    var pivot = new THREE.Group(), inner = new THREE.Group();
+    pivot.position.set(lx, 0, lz); inner.position.set(-lx, 0, -lz); pivot.add(inner); grp.add(pivot);
+    var rec = { pivot: pivot, inner: inner, x: hg[0], y: hg[1], sign: hg[2], ang: hg[3], t: 0 };
+    leafByKey[key] = rec; leafPivots.push(rec);
+    return inner;
+  }
+  function swingDoors(dt) {
+    if (!leafPivots.length) return;
+    var x = W.pos.x + CX, y = -W.pos.z + CY;
+    leafPivots.forEach(function (d) {
+      var want = S.walk && (d.x - x) * (d.x - x) + (d.y - y) * (d.y - y) < 4 ? 1 : 0;
+      if (Math.abs(want - d.t) < 0.001) return;
+      d.t += (want - d.t) * Math.min(1, dt * 4);
+      d.pivot.rotation.y = d.t * d.sign * d.ang;
+    });
+  }
+
+  /* ---------- finish schemes ----------
+     Proposed finishes for interior walls, ceilings and floors (the facade and outdoor paving
+     keep their Revit materials). Floor finishes are generated textures laid in plan, at real
+     tile and plank sizes; walls and ceilings are paint colours. */
+  var FINISH_KIND = { wall: 'wall', ceil: 'ceil', floor: 'floor' };
+  var finishMeshes = [];
+  function addUV(g) {
+    var p = g.attributes.position.array, n = p.length / 3, uv = new Float32Array(n * 2), k = MESH.step / 1000;
+    for (var i = 0; i < n; i++) { uv[i * 2] = p[i * 3] * k + MESH.origin[0] / 1000; uv[i * 2 + 1] = p[i * 3 + 2] * k + MESH.origin[2] / 1000; }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  }
+  function rng(seed) { return function () { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
+  function texture(draw, metres) {
+    var c = document.createElement('canvas'); c.width = c.height = 1024;
+    draw(c.getContext('2d'), 1024, rng(7));
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / metres, 1 / metres);
+    t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return t;
+  }
+  // Large-format slabs with grey veining: 4 slabs of 120 x 120 cm per texture.
+  function marble(c, n, r) {
+    c.fillStyle = '#F3F1EC'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 26; i++) {
+      c.strokeStyle = 'rgba(105,105,112,' + (0.14 + r() * 0.26) + ')'; c.lineWidth = 0.8 + r() * 3;
+      c.beginPath(); var x = r() * n, y = r() * n; c.moveTo(x, y);
+      for (var j = 0; j < 5; j++) { x += (r() - 0.3) * 260; y += (r() - 0.5) * 200; c.quadraticCurveTo(x - 60, y + 40, x, y); }
+      c.stroke();
+    }
+    c.strokeStyle = 'rgba(140,135,130,.8)'; c.lineWidth = 2.5;
+    for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
+  }
+  // Light oak planks 20 x 120 cm, staggered: texture covers 2.4 m.
+  function oak(c, n, r) {
+    var pw = n / 12, pl = n / 2;
+    for (var row = 0; row < 12; row++) {
+      var off = (row % 3) * pl / 3;
+      for (var x = -pl; x < n + pl; x += pl) {
+        var h = 30 + r() * 8, l = 62 + r() * 10;
+        c.fillStyle = 'hsl(' + h + ',38%,' + l + '%)'; c.fillRect(x + off, row * pw, pl - 2, pw - 2);
+        c.strokeStyle = 'rgba(90,60,30,.10)';
+        for (var k = 0; k < 6; k++) { var yy = row * pw + r() * pw; c.beginPath(); c.moveTo(x + off, yy); c.bezierCurveTo(x + off + pl * .3, yy + 3, x + off + pl * .7, yy - 3, x + off + pl, yy); c.stroke(); }
+      }
+    }
+  }
+  // Light grey porcelain, 120 x 120 cm: texture covers 2.4 m.
+  function porcelain(c, n, r) {
+    c.fillStyle = '#DAD7D1'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 9000; i++) { c.fillStyle = 'rgba(' + (r() > .5 ? '255,255,255' : '120,115,110') + ',.05)'; c.fillRect(r() * n, r() * n, 2, 2); }
+    c.strokeStyle = 'rgba(150,145,140,.7)'; c.lineWidth = 2;
+    for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
+  }
+  var SCHEMES = [
+    { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
+    { id: 'classic', ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#EFE9DF', ceil: '#FBFAF7', sw: ['#F3F1EC', '#EFE9DF', '#C9A25D'],
+      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 · دهان عاجي دافئ · أسقف جبس بيضاء', enD: 'White veined marble 120×120 · warm ivory paint · white gypsum ceilings' },
+    { id: 'warm', ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DCD5CA', ceil: '#FAF8F4', sw: ['#C9A57A', '#DCD5CA', '#FAF8F4'],
+      arD: 'باركيه بلوط فاتح 20×120 · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Light oak planks 20×120 · greige paint · off-white ceilings' },
+    { id: 'calm', ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#ECEAE6', ceil: '#FFFFFF', sw: ['#DAD7D1', '#ECEAE6', '#6E7787'],
+      arD: 'بورسلين رمادي فاتح مطفي 120×120 · دهان أبيض دافئ · سقف أبيض', enD: 'Matte light-grey porcelain 120×120 · warm white paint · white ceilings' }
+  ];
+  var texCache = {};
+  function applyFinish() {
+    var sc = SCHEMES.filter(function (x) { return x.id === S.finish; })[0] || SCHEMES[0];
+    finishMeshes.forEach(function (f) {
+      var mat = f.m.material, v = sc[f.kind];
+      if (!v) { mat.color.set(f.color); mat.map = null; }
+      else if (typeof v === 'string') { mat.color.set(v); mat.map = null; }
+      else {
+        texCache[sc.id] = texCache[sc.id] || texture(v[0], v[1]);
+        mat.color.set('#ffffff'); mat.map = texCache[sc.id];
+      }
+      mat.needsUpdate = true;
+    });
+    var fins = $('fins');
+    [].forEach.call(fins.children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
+    $('finNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
+  }
+  function renderFinishes() {
+    var fins = $('fins'), has = finishMeshes.length > 0;
+    $('finSec').hidden = !has; $('kFin').textContent = T('finishes');
+    if (!has) return;
+    fins.innerHTML = '';
+    SCHEMES.forEach(function (sc) {
+      var b = document.createElement('button'), sw = document.createElement('span');
+      b.className = 'fin'; b.dataset.id = sc.id; sw.className = 'sw';
+      (sc.sw || ['#d6d2ca', '#fcfcfc', '#808080']).forEach(function (c) { var i = document.createElement('i'); i.style.background = c; sw.appendChild(i); });
+      b.appendChild(sw); b.appendChild(document.createTextNode(S.lang === 'ar' ? sc.ar : sc.en));
+      b.onclick = function () { S.finish = sc.id; applyFinish(); };
+      fins.appendChild(b);
+    });
+    applyFinish();
+  }
+
   if (MESH) loadMesh();
 
   home(); cam.t.copy(goal.t);

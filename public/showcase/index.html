@@ -71,7 +71,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .joy{position:absolute;bottom:88px;inset-inline-start:24px;width:110px;height:110px;border-radius:50%;background:rgba(16,23,37,.35);border:1px solid rgba(255,255,255,.35);display:none;touch-action:none;align-items:center;justify-content:center}
 .joy i{width:44px;height:44px;border-radius:50%;background:var(--gold);box-shadow:0 4px 14px rgba(16,23,37,.3);pointer-events:none}
 .walking .joy{display:flex}
-.stage canvas.map{position:absolute;top:20px;inset-inline-end:24px;width:170px;height:170px;border-radius:12px;background:rgba(16,23,37,.78);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
+.stage canvas.map{position:absolute;top:20px;inset-inline-end:24px;width:170px;height:170px;border-radius:12px;background:#CFCBC3;border:2px solid var(--navy);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
 .walking .stage canvas.map{display:block}
 .walking .levels{top:206px}
 .walking .title{opacity:0}
@@ -81,6 +81,12 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .failed aside,.failed .hd-actions{display:none}
 .failed main{grid-template-columns:1fr}
 .failed .err{display:flex;align-items:center;justify-content:center;height:100%;min-height:50vh;font-size:16px;color:var(--navy);padding:24px}
+.fins{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.fin{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:13px;text-align:start;transition:.15s}
+.fin:hover{border-color:var(--steel)}
+.fin.on{border-color:var(--gold);color:var(--gold)}
+.sw{display:flex;flex:none}
+.sw i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.25);margin-inline-end:-4px}
 .err{padding:40px;text-align:center;color:var(--steel)}
 @media(max-width:860px){
   .app{height:auto}
@@ -138,6 +144,11 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div>
         <div class="sec-k" id="kFacts"></div>
         <div class="facts" id="facts"></div>
+      </div>
+      <div id="finSec" hidden>
+        <div class="sec-k" id="kFin"></div>
+        <div class="fins" id="fins"></div>
+        <p class="foot" id="finNote"></p>
       </div>
       <div id="scenesSec" hidden>
         <div class="sec-k" id="kScenes"></div>
