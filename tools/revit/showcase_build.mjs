@@ -12,7 +12,17 @@ if (!src || !/^[a-z0-9-]{1,60}$/.test(slug || '')) {
   process.exit(1);
 }
 const ex = JSON.parse(await readFile(src, 'utf8'));
-const cfg = cfgPath ? JSON.parse(await readFile(cfgPath, 'utf8')) : {};
+// '-' (or nothing) means no config file: the defaults below name and pick the storeys.
+const cfg = cfgPath && cfgPath !== '-' ? JSON.parse(await readFile(cfgPath, 'utf8')) : {};
+// Common Revit level names → viewer names, used when the config does not name a level.
+const STOREY = [
+  [/^(b|basement|bsmt)\b/i, 'Basement', 'القبو'],
+  [/^(gr|gf|g|ground)\b/i, 'Ground Floor', 'الطابق الأرضي'],
+  [/^(1st|ff|first)\b/i, 'First Floor', 'الطابق الأول'],
+  [/^(2nd|sf|second)\b/i, 'Second Floor', 'الطابق الثاني'],
+  [/^(rf|roof)\b/i, 'Roof', 'السطح']
+];
+const storey = (name) => STOREY.find(([re]) => re.test(name.trim()));
 
 // English → Arabic for common room names (matched on the normalised name).
 const AR = {
@@ -27,11 +37,12 @@ const AR = {
 };
 const title = (s) => s.toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
 
-const main = new Set(cfg.main || ex.levels.filter((l) => l.rooms.length).map((l) => l.name));
+const main = new Set(cfg.main || ex.levels.filter((l) => l.rooms.length || storey(l.name)).map((l) => l.name));
 const siteNames = new Set(cfg.site || []);
-const names = cfg.levelNames || {};
+const names = {...Object.fromEntries(ex.levels.filter((l) => storey(l.name)).map((l) => [l.name, storey(l.name).slice(1)])), ...(cfg.levelNames || {})};
 const out = {
-  partialRooms: cfg.partialRooms ?? false,
+  // with plan notes naming spaces, the Revit rooms do not cover the whole built-up area
+  partialRooms: cfg.partialRooms ?? ex.levels.some((l) => (l.notes || []).length),
   project: {...ex.project, ...(cfg.project || {})},
   levels: [],
   site: [],

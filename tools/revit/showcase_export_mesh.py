@@ -11,13 +11,17 @@ import json
 FT_MM = 304.8
 OUT = inputs['out']
 
+# The model as a whole: the active 3D view when it is an ordinary (not camera) one, else the
+# default {3D} view, else any non-perspective 3D view. Camera views would crop the model.
 view = doc.ActiveView
-if not isinstance(view, DB.View3D) or view.IsTemplate:
-    view = [v for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D) if not v.IsTemplate][0]
+if not isinstance(view, DB.View3D) or view.IsTemplate or view.IsPerspective:
+    views3d = [v for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D) if not v.IsTemplate and not v.IsPerspective]
+    view = ([v for v in views3d if v.Name == '{3D}'] or views3d)[0]
 
 SKIP = set(['Cameras', 'Lines', 'Curtain Wall Grids', 'Rooms', 'Areas', 'HVAC Zones'])
 FURN = set(['Furniture', 'Furniture Systems', 'Plumbing Fixtures', 'Casework', 'Specialty Equipment',
-            'Parking', 'Planting', 'Entourage', 'Lighting Fixtures', 'Electrical Fixtures'])
+            'Parking', 'Planting', 'Entourage', 'Lighting Fixtures', 'Electrical Fixtures',
+            'Generic Models'])  # loose decor (rugs, plants) in villa models
 
 opts = DB.Options()
 opts.DetailLevel = DB.ViewDetailLevel.Medium
