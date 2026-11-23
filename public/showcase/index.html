@@ -68,9 +68,12 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--navy);color:var(--white);padding:10px 18px;border-radius:999px;font-size:13px}
 .here{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--gold);padding:8px 16px;border-radius:999px;font-size:13px;pointer-events:none;display:none}
 .walking .here:not([hidden]){display:block}
-.joy{position:absolute;bottom:88px;inset-inline-start:24px;width:110px;height:110px;border-radius:50%;background:rgba(16,23,37,.35);border:1px solid rgba(255,255,255,.35);display:none;touch-action:none;align-items:center;justify-content:center}
-.joy i{width:44px;height:44px;border-radius:50%;background:var(--gold);box-shadow:0 4px 14px rgba(16,23,37,.3);pointer-events:none}
-.walking .joy{display:flex}
+.pad{position:absolute;bottom:84px;inset-inline-start:24px;display:none;grid-template:repeat(3,44px)/repeat(3,44px);gap:4px;touch-action:none;user-select:none;-webkit-user-select:none}
+.pad button{background:var(--navy);color:var(--gold);border-radius:10px;font-size:16px;box-shadow:0 4px 14px rgba(16,23,37,.3);touch-action:none}
+.pad button:hover{color:#fff}
+.pad button.on{background:var(--gold);color:var(--navy)}
+.pad [data-k=f]{grid-area:1/2}.pad [data-k=l]{grid-area:2/1}.pad [data-k=r]{grid-area:2/3}.pad [data-k=b]{grid-area:3/2}
+.walking .pad{display:grid}
 .stage canvas.map{position:absolute;top:20px;inset-inline-end:24px;width:170px;height:170px;border-radius:12px;background:#CFCBC3;border:2px solid var(--navy);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
 .walking .stage canvas.map{display:block}
 .walking .levels{top:206px}
@@ -97,7 +100,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   .title{inset-inline-start:16px;top:14px}.title h1{font-size:20px}
   .levels{inset-inline-end:12px;top:14px}
   .dock{bottom:12px;max-width:calc(100% - 16px);overflow-x:auto;scrollbar-width:none}
-  .joy{bottom:76px;inset-inline-start:16px}.btn{padding:8px 11px;font-size:12px}
+  .pad{bottom:72px;inset-inline-start:12px}.btn{padding:8px 11px;font-size:12px}
   .hint{display:none}
   .stage canvas.map{width:120px;height:120px;top:14px;inset-inline-end:12px}
   .walking .levels{top:146px}
@@ -120,7 +123,12 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="labels" id="labels"></div>
       <div class="loading" id="loading" hidden></div>
       <div class="here" id="here" hidden></div>
-      <div class="joy" id="joy"><i></i></div>
+      <div class="pad" id="pad" dir="ltr">
+        <button data-k="f" aria-label="forward">&#9650;</button>
+        <button data-k="l" aria-label="turn left">&#9664;</button>
+        <button data-k="r" aria-label="turn right">&#9654;</button>
+        <button data-k="b" aria-label="back">&#9660;</button>
+      </div>
       <canvas class="map" id="map" aria-label="mini map"></canvas>
       <div class="title">
         <div class="k" id="tK"></div>

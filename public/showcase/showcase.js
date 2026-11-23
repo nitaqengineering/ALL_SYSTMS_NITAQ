@@ -17,7 +17,7 @@
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
-      walkHint: 'اسحب للنظر حولك · اضغط على الأرض للانتقال · W A S D أو عصا التحكم للمشي', inRoom: 'أنت في',
+      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال · الأسهم للمشي والالتفات', inRoom: 'أنت في',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
@@ -26,7 +26,7 @@
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
-      walkHint: 'Drag to look around · tap the floor to move there · W A S D or the joystick to walk', inRoom: 'You are in',
+      walkHint: 'Drag to look around · click the gold ring on the floor to go there · arrows to walk and turn', inRoom: 'You are in',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -206,10 +206,14 @@
   function levelY() { return D.levels[S.level].elevation; }
   function home(ph) { goal.th = HOME.th; goal.ph = ph == null ? HOME.ph : ph; goal.r = HOME.r; goal.t.set(0, levelY(), 0); }
   var ptrs = {}, pinch = 0, moved = 0;
-  canvas.addEventListener('pointerdown', function (e) { canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId] = [e.clientX, e.clientY]; moved = 0; });
+  var downAt = 0;
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId] = [e.clientX, e.clientY]; moved = 0; downAt = Date.now();
+    if (S.walk) W.target = null; // pressing always stops a glide in progress
+  });
   canvas.addEventListener('pointermove', function (e) {
     var p = ptrs[e.pointerId];
-    if (!p) { if (!S.walk) pick(e); return; }
+    if (!p) { if (S.walk) aimRing(e); else pick(e); return; }
     var dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs[e.pointerId] = [e.clientX, e.clientY];
     var ids = Object.keys(ptrs);
     if (ids.length === 2) {
@@ -229,7 +233,7 @@
   function up(e) {
     delete ptrs[e.pointerId]; pinch = 0;
     if (moved >= 5 || e.type !== 'pointerup') return;
-    if (S.walk) { walkTo(e); return; }
+    if (S.walk) { if (Date.now() - downAt < 350) walkTo(e); return; } // a press held to look is not a click
     pick(e); select(S.hover, true);
   }
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
@@ -386,7 +390,7 @@
      (surfaces thinner than 8 cm) do not, so the walker passes through closed doors.
      The floor or stair tread under the walker sets its height, so stairs can be climbed. */
   var EYE = 1.6, CHEST = 1.2, RADIUS = 0.3, SPEED = 1.5, MAX_STEP = 0.35;
-  var W = { pos: new THREE.Vector3(), eye: new THREE.Vector3(), target: null, yaw: 0, pitch: 0.05, floor: 0, keys: {}, joy: [0, 0] };
+  var W = { pos: new THREE.Vector3(), eye: new THREE.Vector3(), target: null, yaw: 0, pitch: 0.05, floor: 0, keys: {}, joy: [0, 0], turn: 0, glide: 0 };
   var hit = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0), tmp = new THREE.Vector3(), org = new THREE.Vector3();
   var solids = [], backs = [];
   function colliders() {
@@ -470,6 +474,8 @@
       colliders();
       var p = startPoint(); placeWalker(p.x, p.z);
       W.yaw = -cam.th; W.pitch = 0.05; W.keys = {};
+    } else {
+      ring.visible = false;
     }
     syncDock();
   }
@@ -504,11 +510,22 @@
     W.pitch = -Math.asin(Math.max(-1, Math.min(1, v.dir[2])));
     lastRoom = null;
   }
-  function walkTo(e) {
+  // Gold ring under the pointer: where a click would take the walker (floors only).
+  var ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 40), new THREE.MeshBasicMaterial({ color: 0xC9A25D, transparent: true, opacity: 0.9, depthTest: false }));
+  ring.rotation.x = -Math.PI / 2; ring.renderOrder = 10; ring.visible = false; scene.add(ring);
+  function floorHit(e) {
     var b = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
     hit.setFromCamera(ndc, camera); hit.near = 0; hit.far = 60;
-    var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object); })[0];
+    return hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object); })[0];
+  }
+  function aimRing(e) {
+    var f = floorHit(e);
+    ring.visible = !!(f && f.face && f.face.normal.y > 0.6 && f.point.y < W.floor + 1.2);
+    if (ring.visible) ring.position.set(f.point.x, f.point.y + 0.02, f.point.z);
+  }
+  function walkTo(e) {
+    var f = floorHit(e);
     if (!f || !f.face) return;
     if (f.face.normal.y > 0.6 && f.point.y < W.floor + 1.2) W.target = f.point.clone();
     else { // tapped a wall: walk up to just in front of it
@@ -516,12 +533,13 @@
       var d = tmp.length(); if (d < 0.6) return;
       W.target = W.pos.clone().addScaledVector(tmp.normalize(), d - 0.5);
     }
+    if (W.target) { tmp.copy(W.target).sub(W.pos); tmp.y = 0; W.glide = tmp.length() / 0.8; } // there in ~0.8 s
   }
   var move = new THREE.Vector3(), dir = new THREE.Vector3();
   function stepWalk(dt) {
     var fwd = (W.keys.w || W.keys.arrowup ? 1 : 0) - (W.keys.s || W.keys.arrowdown ? 1 : 0) + W.joy[1];
     var side = (W.keys.d ? 1 : 0) - (W.keys.a ? 1 : 0) + W.joy[0];
-    W.yaw += ((W.keys.arrowright ? 1 : 0) - (W.keys.arrowleft ? 1 : 0)) * dt * 1.6;
+    W.yaw += ((W.keys.arrowright ? 1 : 0) - (W.keys.arrowleft ? 1 : 0) + W.turn) * dt * 1.6;
     move.set(0, 0, 0);
     if (fwd || side) {
       W.target = null;
@@ -533,7 +551,7 @@
       move.copy(W.target).sub(W.pos); move.y = 0;
       var d = move.length();
       if (d < 0.05) W.target = null;
-      else move.multiplyScalar(Math.min(1, SPEED * 1.6 * dt / d));
+      else move.multiplyScalar(Math.min(1, Math.max(SPEED * 2, W.glide) * dt / d));
     }
     var len = move.length();
     if (len > 1e-5) {
@@ -645,20 +663,25 @@
   });
   window.addEventListener('keyup', function (e) { W.keys[e.key.toLowerCase()] = false; W.keys.shift = e.shiftKey; });
   window.addEventListener('blur', function () { W.keys = {}; });
-  // On-screen joystick (touch or mouse).
+  // On-screen arrows (mouse or touch): hold to keep walking or turning; a tap moves a short step.
   (function () {
-    var pad = $('joy'), knob = pad.firstElementChild, id = null;
-    function set(e) {
-      var b = pad.getBoundingClientRect(), r = b.width / 2;
-      var x = (e.clientX - b.left - r) / r, y = (e.clientY - b.top - r) / r, d = Math.hypot(x, y);
-      if (d > 1) { x /= d; y /= d; }
-      W.joy = [x, -y];
-      knob.style.transform = 'translate(' + (x * r * 0.55) + 'px,' + (y * r * 0.55) + 'px)';
-    }
-    pad.addEventListener('pointerdown', function (e) { id = e.pointerId; try { pad.setPointerCapture(id); } catch (err) { /* synthetic or ended pointer */ } set(e); e.stopPropagation(); });
-    pad.addEventListener('pointermove', function (e) { if (e.pointerId === id) set(e); });
-    function end(e) { if (e.pointerId !== id) return; id = null; W.joy = [0, 0]; knob.style.transform = ''; }
-    pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+    var MOVE = { f: [1, 0], b: [-1, 0], l: [0, -1], r: [0, 1] };
+    [].forEach.call($('pad').querySelectorAll('button'), function (btn) {
+      var v = MOVE[btn.dataset.k], since = 0, timer = 0;
+      function start(e) {
+        e.preventDefault(); e.stopPropagation(); clearTimeout(timer);
+        try { btn.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+        since = Date.now(); W.target = null; W.joy = [0, v[0]]; W.turn = v[1]; btn.classList.add('on');
+      }
+      function stop() {
+        if (!since) return;
+        var left = Math.max(0, 350 - (Date.now() - since)); since = 0; // a tap still lasts 0.35 s
+        timer = setTimeout(function () { W.joy = [0, 0]; W.turn = 0; btn.classList.remove('on'); }, left);
+      }
+      btn.addEventListener('pointerdown', start);
+      btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop); btn.addEventListener('lostpointercapture', stop);
+      btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    });
   })();
 
   /* ---------- loop ---------- */
