@@ -71,10 +71,16 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .joy{position:absolute;bottom:88px;inset-inline-start:24px;width:110px;height:110px;border-radius:50%;background:rgba(16,23,37,.35);border:1px solid rgba(255,255,255,.35);display:none;touch-action:none;align-items:center;justify-content:center}
 .joy i{width:44px;height:44px;border-radius:50%;background:var(--gold);box-shadow:0 4px 14px rgba(16,23,37,.3);pointer-events:none}
 .walking .joy{display:flex}
+.stage canvas.map{position:absolute;top:20px;inset-inline-end:24px;width:170px;height:170px;border-radius:12px;background:rgba(16,23,37,.78);box-shadow:0 8px 24px rgba(16,23,37,.25);display:none;cursor:pointer;touch-action:none}
+.walking .stage canvas.map{display:block}
+.walking .levels{top:206px}
 .walking .title{opacity:0}
 .walking .hint{bottom:78px;inset-inline-start:50%;transform:translateX(50%);background:rgba(16,23,37,.7);color:#fff;padding:6px 12px;border-radius:999px;white-space:nowrap}
 [dir=ltr] .walking .hint{transform:translateX(-50%)}
 .walking .stage canvas{cursor:crosshair}
+.failed aside,.failed .hd-actions{display:none}
+.failed main{grid-template-columns:1fr}
+.failed .err{display:flex;align-items:center;justify-content:center;height:100%;min-height:50vh;font-size:16px;color:var(--navy);padding:24px}
 .err{padding:40px;text-align:center;color:var(--steel)}
 @media(max-width:860px){
   .app{height:auto}
@@ -87,6 +93,8 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   .dock{bottom:12px;max-width:calc(100% - 16px);overflow-x:auto;scrollbar-width:none}
   .joy{bottom:76px;inset-inline-start:16px}.btn{padding:8px 11px;font-size:12px}
   .hint{display:none}
+  .stage canvas.map{width:120px;height:120px;top:14px;inset-inline-end:12px}
+  .walking .levels{top:146px}
 }
 </style>
 </head>
@@ -107,6 +115,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="loading" id="loading" hidden></div>
       <div class="here" id="here" hidden></div>
       <div class="joy" id="joy"><i></i></div>
+      <canvas class="map" id="map" aria-label="mini map"></canvas>
       <div class="title">
         <div class="k" id="tK"></div>
         <h1 id="tName"></h1>
@@ -141,13 +150,31 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   </main>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="config.js"></script>
 <script>
-/* ?p=<project> loads data/<project>.js (letters, digits, dashes only); default: sample villa. */
+/* ?v=<owner link token>: the villa comes from the private showcase project (config.js).
+   ?p=<project> loads data/<project>.js from this site (sample villa, or local testing). */
 (function () {
-  var p = (new URLSearchParams(location.search).get('p') || 'sample-villa').toLowerCase();
+  var q = new URLSearchParams(location.search), v = (q.get('v') || '').toLowerCase();
+  var p = (q.get('p') || 'sample-villa').toLowerCase();
   if (!/^[a-z0-9-]{1,60}$/.test(p)) p = 'sample-villa';
   function load(src, next) { var s = document.createElement('script'); s.src = src; s.onload = s.onerror = next; document.body.appendChild(s); }
-  load('data/' + p + '.js', function () { load('showcase.js'); });
+  function fail(msg) {
+    document.getElementById('app').classList.add('failed');
+    document.getElementById('stage').innerHTML = '<div class="err"></div>';
+    document.querySelector('#stage .err').textContent = msg;
+  }
+  if (!v) { load('data/' + p + '.js', function () { load('showcase.js'); }); return; }
+  var api = (window.NITAQ_SHOWCASE_API || '').replace(/\/+$/, '');
+  if (!/^[a-z0-9-]{12,80}$/.test(v) || !api) { fail('هذا الرابط غير صالح. تواصل مع نطاق للحصول على رابط جديد.'); return; }
+  fetch(api + '/functions/v1/showcase?v=' + encodeURIComponent(v), { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, body: b }; }); })
+    .then(function (r) {
+      if (r.status === 404) throw new Error('هذا الرابط غير متاح حاليًا. تواصل مع نطاق.');
+      if (!r.ok || !r.body.data) throw new Error('تعذّر تحميل المشروع الآن. حاول مرة أخرى بعد قليل.');
+      window.NITAQ_SHOWCASE = r.body.data; load('showcase.js');
+    })
+    .catch(function (e) { fail(/[\u0600-\u06FF]/.test(e.message) ? e.message : 'تعذّر الاتصال. تأكد من الإنترنت وحاول مرة أخرى.'); });
 })();
 </script>
 </body>

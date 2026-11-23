@@ -168,7 +168,9 @@
     var G = new THREE.Group(); scene.add(G);
     var floors = new THREE.Group(); G.add(floors);
     if (!MESH) buildSlabs(L, floors);
-    var slabTop = (L.slabs || []).reduce(function (m, s) { return Math.max(m, s.top || 0); }, 0);
+    // The level's floor is its largest slab; smaller ones (planters, podiums, landings) can sit higher.
+    var main = (L.slabs || []).reduce(function (m, s) { var a = polyInfo(s.poly).area; return a > m.a ? { a: a, top: s.top || 0 } : m; }, { a: 0, top: 0 });
+    var slabTop = main.top;
     L.rooms.forEach(function (r) {
       var geo = new THREE.ExtrudeGeometry(shape(r.poly), { depth: 0.2, bevelEnabled: false });
       // With real geometry the room floor is only a highlight overlay (hover / selection).
@@ -256,6 +258,7 @@
   function select(r, focus) {
     S.sel = r === S.sel ? null : r; paint();
     if (!focus) return;
+    if (S.walk) { if (S.sel) { placeWalker(P(S.sel._c[0], S.sel._c[1]).x, P(S.sel._c[0], S.sel._c[1]).z); } return; }
     if (S.sel) {
       goal.t.copy(P(S.sel._c[0], S.sel._c[1], levelY()));
       goal.r = clampR(Math.max(Math.sqrt(S.sel.area) * 4.5, SIZE * 0.9));
@@ -406,11 +409,32 @@
     return f ? f.point.y : null;
   }
   function levelFloor() { var L = D.levels[S.level]; return L.elevation + (L._slabTop || 0); }
+  // Inside a wall or column: looking out, a back face (the navy copy) comes before any front face.
+  var AXES = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return new THREE.Vector3(d[0], 0, d[1]); });
+  function insideSolid(x, y, z) {
+    if (!backs.length) return false;
+    var n = 0;
+    AXES.forEach(function (d) {
+      hit.set(org.set(x, y, z), d); hit.near = 0; hit.far = 3;
+      var b = hit.intersectObjects(backs, false)[0], f = hit.intersectObjects(solids, false)[0];
+      if (b && (!f || b.distance < f.distance)) n++;
+    });
+    return n >= 3;
+  }
   function placeWalker(x, z) {
-    var base = levelFloor(), f = floorAt(x, z, base + 1.2);
-    W.floor = f != null && Math.abs(f - base) < 1.5 ? f : base;
-    W.pos.set(x, W.floor, z); W.target = null;
-    W.eye.set(x, W.floor + EYE, z);
+    var base = levelFloor();
+    // Try the spot itself, then rings around it, so a jump never lands inside a wall.
+    for (var r = 0; r <= 2.4; r += 0.3) {
+      for (var a = 0; a < (r ? 12 : 1); a++) {
+        var px = x + r * Math.cos(a * Math.PI / 6), pz = z + r * Math.sin(a * Math.PI / 6);
+        var f = floorAt(px, pz, base + 0.6), fl = f != null && base - f < 1.2 ? f : base; // land on the floor, not on a ledge
+        if (!insideSolid(px, fl + CHEST, pz)) {
+          W.floor = fl; W.pos.set(px, fl, pz); W.target = null; W.eye.set(px, fl + EYE, pz);
+          return true;
+        }
+      }
+    }
+    return false; // nowhere free nearby: stay where we are
   }
   function startPoint() {
     var L = D.levels[S.level];
@@ -478,8 +502,46 @@
     }
     W.pos.y = W.floor;
     W.eye.lerp(tmp.set(W.pos.x, W.floor + EYE, W.pos.z), Math.min(1, dt * 12));
-    showRoom();
+    showRoom(); drawMap();
   }
+
+  /* Mini-map: the level's slab outlines and rooms, north up, with the walker and its view.
+     Tapping it moves the walker there. */
+  var map = $('map'), mctx = map.getContext('2d'), mapFit = null, mapLevel = -1;
+  function fitMap() {
+    var L = D.levels[S.level], x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    (L.slabs || []).concat(L.rooms).forEach(function (o) {
+      o.poly.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+    });
+    if (!isFinite(x0)) { x0 = minX; x1 = maxX; y0 = minY; y1 = maxY; }
+    var size = map.clientWidth || 170, dpr = Math.min(window.devicePixelRatio || 1, 2), pad = 10;
+    map.width = map.height = size * dpr;
+    var k = (size - pad * 2) / Math.max(x1 - x0, y1 - y0, 1);
+    mapFit = { k: k * dpr, ox: (size - (x1 - x0) * k) / 2 * dpr, oy: (size - (y1 - y0) * k) / 2 * dpr, x0: x0, y1: y1, dpr: dpr };
+    mapLevel = S.level;
+  }
+  function toMap(x, y) { return [mapFit.ox + (x - mapFit.x0) * mapFit.k, mapFit.oy + (mapFit.y1 - y) * mapFit.k]; }
+  function fromMap(px, py) { return [(px * mapFit.dpr - mapFit.ox) / mapFit.k + mapFit.x0, mapFit.y1 - (py * mapFit.dpr - mapFit.oy) / mapFit.k]; }
+  function drawMap() {
+    if (mapLevel !== S.level || !mapFit) fitMap();
+    var L = D.levels[S.level], c = mctx;
+    c.clearRect(0, 0, map.width, map.height);
+    function path(poly) { c.beginPath(); poly.forEach(function (q, i) { var m = toMap(q[0], q[1]); c[i ? 'lineTo' : 'moveTo'](m[0], m[1]); }); c.closePath(); }
+    c.lineWidth = mapFit.dpr;
+    (L.slabs || []).forEach(function (sl) { path(sl.poly); c.fillStyle = 'rgba(238,237,234,.92)'; c.fill(); c.strokeStyle = '#6E7787'; c.stroke(); });
+    L.rooms.forEach(function (r) { path(r.poly); c.strokeStyle = 'rgba(110,119,135,.7)'; c.stroke(); });
+    var me = toMap(W.pos.x + CX, -W.pos.z + CY), a = Math.atan2(Math.cos(W.yaw), Math.sin(W.yaw)), r = 26 * mapFit.dpr;
+    c.beginPath(); c.moveTo(me[0], me[1]); c.arc(me[0], me[1], r, -a - 0.6, -a + 0.6); c.closePath();
+    c.fillStyle = 'rgba(201,162,93,.35)'; c.fill();
+    c.beginPath(); c.arc(me[0], me[1], 4.5 * mapFit.dpr, 0, Math.PI * 2); c.fillStyle = '#C9A25D'; c.fill();
+    c.strokeStyle = '#101725'; c.lineWidth = 1.5 * mapFit.dpr; c.stroke();
+  }
+  map.addEventListener('pointerdown', function (e) {
+    e.stopPropagation();
+    if (!mapFit) return;
+    var b = map.getBoundingClientRect(), q = fromMap(e.clientX - b.left, e.clientY - b.top);
+    var w = P(q[0], q[1]); placeWalker(w.x, w.z);
+  });
   // Name of the space under the walker: a Revit room, else the nearest plan note within 4 m.
   var lastRoom = null;
   function showRoom() {

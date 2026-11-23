@@ -1,0 +1,6 @@
+# Separate Supabase project for the NITAQ Showcase (owner villa links).
+# Not the accounting/CRM project: the repo's main supabase/ folder and its deploy workflow never touch this.
+project_id = "nitaq-showcase"
+
+[functions.showcase]
+verify_jwt = false
