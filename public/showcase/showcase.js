@@ -307,6 +307,7 @@
       scene.environment = S.night ? ENV.night : ENV.day; paintSky();
       hemi.intensity = S.night ? 0.08 : 0.22; sun.intensity = S.night ? 0.03 : 1.25;
       if (meshReady) applyCeiling();
+      if (bedGlow) bedGlow.opacity = S.night ? 0.85 : 0.28;
     }
   }
   function renderUI() {
@@ -1382,12 +1383,35 @@
       c.beginPath(); c.moveTo(d + n, 0); c.lineTo(d, n); c.stroke();
     }
   }
+  function boucle(c, n, r) { // looped boucle wool
+    c.fillStyle = '#f1ede6'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 5200; i++) {
+      var x = r() * n, y = r() * n, rad = 1.5 + r() * 2.5;
+      c.strokeStyle = 'rgba(' + (r() < 0.5 ? '90,80,70,.16' : '255,255,255,.5') + ')'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.stroke();
+    }
+  }
+  function travertine(c, n, r) { // warm travertine: soft horizontal veining and small pits
+    c.fillStyle = '#ece4d6'; c.fillRect(0, 0, n, n);
+    for (var k = 0; k < 40; k++) { c.fillStyle = 'rgba(190,170,140,' + (0.05 + r() * 0.08) + ')'; c.fillRect(0, r() * n, n, 1 + r() * 7); }
+    for (var i = 0; i < 900; i++) { c.fillStyle = 'rgba(120,100,80,' + (0.2 + r() * 0.3) + ')'; c.beginPath(); c.ellipse(r() * n, r() * n, 0.6 + r() * 2.2, 0.4 + r() * 1.2, 0, 0, Math.PI * 2); c.fill(); }
+  }
+  function carved(c, n, r) { // hand-carved rug: fields of parallel grooves and concentric arcs
+    c.fillStyle = '#efe9df'; c.fillRect(0, 0, n, n);
+    c.strokeStyle = 'rgba(120,110,95,.22)'; c.lineWidth = 1.6;
+    for (var y = 0; y < n / 2; y += 7) { c.beginPath(); c.moveTo(0, y); c.lineTo(n / 2, y); c.stroke(); }
+    for (var x = n / 2; x < n; x += 7) { c.beginPath(); c.moveTo(x, n / 2); c.lineTo(x, n); c.stroke(); }
+    [[n / 2, n / 2, n / 2], [0, n, n / 2], [n, 0, n / 2]].forEach(function (o) {
+      for (var rr = 8; rr < o[2]; rr += 7) { c.beginPath(); c.arc(o[0], o[1], rr, 0, Math.PI * 2); c.stroke(); }
+    });
+    c.strokeStyle = 'rgba(120,110,95,.3)'; c.lineWidth = 3; c.strokeRect(0, 0, n, n);
+  }
   function procFor(kind) {
     if (!procTex[kind]) {
       var c = document.createElement('canvas'); c.width = c.height = 512;
       var cx = c.getContext('2d');
       if (kind === 'woodV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
-      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: wool, marble: marble })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23 }[kind]));
+      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: carved, marble: marble, boucle: boucle, travertine: travertine })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
@@ -1676,13 +1700,40 @@
     return true;
   }
 
-  // Beds: headboard on the tallest side, mattress from the run of columns at mattress height,
-  // nightstands from what is left beside the headboard.
+  // Pieces in a calm, contemporary style (boucle, travertine, walnut and oak, cream, bronze),
+  // all generated: no model downloads, a few hundred triangles each.
+  function MX() {
+    var b = M();
+    b.boucle = rmat('fabric', 0.86, '#E6DFD3', 0.97, 'boucle', 0.25);
+    b.travertine = rmat('stone', 0.8, '#D9CDB8', 0.6, 'travertine', 0.7);
+    b.cream = rmat('top', 0.9, '#EDE7DC', 0.35);
+    b.tv = rmat('tv', 0.05, '#0C0D0F', 0.08, null, 1, 0.6);
+    b.ceramic = rmat('ceramic', 0.85, '#E4DED3', 0.45);
+    b.throwKnit = rmat('fabric', 0.55, '#9C8E7D', 0.97, 'boucle', 0.12);
+    b.leaf = rmat('foliage', 0.3, '#FFFFFF', 0.7); // leaf colours come per instance
+    b.trunk = rmat('wood', 0.25, '#6A5644', 0.85, 'wood', 0.3);
+    b.soil = rmat('soil', 0.1, '#3B3127', 1);
+    b.planter = rmat('stone', 0.75, '#CFC7B9', 0.85, 'stone', 0.35);
+    return b;
+  }
+  function glowMatBed() {
+    if (!bedGlow) {
+      var g = document.createElement('canvas'); g.width = 4; g.height = 128;
+      var x = g.getContext('2d'), gr = x.createLinearGradient(0, 128, 0, 0);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 4, 128);
+      bedGlow = new THREE.MeshBasicMaterial({ color: 0xFFC98A, map: new THREE.CanvasTexture(g), transparent: true, opacity: 0.3,
+        blending: THREE.AdditiveBlending, depthWrite: false, clippingPlanes: [cutPlane] });
+    }
+    return bedGlow;
+  }
+  var bedGlow = null;
+
+  // Beds (reference: low boucle bed, soft headboard with a warm LED wash behind it, floating
+  // nightstands with mushroom lamps, knitted throw, carved-arc rug).
   function buildBed(m, G, mt) {
     var r = occRect(m, function () { return true; }); if (!r) return false;
     var best = -1, head = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.15, 0); if (st.maxh > best) { best = st.maxh; head = s; } });
-    var headTop = best, wAxisU = head >= 2; // the bed's width runs along the head side
-    var nW = wAxisU ? m.nu : m.nv, nL = wAxisU ? m.nv : m.nu, cell = function (w, l) {
+    var wAxisU = head >= 2, nW = wAxisU ? m.nu : m.nv, nL = wAxisU ? m.nv : m.nu, cell = function (w, l) {
       var i = wAxisU ? w : (head === 0 ? l : m.nu - 1 - l), j = wAxisU ? (head === 2 ? l : m.nv - 1 - l) : w;
       return hAt(m, i, j);
     };
@@ -1690,59 +1741,102 @@
     for (var w = 0; w < nW; w++) { var ok = 0, tot = 0; for (var l = Math.floor(nL * 0.45); l < Math.floor(nL * 0.95); l++) { tot++; var h = cell(w, l); if (h > 0.25 && h < 0.85) ok++; } colOK.push(tot && ok / tot > 0.5); }
     var runA = 0, runB = -1, a = -1; colOK.concat([false]).forEach(function (v, i) { if (v && a < 0) a = i; if (!v && a >= 0) { if (i - a > runB - runA + 1) { runA = a; runB = i - 1; } a = -1; } });
     if (runB < runA) return false;
-    var mats = []; for (w = runA; w <= runB; w++) for (l = Math.floor(nL * 0.4); l < nL; l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) mats.push(h); }
-    var mTop = median(mats) || 0.55, footL = 0; for (w = runA; w <= runB; w++) for (l = 0; l < nL; l++) if (cell(w, l) > 0.1) footL = Math.max(footL, l + 1);
+    var footL = 0; for (w = runA; w <= runB; w++) for (l = 0; l < nL; l++) if (cell(w, l) > 0.1) footL = Math.max(footL, l + 1);
     var W = (runB - runA + 1) * CELL, L = footL * CELL, w0 = (wAxisU ? m.u0 : m.v0) + runA * CELL;
-    // bed frame in (x = across width, z = from head toward foot), mapped to (u, v)
     function at(x, z) {
-      var wc = w0 + x, lc = z;
-      if (head === 2) return [wc, m.v0 + lc]; if (head === 3) return [wc, m.v1 - lc];
-      if (head === 0) return [m.u0 + lc, wc]; return [m.u1 - lc, wc];
+      var wc = w0 + x; if (head === 2) return [wc, m.v0 + z]; if (head === 3) return [wc, m.v1 - z];
+      if (head === 0) return [m.u0 + z, wc]; return [m.u1 - z, wc];
     }
-    function bx(gx, gy, gz, x, y, z, mat, rx) { // box of size (gx across, gy up, gz along length)
-      var p = at(x, z), m2 = put(G, rboxGeo(wAxisU ? gx : gz, gy, wAxisU ? gz : gx, Math.min(0.06, gy / 2, gx / 2, gz / 2)), mat, p[0], y, p[1]);
-      if (rx) { if (wAxisU) m2.rotation.x = head === 2 ? -rx : rx; else m2.rotation.z = head === 0 ? rx : -rx; } // tops lean toward the headboard
+    function bx(gx, gy, gz, x, y, z, mat, rx, rad) {
+      var p = at(x, z), m2 = put(G, rboxGeo(wAxisU ? gx : gz, gy, wAxisU ? gz : gx, rad != null ? rad : Math.min(0.06, gy / 2, gx / 2, gz / 2)), mat, p[0], y, p[1]);
+      if (rx) { if (wAxisU) m2.rotation.x = head === 2 ? -rx : rx; else m2.rotation.z = head === 0 ? rx : -rx; }
       return m2;
     }
-    var baseTop = Math.max(0.28, mTop - 0.24);
-    bx(W + 0.04, baseTop - 0.08, L - 0.08, W / 2, 0.08 + (baseTop - 0.08) / 2, 0.08 + (L - 0.08) / 2, mt.body);
-    bx(W - 0.03, 0.24, L - 0.14, W / 2, baseTop + 0.12, 0.12 + (L - 0.14) / 2, mt.linen);
-    var duvL = (L - 0.14) * 0.72;
-    bx(W + 0.07, 0.07, duvL, W / 2, baseTop + 0.255, L - 0.02 - duvL / 2, mt.cushion);
-    bx(W + 0.08, 0.08, 0.26, W / 2, baseTop + 0.29, L - 0.02 - duvL + 0.13, mt.cushion);
-    bx(W + 0.1, 0.03, 0.45, W / 2, baseTop + 0.3, L - 0.3, mt.accent); // throw at the foot
-    var np = W > 1.3 ? 2 : 1, pw = (W - 0.12) / np;
-    for (var k = 0; k < np; k++) bx(pw - 0.06, 0.15, 0.42, 0.06 + pw * (k + 0.5), baseTop + 0.32, 0.36, mt.linen, 0.35);
-    if (W > 1.3) bx(0.5, 0.32, 0.12, W / 2, baseTop + 0.38, 0.58, mt.accent, 0.25);
-    var hbW = W + 0.2, nch = Math.max(3, Math.round(hbW / 0.24)), cw = hbW / nch, hbTop = Math.max(headTop, mTop + 0.45);
-    for (k = 0; k < nch; k++) bx(cw - 0.012, hbTop - 0.12, 0.1, -0.1 + cw * (k + 0.5), 0.12 + (hbTop - 0.12) / 2, 0.06, mt.body);
-    // nightstands: columns outside the mattress run, near the head
+    G.userData.headSide = head;
+    var baseH = 0.32, mTop = baseH + 0.2;
+    put(G, rboxGeo(wAxisU ? W - 0.1 : L - 0.2, 0.04, wAxisU ? L - 0.2 : W - 0.1, 0.01), mt.plinth, at(W / 2, L / 2)[0], 0.02, at(W / 2, L / 2)[1]);
+    bx(W + 0.16, baseH, L + 0.04, W / 2, 0.04 + baseH / 2, L / 2 + 0.06, mt.boucle, 0, 0.13); // rounded "cloud" base
+    bx(W - 0.02, 0.2, L - 0.16, W / 2, baseH + 0.1, 0.14 + (L - 0.16) / 2, mt.linen, 0, 0.06);
+    var duvL = (L - 0.16) * 0.74, dz = L - 0.02 - duvL / 2;
+    bx(W + 0.06, 0.06, duvL, W / 2, mTop + 0.03, dz, mt.cushion, 0, 0.03);
+    [-1, 1].forEach(function (sd) { bx(0.025, 0.24, duvL, W / 2 + sd * (W / 2 + 0.04), mTop - 0.09, dz, mt.cushion, 0, 0.012); }); // duvet drop
+    bx(W + 0.07, 0.08, 0.22, W / 2, mTop + 0.06, L - 0.02 - duvL + 0.11, mt.cushion, 0, 0.04); // turned-down fold
+    bx(W + 0.2, 0.035, 0.55, W / 2, mTop + 0.08, L - 0.45, mt.throwKnit, 0, 0.017); // knitted throw
+    [-1, 1].forEach(function (sd) { bx(0.03, 0.32, 0.55, W / 2 + sd * (W / 2 + 0.11), mTop - 0.08, L - 0.45, mt.throwKnit, 0, 0.014); });
+    var np = W > 1.3 ? 2 : 1, pw = (W - 0.1) / np;
+    for (var k = 0; k < np; k++) bx(pw - 0.05, 0.36, 0.17, 0.05 + pw * (k + 0.5), mTop + 0.17, 0.25, mt.linen, 0.28, 0.07);
+    if (W > 1.3) bx(0.55, 0.26, 0.13, W / 2, mTop + 0.14, 0.42, mt.throwKnit, 0.2, 0.06); // lumbar
+    var hbTop = Math.max(best, 1.05), hbH = hbTop - 0.12;
+    bx(W + 0.12, hbH, 0.14, W / 2, 0.12 + hbH / 2, 0.02, mt.boucle, 0, 0.065); // one soft headboard panel
+    var gl = at(W / 2, -0.06), glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, 0.45), glowMatBed());
+    glow.position.set(gl[0], hbTop + 0.18, gl[1]); glow.rotation.y = head === 2 ? 0 : head === 3 ? Math.PI : head === 0 ? Math.PI / 2 : -Math.PI / 2;
+    G.add(glow); // LED wash on the wall above the headboard
+    // floating nightstands with mushroom lamps where Revit has them beside the head
     [[0, runA - 1], [runB + 1, nW - 1]].forEach(function (rg) {
       if (rg[1] - rg[0] < 6) return;
-      var top2 = 0, wa = Infinity, wb = -1, lb = 0;
-      for (w = rg[0]; w <= rg[1]; w++) for (l = 0; l < Math.min(nL, Math.round(0.8 / CELL)); l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) { top2 = Math.max(top2, h); wa = Math.min(wa, w); wb = Math.max(wb, w); lb = Math.max(lb, l + 1); } }
+      var wa = Infinity, wb = -1, lb = 0;
+      for (w = rg[0]; w <= rg[1]; w++) for (l = 0; l < Math.min(nL, Math.round(0.8 / CELL)); l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) { wa = Math.min(wa, w); wb = Math.max(wb, w); lb = Math.max(lb, l + 1); } }
       if (wb < wa) return;
-      var nx = (wa - runA) * CELL, nw = (wb - wa + 1) * CELL, nd = Math.min(lb * CELL, 0.5), nh = Math.min(top2, 0.65);
-      bx(nw - 0.04, nh - 0.08, nd - 0.04, nx + nw / 2, 0.08 + (nh - 0.08) / 2, 0.04 + nd / 2, mt.wood);
-      bx(nw - 0.1, 0.006, 0.01, nx + nw / 2, 0.08 + (nh - 0.08) * 0.62, 0.04 + nd - 0.02, mt.plinth); // drawer line
-      var p = at(nx + nw / 2, 0.04 + nd / 2);
-      put(G, new THREE.CylinderGeometry(0.06, 0.07, 0.3, 20), mt.metal, p[0], nh + 0.15, p[1]); // lamp
-      put(G, new THREE.CylinderGeometry(0.13, 0.17, 0.22, 28, 1, true), mt.shade, p[0], nh + 0.38, p[1]);
+      var nx = (wa - runA) * CELL, nw = Math.min((wb - wa + 1) * CELL, 0.6), nd = Math.min(lb * CELL, 0.42);
+      var cx = nx + (wb - wa + 1) * CELL / 2;
+      bx(nw, 0.16, nd, cx, 0.47, 0.03 + nd / 2, mt.wood, 0, 0.01);
+      bx(nw - 0.06, 0.004, 0.01, cx, 0.47, 0.03 + nd + 0.002, mt.plinth, 0, 0.001); // drawer line
+      var p = at(cx, 0.03 + nd / 2);
+      put(G, new THREE.CylinderGeometry(0.035, 0.05, 0.24, 20), mt.ceramic, p[0], 0.55 + 0.12, p[1]);
+      put(G, new THREE.SphereGeometry(0.15, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mt.shade, p[0], 0.77, p[1]);
     });
+    if (W > 1.3) { // carved-arc rug under the lower two thirds
+      var rp = at(W / 2, L * 0.62);
+      put(G, rboxGeo(wAxisU ? W + 1.4 : L * 0.9, 0.012, wAxisU ? L * 0.9 : W + 1.4, 0.004), mt.rugC, rp[0], 0.006, rp[1]).castShadow = false;
+    }
     return true;
   }
 
-  // Tables: marble top at the measured height; round when the top's corners are empty.
+  // Tables after the references: square → thin marble top on slim bronze legs with a nesting
+  // wooden tray table; elongated → travertine pill on two drums; small → travertine drum.
+  function pillGeo(len, wid, t) {
+    var r = wid / 2, s = new THREE.Shape(), hl = len / 2 - r;
+    s.moveTo(-hl, -r); s.lineTo(hl, -r); s.absarc(hl, 0, r, -Math.PI / 2, Math.PI / 2, false);
+    s.lineTo(-hl, r); s.absarc(-hl, 0, r, Math.PI / 2, Math.PI * 1.5, false);
+    var g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 3, curveSegments: 24 });
+    g.rotateX(-Math.PI / 2); g.translate(0, -t / 2, 0); return g;
+  }
   function tableAt(G, mt, rect, topH, round, dining) {
-    var t = dining ? 0.05 : 0.04, cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
-    if (round) {
-      var top = put(G, new THREE.CylinderGeometry(0.5, 0.5, t, 48), mt.top, cu, topH - t / 2, cv); top.scale.set(du, 1, dv);
-      var ped = put(G, new THREE.CylinderGeometry(0.05, 0.12, topH - t, 24), mt.metal, cu, (topH - t) / 2, cv);
+    var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
+    var longU = du >= dv, lo = Math.max(du, dv), sh = Math.min(du, dv);
+    if (dining) { // cream top on two oak pedestal slabs
+      put(G, rboxGeo(du, 0.05, dv, 0.015), mt.cream, cu, topH - 0.025, cv);
+      [-1, 1].forEach(function (sd) {
+        var off = sd * (lo / 2 - Math.min(0.45, lo * 0.22));
+        put(G, rboxGeo(longU ? 0.16 : sh * 0.62, topH - 0.05, longU ? sh * 0.62 : 0.16, 0.02), mt.woodL, cu + (longU ? off : 0), (topH - 0.05) / 2, cv + (longU ? 0 : off));
+      });
       return;
     }
-    put(G, rboxGeo(du, t, dv, 0.008), mt.top, cu, topH - t / 2, cv);
-    var inset = Math.min(0.08, du * 0.15, dv * 0.15), lh = topH - t, leg = new THREE.BoxGeometry(0.035, lh, 0.035);
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg, mt.metal, cu + s[0] * (du / 2 - inset), lh / 2, cv + s[1] * (dv / 2 - inset)); });
+    if (lo <= 0.62) { // side table: travertine drum
+      var R = sh / 2;
+      put(G, new THREE.CylinderGeometry(R * 0.78, R * 0.82, topH - 0.04, 36), mt.travertine, cu, (topH - 0.04) / 2, cv);
+      put(G, new THREE.CylinderGeometry(R, R, 0.04, 40), mt.travertine, cu, topH - 0.02, cv);
+      return;
+    }
+    if (lo / sh > 1.3 || round) { // travertine pill on two drums
+      var top = put(G, pillGeo(lo, sh, 0.07), mt.travertine, cu, topH - 0.035, cv); if (!longU) top.rotation.y = Math.PI / 2;
+      [-1, 1].forEach(function (sd) {
+        var off = sd * (lo / 2 - sh * 0.42);
+        put(G, new THREE.CylinderGeometry(sh * 0.27, sh * 0.27, topH - 0.07, 32), mt.travertine, cu + (longU ? off : 0), (topH - 0.07) / 2, cv + (longU ? 0 : off));
+      });
+      return;
+    }
+    // square coffee table: marble on slim bronze legs, nesting tray table beneath
+    put(G, rboxGeo(du, 0.025, dv, 0.006), mt.top, cu, topH - 0.0125, cv);
+    var leg = new THREE.BoxGeometry(0.016, topH - 0.025, 0.016);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg, mt.metal, cu + s[0] * (du / 2 - 0.012), (topH - 0.025) / 2, cv + s[1] * (dv / 2 - 0.012)); });
+    var nu = du * 0.55, nv = dv * 0.55, nh = topH * 0.5, ncu = cu + du * 0.18, ncv = cv + dv * 0.24;
+    put(G, rboxGeo(nu, 0.02, nv, 0.004), mt.woodL, ncu, nh - 0.01, ncv);
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (e) { // tray lip
+      put(G, new THREE.BoxGeometry(e[0] ? 0.012 : nu, 0.03, e[1] ? 0.012 : nv), mt.woodL, ncu + e[0] * (nu / 2 - 0.006), nh + 0.015, ncv + e[1] * (nv / 2 - 0.006));
+    });
+    var leg2 = new THREE.BoxGeometry(0.012, nh - 0.02, 0.012);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg2, mt.metal, ncu + s[0] * (nu / 2 - 0.01), (nh - 0.02) / 2, ncv + s[1] * (nv / 2 - 0.01)); });
   }
   function buildTable(m, G, mt) {
     var topH = 0; cellsWhere(m, function (h) { if (h > topH) topH = h; return false; });
@@ -1751,15 +1845,27 @@
     tableAt(G, mt, rect, topH, rect.n / area < 0.86, false);
     return true;
   }
-  // Dining chair facing direction (fu, fv) in the frame, centred at (cu, cv).
+  // Curved-back upholstered dining chair (reference), oak legs, facing (fu, fv).
+  var shellCache = {};
+  function shellGeo(R, span, h) {
+    var key = R.toFixed(3) + h.toFixed(3); if (shellCache[key]) return shellCache[key];
+    var s = new THREE.Shape(), t = 0.05, a0 = -span, a1 = span, n = 24;
+    for (var i = 0; i <= n; i++) { var a = a0 + (a1 - a0) * i / n; s[i ? 'lineTo' : 'moveTo'](R * Math.sin(a), R * Math.cos(a)); }
+    for (i = n; i >= 0; i--) { a = a0 + (a1 - a0) * i / n; s.lineTo((R - t) * Math.sin(a), (R - t) * Math.cos(a)); }
+    var g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 3 });
+    g.rotateX(-Math.PI / 2); // arc behind the seat (−z), extruded upward
+    return (shellCache[key] = g);
+  }
   function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
     var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
-    w = Math.min(Math.max(w, 0.44), 0.6); d = Math.min(Math.max(d, 0.46), 0.6); hTop = Math.min(Math.max(hTop, 0.8), 1.05);
-    var seat = 0.47, leg = new THREE.CylinderGeometry(0.016, 0.012, seat - 0.06, 10);
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(C, leg, mt.wood, s[0] * (w / 2 - 0.04), (seat - 0.06) / 2, s[1] * (d / 2 - 0.04)); });
-    put(C, rboxGeo(w, 0.08, d, 0.03), mt.cushion, 0, seat - 0.02, 0.01);
-    var back = put(C, rboxGeo(w - 0.02, hTop - seat - 0.04, 0.06, 0.03), mt.cushion, 0, seat + (hTop - seat) / 2, -d / 2 + 0.04);
-    back.rotation.x = -0.1;
+    w = Math.min(Math.max(w, 0.46), 0.58); d = Math.min(Math.max(d, 0.48), 0.58); hTop = Math.min(Math.max(hTop, 0.78), 0.86);
+    var seat = 0.47, legG = new THREE.CylinderGeometry(0.017, 0.012, seat - 0.05, 12);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) {
+      var lg = put(C, legG, mt.woodL, s[0] * (w / 2 - 0.05), (seat - 0.05) / 2, s[1] * (d / 2 - 0.05));
+      lg.rotation.z = -s[0] * 0.06; lg.rotation.x = s[1] * 0.06; // slight splay
+    });
+    put(C, rboxGeo(w, 0.1, d, 0.045), mt.cushion, 0, seat, 0.01);
+    var back = put(C, shellGeo(w * 0.55, 1.25, hTop - seat - 0.1), mt.cushion, 0, seat + 0.09, 0.03);
     return C;
   }
   function buildChair(m, G, mt) {
@@ -1769,41 +1875,107 @@
     chairAt(G, mt, (r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2, bs < 2 ? r.v1 - r.v0 : r.u1 - r.u0, bs < 2 ? r.u1 - r.u0 : r.v1 - r.v0, best, f[0], f[1]);
     return true;
   }
-  // Dining set in one family: the table top at the most common height between 0.65 and 0.82 m,
-  // every other cluster of cells a chair facing the table.
   function buildDiningSet(m, G, mt) {
     var hs = cellsWhere(m, function (h) { return h > 0.65 && h < 0.82; }).map(function (c) { return Math.round(c[2] * 50) / 50; });
     if (!hs.length) return false;
     var cnt = {}, topH = 0.75, bc = 0; hs.forEach(function (h) { cnt[h] = (cnt[h] || 0) + 1; if (cnt[h] > bc) { bc = cnt[h]; topH = h; } });
     var rect = occRect(m, function (h) { return Math.abs(h - topH) < 0.03; }); if (!rect) return false;
-    // keep the biggest rectangle of table cells: drop chair seats that happen to be at that height
     var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, inTable = function (u, v) { return u > rect.u0 - 0.05 && u < rect.u1 + 0.05 && v > rect.v0 - 0.05 && v < rect.v1 + 0.05; };
     tableAt(G, mt, rect, topH, false, true);
-    var seen = new Uint8Array(m.nu * m.nv), q = [];
+    var seen = new Uint8Array(m.nu * m.nv);
     for (var i = 0; i < m.nu; i++) for (var j = 0; j < m.nv; j++) {
       var idx = i * m.nv + j, u = m.u0 + (i + 0.5) * CELL, v = m.v0 + (j + 0.5) * CELL;
       if (seen[idx] || m.H[idx] <= 0.05 || inTable(u, v)) continue;
-      var comp = [], top = 0; q = [[i, j]]; seen[idx] = 1;
+      var comp = [], top = 0, q = [[i, j]]; seen[idx] = 1;
       while (q.length) {
         var c = q.pop(); comp.push(c); top = Math.max(top, m.H[c[0] * m.nv + c[1]]);
         [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (dd) {
           var a = c[0] + dd[0], b = c[1] + dd[1], k = a * m.nv + b;
           if (a < 0 || b < 0 || a >= m.nu || b >= m.nv || seen[k] || m.H[k] <= 0.05) return;
-          var uu = m.u0 + (a + 0.5) * CELL, vv = m.v0 + (b + 0.5) * CELL; if (inTable(uu, vv)) return;
+          if (inTable(m.u0 + (a + 0.5) * CELL, m.v0 + (b + 0.5) * CELL)) return;
           seen[k] = 1; q.push([a, b]);
         });
       }
       if (comp.length * CELL * CELL < 0.06) continue;
       var a0 = Infinity, a1 = -1, b0 = Infinity, b1 = -1; comp.forEach(function (c) { a0 = Math.min(a0, c[0]); a1 = Math.max(a1, c[0]); b0 = Math.min(b0, c[1]); b1 = Math.max(b1, c[1]); });
-      var ccu = m.u0 + (a0 + a1 + 1) / 2 * CELL, ccv = m.v0 + (b0 + b1 + 1) / 2 * CELL, fu = cu - ccu, fv = cv - ccv, fl = Math.hypot(fu, fv) || 1;
-      var horiz = Math.abs(fu) > Math.abs(fv); // chairs at the ends face along u
-      fu = horiz ? Math.sign(fu) : 0; fv = horiz ? 0 : Math.sign(fv);
+      var ccu = m.u0 + (a0 + a1 + 1) / 2 * CELL, ccv = m.v0 + (b0 + b1 + 1) / 2 * CELL, fu = cu - ccu, fv = cv - ccv;
+      var horiz = Math.abs(fu) > Math.abs(fv); fu = horiz ? Math.sign(fu) : 0; fv = horiz ? 0 : Math.sign(fv);
       chairAt(G, mt, ccu - fu * 0.05, ccv - fv * 0.05, (horiz ? b1 - b0 + 1 : a1 - a0 + 1) * CELL, (horiz ? a1 - a0 + 1 : b1 - b0 + 1) * CELL, top, fu, fv);
     }
+    // centrepiece: a stone vase with olive sprigs
+    put(G, new THREE.SphereGeometry(0.13, 24, 16), mt.ceramic, cu, topH + 0.12, cv).scale.set(1, 1.15, 1);
     return true;
   }
+
+  // TV wall (reference): with a wall behind the unit, a travertine feature panel, the TV on it
+  // and a floating walnut console with drawer seams; without one, the console and TV alone.
+  function buildTV(m, G, mt, back) {
+    var r = occRect(m, function () { return true; }); if (!r) return false;
+    var s = back, along2 = along(r, s), a0 = along2[0], a1 = along2[1], len = a1 - a0, dep = s < 2 ? r.u1 - r.u0 : r.v1 - r.v0;
+    dep = Math.min(Math.max(dep, 0.38), 0.46);
+    function box(off, depth, h, y, w, mat, center) {
+      var fr = sideRect(r, s, off, depth, (a0 + a1) / 2 - w / 2, (a0 + a1) / 2 + w / 2);
+      return put(G, rboxGeo(fr.du, h, fr.dv, Math.min(0.01, h / 2)), mat, fr.u, y, fr.v);
+    }
+    if (back >= 0 && back <= 3 && G.userData.wall) {
+      box(0, 0.05, 2.35, 0.3 + 2.35 / 2, Math.min(len + 0.6, 3.6), mt.travertine); // feature panel
+      var tvW = Math.min(1.65, len * 0.72);
+      box(0.05, 0.035, tvW * 9 / 16, 1.3, tvW, mt.tv);
+    } else {
+      tvW = Math.min(1.45, len * 0.65);
+      box(0.06, 0.04, tvW * 9 / 16, 0.62 + tvW * 9 / 32 + 0.04, tvW, mt.tv);
+    }
+    box(0.05, dep, 0.3, 0.18 + 0.15, len, mt.wood); // floating console
+    var nd = Math.max(2, Math.round(len / 0.6)), dw = len / nd;
+    for (var k = 1; k < nd; k++) { // drawer seams on the front
+      var x = a0 + dw * k, fr = sideRect(r, s, 0.05 + dep, 0.004, x - 0.002, x + 0.002);
+      put(G, new THREE.BoxGeometry(fr.du, 0.26, fr.dv), mt.plinth, fr.u, 0.33, fr.v);
+    }
+    // two ceramic vases on the console
+    [0.22, 0.32].forEach(function (f, i) {
+      var fr = sideRect(r, s, 0.05 + dep * 0.5, 0.01, a1 - len * f, a1 - len * f + 0.01), vh = i ? 0.26 : 0.36;
+      put(G, new THREE.CylinderGeometry(0.05, 0.075, vh, 24), mt.ceramic, fr.u, 0.48 + vh / 2, fr.v);
+    });
+    return true;
+  }
+
+  // Potted olive tree (reference) from the plant's bounding box: textured stone planter, a few
+  // slender trunks and a canopy of instanced leaves (one draw call per tree).
+  var leafGeo = null;
+  function buildPlant(f, mt) {
+    var bb = f.bb; if (!bb) return null;
+    var w = bb[3] - bb[0], d = bb[4] - bb[1], H = Math.max(0.6, bb[5] - bb[2]), G = new THREE.Group(), rnd = rng(f.id % 2147483646 || 7);
+    var c = P((bb[0] + bb[3]) / 2, (bb[1] + bb[4]) / 2); G.position.set(c.x, bb[2], c.z);
+    var R = Math.min(Math.max(Math.min(w, d) * 0.38, 0.17), 0.3), ph = Math.min(0.55, Math.max(0.32, H * 0.3));
+    var prof = []; for (var i = 0; i <= 12; i++) { var t = i / 12; prof.push(new THREE.Vector2(R * (0.72 + 0.32 * Math.sin(Math.PI * (0.15 + t * 0.75))), t * ph)); }
+    put(G, new THREE.LatheGeometry(prof, 36), mt.planter, 0, 0, 0);
+    put(G, new THREE.CylinderGeometry(R * 0.85, R * 0.85, 0.02, 30), mt.soil, 0, ph - 0.03, 0);
+    var tall = H > 1.0, crown = tall ? ph + (H - ph) * 0.62 : ph + (H - ph) * 0.5;
+    var nTr = tall ? 3 : 0, tips = [];
+    for (i = 0; i < nTr; i++) {
+      var ang = i * 2.1 + rnd(), lean = 0.08 + rnd() * 0.1, len = crown - ph + 0.05;
+      var tr = put(G, new THREE.CylinderGeometry(0.008, 0.016, len, 8), mt.trunk, Math.sin(ang) * lean * len / 2, ph + len / 2, Math.cos(ang) * lean * len / 2);
+      tr.rotation.set(Math.cos(ang) * lean, 0, -Math.sin(ang) * lean);
+      tips.push(new THREE.Vector3(Math.sin(ang) * lean * len, ph + len, Math.cos(ang) * lean * len));
+    }
+    if (!tips.length) tips.push(new THREE.Vector3(0, crown, 0));
+    if (!leafGeo) { leafGeo = new THREE.SphereGeometry(1, 6, 4); leafGeo.scale(0.011, 0.0035, 0.042); }
+    var n = tall ? 520 : 300, leaves = new THREE.InstancedMesh(leafGeo, mt.leaf, n), M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
+    var spread = Math.min(Math.max(Math.min(w, d) * 0.45, 0.25), 0.55), canopyH = tall ? (H - crown) + 0.25 : (H - ph) * 0.7;
+    for (i = 0; i < n; i++) {
+      var tip = tips[i % tips.length], u = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * spread, yy = (rnd() - 0.35) * canopyH;
+      e.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28); q.setFromEuler(e);
+      M4.compose(new THREE.Vector3(tip.x + Math.cos(u) * rr, tip.y + yy, tip.z + Math.sin(u) * rr), q, new THREE.Vector3(1, 1, 1));
+      leaves.setMatrixAt(i, M4); leaves.setColorAt(i, col.setHSL(0.21 + rnd() * 0.05, 0.22 + rnd() * 0.12, 0.3 + rnd() * 0.14));
+    }
+    leaves.castShadow = true; G.add(leaves);
+    return G;
+  }
+
   function redressKind(name) {
     var n = name.toLowerCase();
+    if (/plant|vase|foliage|bamboo|ficus|olive/.test(n)) return 'plant';
+    if (/entertainment|tv unit/.test(n)) return 'tv';
     if (/bed|letto/.test(n)) return 'bed';
     if (/dining_table|chairs\)|tavolo da pranzo/.test(n)) return 'dining';
     if (/chair|sedia|katakana/.test(n)) return 'chair';
@@ -1814,13 +1986,33 @@
   function buildRealFurniture() {
     if (realBuilt || !D.furniture || !D.furniture.length) return;
     realBuilt = true;
-    var mt = M(), up = new THREE.Vector3(0, 1, 0), made = 0;
+    var mt = MX(), up = new THREE.Vector3(0, 1, 0), made = 0;
+    mt.rugC = rmat('rug', 0.9, '#E3DCCF', 1, 'rug', 2.4);
+    var fronts = []; ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) fronts.push(o); }); });
+    var wrc = new THREE.Raycaster();
     D.furniture.forEach(function (f) {
-      var tris = elemTris[f.id], kind = redressKind(f.name); if (!tris || !kind) return;
+      var kind = redressKind(f.name);
+      if (kind === 'plant') { var pg = buildPlant(f, mt); if (pg) { pg.userData.elem = f.id; realGroup.add(pg); made++; } return; }
+      var tris = elemTris[f.id]; if (!tris || !kind) return;
       var al = Math.hypot(f.ax[0], f.ax[1]) || 1, A = new THREE.Vector3(f.ax[0] / al, 0, -f.ax[1] / al), Cv = new THREE.Vector3().crossVectors(A, up);
       var O = P(f.p[0], f.p[1]), m = heightMap(tris, O, A, Cv), G = new THREE.Group();
-      var ok = ({ seat: buildSeat, bed: buildBed, table: buildTable, chair: buildChair, dining: buildDiningSet })[kind](m, G, mt);
+      var back = -1;
+      if (kind === 'tv') { // the side of the unit that has a wall right behind it
+        var rr = occRect(m, function () { return true; }), best = 0.7;
+        if (rr) [[0, -1, 0], [1, 1, 0], [2, 0, -1], [3, 0, 1]].forEach(function (sd) {
+          var cu = (rr.u0 + rr.u1) / 2, cv = (rr.v0 + rr.v1) / 2, half = sd[1] ? (rr.u1 - rr.u0) / 2 : (rr.v1 - rr.v0) / 2;
+          var o = O.clone().addScaledVector(A, cu).addScaledVector(Cv, cv); o.y = m.base + 1.2;
+          var dir = A.clone().multiplyScalar(sd[1]).addScaledVector(Cv, sd[2]);
+          wrc.set(o, dir); wrc.near = 0; wrc.far = half + 0.4;
+          var hit = wrc.intersectObjects(fronts, false)[0];
+          if (hit && hit.distance - half < best) { best = hit.distance - half; back = sd[0]; }
+        });
+        G.userData.wall = back >= 0; if (back >= 0) G.userData.front = [A, A, Cv, Cv][back].clone().multiplyScalar(back % 2 ? -1 : 1); // faces into the room
+        if (back < 0) back = 2;
+      }
+      var ok = kind === 'tv' ? buildTV(m, G, mt, back) : ({ seat: buildSeat, bed: buildBed, table: buildTable, chair: buildChair, dining: buildDiningSet })[kind](m, G, mt);
       if (!ok) return;
+      if (G.userData.headSide != null) G.userData.front = [A, A, Cv, Cv][G.userData.headSide].clone().multiplyScalar(G.userData.headSide % 2 ? -1 : 1);
       G.matrixAutoUpdate = false; G.matrix.makeBasis(A, up, Cv).setPosition(O.x, m.base, O.z);
       G.userData.elem = f.id; realGroup.add(G); made++;
       if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true;

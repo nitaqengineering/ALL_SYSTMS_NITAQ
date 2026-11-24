@@ -172,19 +172,21 @@ for i, lv in enumerate(levels):
 # Furniture the viewer re-dresses as realistic pieces in the same layout: sofas and armchairs,
 # beds, tables and chairs. Each instance: names, insertion point and its X axis in plan (the
 # viewer reads the actual shape from the instance's own exported geometry).
-REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner', re.I)
+REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner|entertainment|tv unit|plant|vase|foliage|bamboo|ficus|olive', re.I)
 furniture = []
 for fi in DB.FilteredElementCollector(doc).OfClass(DB.FamilyInstance):
     cat = fi.Category.Name if fi.Category else ''
-    if cat.strip() not in ('Furniture', 'Furniture Systems') or not isinstance(fi.Location, DB.LocationPoint):
+    if cat.strip() not in ('Furniture', 'Furniture Systems', 'Generic Models') or not isinstance(fi.Location, DB.LocationPoint):
         continue
     name = '%s %s' % (fi.Symbol.FamilyName, fi.Name)
     if not REDRESS.search(name):
         continue
     t = fi.GetTotalTransform()
     pt = fi.Location.Point
+    bb = fi.get_BoundingBox(None)
     furniture.append({'id': eid(fi), 'name': ''.join([ch for ch in name if ord(ch) < 128])[:80],
-                      'p': [r3(pt.X), r3(pt.Y), r3(pt.Z)], 'ax': [round(t.BasisX.X, 4), round(t.BasisX.Y, 4)]})
+                      'p': [r3(pt.X), r3(pt.Y), r3(pt.Z)], 'ax': [round(t.BasisX.X, 4), round(t.BasisX.Y, 4)],
+                      'bb': [r3(bb.Min.X), r3(bb.Min.Y), r3(bb.Min.Z), r3(bb.Max.X), r3(bb.Max.Y), r3(bb.Max.Z)] if bb else None})
 views = []
 for v in DB.FilteredElementCollector(doc).OfClass(DB.View3D):
     if v.IsTemplate or not v.IsPerspective:

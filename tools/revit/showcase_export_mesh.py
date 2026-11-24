@@ -31,7 +31,10 @@ opts.DetailLevel = DB.ViewDetailLevel.Medium
 opts.IncludeNonVisibleObjects = False
 
 DEFAULT = ((214, 210, 202), 0, '')
-REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner', re.I)
+REDRESS = re.compile(r'sofa|couch|divano|poltrona|armchair|chair|sedia|bed|letto|table|tavolo|blocks_corner|entertainment|tv unit|plant|vase|foliage|bamboo|ficus|olive', re.I)
+# Plants are rebuilt from their bounding box (a light olive tree), so their very heavy leaf
+# geometry is not exported at all.
+PLANT = re.compile(r'plant|vase|foliage|bamboo|ficus|olive', re.I)
 mats = {}
 
 
@@ -331,7 +334,9 @@ for e in DB.FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType(
     # doors are their own group: the walk mode lets the visitor pass through them
     grp = 'furn' if c.Name in FURN else 'door' if c.Name == 'Doors' else 'arch'
     # pieces the viewer re-dresses keep their own group, so it can read each one's shape and hide it
-    if grp == 'furn' and c.Name.strip() in ('Furniture', 'Furniture Systems') and isinstance(e, DB.FamilyInstance)             and REDRESS.search('%s %s' % (e.Symbol.FamilyName, e.Name)):
+    if grp == 'furn' and c.Name.strip() in ('Furniture', 'Furniture Systems', 'Generic Models') and isinstance(e, DB.FamilyInstance)             and REDRESS.search('%s %s' % (e.Symbol.FamilyName, e.Name)):
+        if PLANT.search('%s %s' % (e.Symbol.FamilyName, e.Name)):
+            continue
         grp = 'furn:%d' % eid(e.Id)
     route = None
     if c.Name == 'Doors':
