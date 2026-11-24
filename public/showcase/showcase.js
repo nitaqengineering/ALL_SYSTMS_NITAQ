@@ -1017,7 +1017,7 @@
       else if (typeof v === 'string') {
         mat.color.set(v); mat.map = null;
         if (!mat.userData.surface && (f.kind === 'wall' || f.kind === 'ceil')) { // once: a quiet surface texture
-          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6, f.kind === 'wall' ? 0.6 : 0.3);
+          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6, f.kind === 'wall' ? 0.3 : 0.2);
           mat.flatShading = true; mat.userData.surface = true; mat.needsUpdate = true;
         }
       }
@@ -1250,6 +1250,7 @@
     if (trimParts.panels) trimParts.panels.visible = sc.id === 'classic';
     if (trimParts.cornice) trimParts.cornice.visible = sc.id === 'classic';
     if (trimParts.gap) trimParts.gap.visible = sc.id === 'warm' || sc.id === 'calm';
+    if (trimParts.ceilFrame) trimParts.ceilFrame.visible = sc.id === 'classic';
   }
   var corniceGeo = null;
   function corniceGeometry() { // cavetto cornice: 115 x 115 mm, length 1 along x, out of the wall +z, top at y = 0
@@ -1379,6 +1380,84 @@
     }
     applyTrim(SCHEMES.filter(function (x) { return x.id === S.finish; })[0] || SCHEMES[0]);
   }
+
+  /* Chandeliers over dining tables and the coffee tables of living rooms and majlis: tiered
+     brass rings with a warm LED ring (round / square tables) or a linear brass bar (long dining
+     tables), bigger in double-height spaces. In the classic scheme a double moulded frame on the
+     ceiling surrounds them. At night the nearest ones become real lights. */
+  var chandGroup = new THREE.Group(), chandSpots = [];
+  scene.add(chandGroup);
+  function buildChandeliers() {
+    var ceils = []; if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
+    if (!ceils.length) return;
+    var rc = new THREE.Raycaster(), up = new THREE.Vector3(0, 1, 0), brass = M().metal, placed = [], frames = [];
+    function ceilAt(x, y, z) { rc.set(new THREE.Vector3(x, y, z), up); rc.near = 0; rc.far = 7; var h = rc.intersectObjects(ceils, false)[0]; return h ? h.point.y : null; }
+    function rod(C, x, y, z, top, r) { var h = top - y; if (h <= 0.01) return; var m = new THREE.Mesh(new THREE.CylinderGeometry(r || 0.0018, r || 0.0018, h, 6), brass); m.position.set(x, y + h / 2, z); C.add(m); }
+    realGroup.children.forEach(function (G) {
+      var k = G.userData.kind, room = G.userData.room, tb = G.userData.table;
+      if (!tb || !(k === 'dining' || (k === 'table' && (room === 'living' || room === 'majlis')))) return;
+      var r = tb.rect, du = r.u1 - r.u0, dv = r.v1 - r.v0, lo = Math.max(du, dv), sh = Math.min(du, dv);
+      if (k === 'table' && lo < 0.7) return; // side tables: no
+      G.updateMatrix && G.matrixAutoUpdate && G.updateMatrix();
+      var base = G.matrix.elements[13], cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
+      var w = new THREE.Vector3(cu, tb.topH, cv).applyMatrix4(G.matrix);
+      if (placed.some(function (q) { return Math.hypot(q.x - w.x, q.z - w.z) < 1.6 && Math.abs(q.y - w.y) < 1; })) return;
+      var cy = ceilAt(w.x, w.y + 0.1, w.z); if (cy == null) return;
+      var H = cy - base; if (H < 2.5) return;
+      placed.push(w.clone());
+      var A = new THREE.Vector3(G.matrix.elements[0], 0, G.matrix.elements[2]).normalize(), Cv = new THREE.Vector3(G.matrix.elements[8], 0, G.matrix.elements[10]).normalize();
+      var scl = H > 4.2 ? 1.5 : 1, bottom = base + (k === 'dining' ? tb.topH + 0.85 : Math.min(Math.max(2.25, H - 1.0), 3.3));
+      bottom = Math.min(bottom, cy - 0.45);
+      var C = new THREE.Group(); C.position.set(w.x, bottom, w.z); chandGroup.add(C);
+      var top = cy - bottom, longDir = du >= dv ? A : Cv;
+      if (k === 'dining' && lo / sh > 1.4) { // linear pendant along the table
+        var L = Math.min(2.2, lo * 0.62); C.rotation.y = Math.atan2(-longDir.z, longDir.x);
+        var bar = new THREE.Mesh(rboxGeo(L, 0.045, 0.075, 0.012), brass); bar.position.y = 0.025; C.add(bar);
+        var dif = new THREE.Mesh(rboxGeo(L - 0.03, 0.01, 0.05, 0.004), ledMat); dif.position.y = -0.0; C.add(dif);
+        [-1, 1].forEach(function (sg) { rod(C, sg * (L / 2 - 0.12), 0.05, 0, top); var cp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 20), brass); cp.position.set(sg * (L / 2 - 0.12), top - 0.01, 0); C.add(cp); });
+      } else { // tiered rings
+        var R = Math.min(0.7, Math.max(0.35, sh * 0.42)) * scl;
+        [[R, 0], [R * 0.72, 0.17 * scl], [R * 0.46, 0.32 * scl]].forEach(function (t, ti) {
+          var ring = new THREE.Mesh(new THREE.TorusGeometry(t[0], 0.014 * scl, 10, 72), brass); ring.rotation.x = Math.PI / 2; ring.position.y = t[1]; C.add(ring);
+          var lit = new THREE.Mesh(new THREE.TorusGeometry(t[0] - 0.002, 0.009 * scl, 8, 72), ledMat); lit.rotation.x = Math.PI / 2; lit.position.y = t[1] - 0.013 * scl; C.add(lit);
+          for (var i = 0; i < 3; i++) { var a = i * 2 * Math.PI / 3 + ti * 0.7; rod(C, Math.cos(a) * t[0], t[1] + 0.012, Math.sin(a) * t[0], top); }
+        });
+        var cp = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scl, 0.12 * scl, 0.025, 32), brass); cp.position.y = top - 0.012; C.add(cp);
+      }
+      C.traverse(function (o) { if (o.isMesh) o.castShadow = false; });
+      chandSpots.push({ p: new THREE.Vector3(w.x, bottom - 0.1, w.z), level: D.levels.indexOf(levelAt(base + 0.1)), chand: true });
+      // classic ceiling frame: only where the ceiling is flat over the whole frame
+      var fw = k === 'dining' ? du + 1.0 : Math.min(3.6, Math.max(2.4, du + 1.6)), fd = k === 'dining' ? dv + 1.0 : Math.min(3.6, Math.max(2.4, dv + 1.6));
+      var flat = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(function (c) {
+        var q = w.clone().addScaledVector(A, c[0] * fw / 2).addScaledVector(Cv, c[1] * fd / 2), y2 = ceilAt(q.x, w.y + 0.1, q.z);
+        return y2 != null && Math.abs(y2 - cy) < 0.03;
+      });
+      var rad = Math.hypot(fw, fd) / 2, clash = frames.some(function (f) { return Math.abs(f.c.y - cy) < 0.1 && Math.hypot(f.c.x - w.x, f.c.z - w.z) < rad + Math.hypot(f.w, f.d) / 2 - 0.3; });
+      if (flat && !clash) frames.push({ c: new THREE.Vector3(w.x, cy, w.z), A: A, Cv: Cv, w: fw, d: fd });
+    });
+    if (frames.length) {
+      var box = new THREE.BoxGeometry(1, 1, 1), n = frames.length * 16, flatM = new THREE.InstancedMesh(box, trimMat, n), beadM = new THREE.InstancedMesh(box, trimMat, n);
+      var Mx = new THREE.Matrix4(), Bs = new THREE.Matrix4(), Sx = new THREE.Matrix4(), i = 0, upV = new THREE.Vector3(0, 1, 0);
+      frames.forEach(function (f) {
+        Bs.makeBasis(f.A, upV, f.Cv);
+        [0, 0.12].forEach(function (inset) {
+          var fw2 = f.w - 2 * inset, fd2 = f.d - 2 * inset;
+          [[0, -fd2 / 2, fw2, 0], [0, fd2 / 2, fw2, 0], [-fw2 / 2, 0, fd2, 1], [fw2 / 2, 0, fd2, 1]].forEach(function (b) {
+            var pos = f.c.clone().addScaledVector(f.A, b[0]).addScaledVector(f.Cv, b[1]);
+            [[flatM, 0.06, 0.008], [beadM, 0.025, 0.02]].forEach(function (pt) {
+              var sx = b[3] ? pt[1] : b[2] + pt[1], sz = b[3] ? b[2] + pt[1] : pt[1];
+              Mx.makeTranslation(pos.x, f.c.y - pt[2] / 2 - 0.001, pos.z).multiply(Bs).multiply(Sx.makeScale(sx, pt[2], sz));
+              pt[0].setMatrixAt(i, Mx);
+            });
+            i++;
+          });
+        });
+      });
+      trimParts.ceilFrame = new THREE.Group(); trimParts.ceilFrame.add(flatM, beadM); trimGroup.add(trimParts.ceilFrame);
+      trimParts.ceilFrame.visible = S.finish === 'classic';
+    }
+    applyCeiling();
+  }
   var skirtGroup = new THREE.Group(); scene.add(skirtGroup);
   function buildSkirting() {
     if (!meshGroups.wall) return;
@@ -1460,8 +1539,12 @@
       });
     });
     if (!segs.length) return;
+    var WD = 0.6, HD = 0.22, LIP = 0.12, GAP = 0.08, nbs = 0;
+    segs.forEach(function (s) { nbs += Math.max(1, Math.floor(s.a.distanceTo(s.b) / 1.2)); });
     var shelf = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), shelfMat, segs.length);
+    var lip = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), shelfMat, segs.length);
     var led = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), ledMat, segs.length);
+    var bandSpots = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16), ledMat, nbs), bi = 0;
     var glowM = glowMat.clone(); glowM.map = glowTexture(); glowMat = glowM;
     var glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowM, segs.length);
     var M = new THREE.Matrix4(), R = new THREE.Matrix4(), Rx = new THREE.Matrix4().makeRotationX(Math.PI / 2), Sm = new THREE.Matrix4(), q = new THREE.Vector3();
@@ -1476,11 +1559,18 @@
         if (flat) M.multiply(Rx);
         mesh.setMatrixAt(i, M.multiply(Sm));
       }
-      put(shelf, len, 0.3, 0.05, 0.15, s.y - 0.3);
-      put(led, len, 0.02, 0.012, 0.28, s.y - 0.27);
-      put(glow, len, 0.7, 0, 0.35, s.y - 0.006, true);
+      put(shelf, len, WD - LIP, HD, (WD - LIP) / 2, s.y - HD / 2);
+      put(lip, len, LIP, HD - GAP, WD - LIP / 2, s.y - HD + (HD - GAP) / 2);
+      put(led, len, 0.02, 0.012, WD - LIP + 0.025, s.y - GAP + 0.006);
+      put(glow, len, 0.9, 0, WD + 0.3, s.y - 0.006, true);
+      var nsp = Math.max(1, Math.floor(len / 1.2)), sm = new THREE.Matrix4();
+      for (var k = 0; k < nsp; k++) {
+        var t = (k + 0.5) / nsp - 0.5, px = mid.x + d.x * t * len + s.n.x * (WD - LIP) / 2, pz = mid.z + d.z * t * len + s.n.z * (WD - LIP) / 2;
+        bandSpots.setMatrixAt(bi++, sm.makeTranslation(px, s.y - HD - 0.009, pz));
+      }
     });
-    coveGroup.add(shelf, led, glow);
+    [shelf, lip].forEach(function (m) { m.receiveShadow = true; m.castShadow = true; });
+    coveGroup.add(shelf, lip, led, glow, bandSpots);
   }
   // Night: the downlights nearest the visitor light the space (a few real lights, reused).
   var pool = [];
@@ -1492,20 +1582,24 @@
     if (now - lastPick < 250) return;
     lastPick = now;
     var focus = S.walk ? W.eye : cam.t, li = S.level;
-    spots.filter(function (s) { return s.level === li; })
-      .sort(function (p, q) { return p.p.distanceToSquared(focus) - q.p.distanceToSquared(focus); })
-      .slice(0, pool.length)
-      .forEach(function (s, i) { pool[i].position.set(s.p.x, s.p.y - 0.15, s.p.z); pool[i].intensity = S.walk ? 1.3 : 0.9; });
+    var near = function (p, q) { return p.p.distanceToSquared(focus) - q.p.distanceToSquared(focus); };
+    var ch = S.ceil === 'flat' ? [] : chandSpots.filter(function (s) { return s.level === li && s.p.distanceTo(focus) < 9; }).sort(near).slice(0, 2);
+    ch.concat(spots.filter(function (s) { return s.level === li; }).sort(near).slice(0, pool.length - ch.length))
+      .forEach(function (s, i) {
+        pool[i].position.set(s.p.x, s.p.y - (s.chand ? 0 : 0.15), s.p.z);
+        pool[i].intensity = (S.walk ? 1.3 : 0.9) * (s.chand ? 1.8 : 1); pool[i].distance = s.chand ? 9 : 7;
+      });
   }
   var CEILS = [
-    { id: 'spots', ar: 'سبوتات', en: 'Downlights', arD: 'سقف جبس مستوي وسبوتات LED دافئة 3000K كل 1.5 م', enD: 'Flat gypsum ceiling, warm 3000K LED downlights every 1.5 m' },
-    { id: 'cove', ar: 'جبس بإنارة مخفية', en: 'Gypsum cove', arD: 'رف جبس على محيط الفراغ بإضاءة LED مخفية تنعكس على السقف، مع السبوتات', enD: 'Gypsum cove around each space with hidden LED washing the ceiling, plus downlights' },
+    { id: 'spots', ar: 'سبوتات', en: 'Downlights', arD: 'سقف جبس مستوي وسبوتات LED دافئة 3000K كل 1.5 م، وثريات فوق الطاولات', enD: 'Flat gypsum ceiling, warm 3000K LED downlights every 1.5 m, chandeliers over the tables' },
+    { id: 'cove', ar: 'سقف ساقط بإنارة مخفية', en: 'Drop ceiling, hidden light', arD: 'شريط جبس ساقط 60 سم على محيط الفراغ بفتحة إضاءة LED مخفية تنعكس على السقف، وسبوتات في الشريط، وثريات فوق الطاولات', enD: 'A 60 cm gypsum drop band round each space with a hidden LED slot washing the ceiling, downlights in the band, chandeliers over the tables' },
     { id: 'flat', ar: 'كما في الموديل', en: 'As modelled', arD: 'سقف بلا تجهيزات إضاءة', enD: 'Ceiling without light fittings' }
   ];
   function applyCeiling() {
     var sc = CEILS.filter(function (c) { return c.id === S.ceil; })[0] || CEILS[0];
     if (spotMesh) spotMesh.visible = sc.id !== 'flat';
     coveGroup.visible = sc.id === 'cove';
+    chandGroup.visible = sc.id !== 'flat';
     ledMat.emissiveIntensity = S.night ? 2.2 : 0.5;
     glowMat.opacity = S.night ? 0.9 : 0.22;
     [].forEach.call($('ceils').children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
@@ -2328,6 +2422,7 @@
     g.rotateX(-Math.PI / 2); g.translate(0, -t / 2, 0); return g;
   }
   function tableAt(G, mt, rect, topH, round, dining) {
+    G.userData.table = { rect: rect, topH: topH, dining: !!dining };
     var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
     var longU = du >= dv, lo = Math.max(du, dv), sh = Math.min(du, dv);
     if (dining) { // travertine top on two travertine slab legs
@@ -2575,6 +2670,7 @@
       if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true;
     });
     groupRugs(seatRecs, rugTaken);
+    buildChandeliers();
     applyRealFurniture();
     return made;
   }
