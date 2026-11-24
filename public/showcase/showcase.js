@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'walnut', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'white', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -299,13 +299,27 @@
     applyRealFurniture();
     goal.t.y = levelY();
   }
+  // Sky light from the environment reaches every interior surface equally; in walk mode it is
+  // turned down so light comes through the windows (sun, sky) and contrast returns.
+  var envK = 1;
+  function envScale(k) {
+    if (k === envK) return; envK = k;
+    scene.traverse(function (o) {
+      if (!o.isMesh || !o.material || o.material === glassMat || !o.material.isMeshStandardMaterial) return;
+      var m2 = o.material; if (m2.userData.env0 == null) m2.userData.env0 = m2.envMapIntensity;
+      m2.envMapIntensity = m2.userData.env0 * k;
+    });
+  }
+  var lastWalkL = null;
   function applyNight() {
     $('app').classList.toggle('night', S.night);
     hemi.intensity = S.night ? 0.16 : (MESH ? 0.6 : 0.85); sun.intensity = S.night ? 0.05 : (MESH ? 0.9 : 0.75);
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
     if (MESH) {
       scene.environment = S.night ? ENV.night : ENV.day; paintSky();
-      hemi.intensity = S.night ? 0.08 : 0.22; sun.intensity = S.night ? 0.03 : 1.25;
+      hemi.intensity = S.night ? 0.08 : (S.walk ? 0.1 : 0.22); sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
+      renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.95) : 0.82;
+      envScale(S.walk ? 0.5 : 1);
       if (meshReady) applyCeiling();
       if (bedGlow) bedGlow.opacity = S.night ? 0.85 : 0.28;
     }
@@ -495,7 +509,7 @@
     if (!composer) {
       composer = new THREE.EffectComposer(renderer);
       ssao = new THREE.SSAOPass(scene, camera, 2, 2);
-      ssao.kernelRadius = 0.35; ssao.minDistance = 0.00005; ssao.maxDistance = 0.003;
+      ssao.kernelRadius = 0.6; ssao.minDistance = 0.00003; ssao.maxDistance = 0.006;
       // the model carries no vertex normals (flat-shaded from faces): the AO normal pass must too
       ssao.normalMaterial.flatShading = true; ssao.normalMaterial.needsUpdate = true;
       composer.addPass(ssao);
@@ -741,7 +755,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -783,6 +797,7 @@
     }
     if (sky) sky.visible = S.walk;
     mirrorGroup.visible = S.walk;
+    if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); }
     if (useAO()) { if (bloom) bloom.strength = S.night ? 0.75 : 0.28; composer.render(); } else renderer.render(scene, camera);
     $('labels').style.visibility = S.walk ? 'hidden' : '';
     var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
@@ -873,7 +888,11 @@
         // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
         var smooth = false;
         if (b.grp === 'furn' && !glass) { // rugs split off; the rest smooth-shaded
-          var fp = furnParts(g, proposal(b).kind === 'wood');
+          var fp = furnParts(g, proposal(b).kind === 'wood', b.elem == null);
+          if (fp.kit) {
+            var km = new THREE.Mesh(fp.kit, lookMaterial(b, true)), kc = new THREE.Mesh(fp.kit, cap);
+            km.castShadow = km.receiveShadow = true; parent.add(km, kc); kitMeshes.push(km, kc);
+          }
           if (fp.top) { // kitchen worktop: white quartz with a soft vein
             var tm = new THREE.Mesh(fp.top, makeMaterial({ kind: 'quartz', color: new THREE.Color('#F1EEE8'), rough: 0.14, metal: 0, tex: 'marble', scale: 0.9 }, true));
             tm.castShadow = tm.receiveShadow = true; parent.add(tm); parent.add(new THREE.Mesh(fp.top, cap));
@@ -1198,13 +1217,13 @@
   // Glass: nearly clear when seen straight on, more reflective toward grazing angles (Fresnel),
   // reflecting the sky environment; a faint green-blue body tint like float glass.
   var glassMat = MESH ? new THREE.MeshStandardMaterial({
-    color: 0xC9DCDF, metalness: 0.2, roughness: 0.02, transparent: true, opacity: 1, envMapIntensity: 2.2, flatShading: true,
+    color: 0xBFD3D6, metalness: 0.35, roughness: 0.0, transparent: true, opacity: 1, envMapIntensity: 1.6, flatShading: true,
     depthWrite: false, side: THREE.DoubleSide, clippingPlanes: [cutPlane] }) : null;
   if (glassMat) {
     glassMat.onBeforeCompile = function (sh) {
       sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', [
         'float glassF = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0);',
-        'gl_FragColor = vec4( outgoingLight, mix(0.06, 0.72, glassF) );'].join('\n'));
+        'gl_FragColor = vec4( outgoingLight, mix(0.035, 0.6, glassF) );'].join('\n'));
     };
     glassMat.customProgramCacheKey = function () { return 'fresnel-glass'; };
   }
@@ -1217,7 +1236,7 @@
     sky = new THREE.Group();
     sky.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })));
     // a ring, so it never cuts through a basement under the house
-    var groundM = new THREE.Mesh(new THREE.RingGeometry(SIZE * 0.9, 140, 64), new THREE.MeshStandardMaterial({ color: 0xD3C9B8, roughness: 1 }));
+    var groundM = new THREE.Mesh(new THREE.RingGeometry(SIZE * 0.9, 140, 64), new THREE.MeshStandardMaterial({ color: 0x9BA488, roughness: 1 }));
     groundM.rotation.x = -Math.PI / 2; groundM.position.y = -0.05; groundM.receiveShadow = true; sky.add(groundM);
     sky.visible = false; scene.add(sky);
   }
@@ -1227,7 +1246,7 @@
     var c = cv.getContext('2d'), r = rng(night ? 5 : 3), hz = H * 0.5;
     var g = c.createLinearGradient(0, 0, 0, hz);
     if (night) { g.addColorStop(0, '#050913'); g.addColorStop(0.7, '#0E1628'); g.addColorStop(1, '#2A2C3A'); }
-    else { g.addColorStop(0, '#5E94C8'); g.addColorStop(0.55, '#A9C8E2'); g.addColorStop(1, '#EDEFEA'); }
+    else { g.addColorStop(0, '#3F7FC0'); g.addColorStop(0.55, '#8DB7DE'); g.addColorStop(1, '#DDE7EE'); }
     c.fillStyle = g; c.fillRect(0, 0, W, hz);
     if (night) { for (var i = 0; i < 900; i++) { c.fillStyle = 'rgba(255,255,255,' + (0.2 + r() * 0.6) + ')'; c.fillRect(r() * W, r() * hz * 0.8, 1.2, 1.2); } }
     else for (var k = 0; k < 70; k++) { // soft cumulus banks, flatter toward the horizon
@@ -1245,13 +1264,13 @@
       for (var x = 0; x <= W; x += 6) {
         var h = L[2] * (0.4 + 0.6 * Math.abs(Math.sin(x / 37 + L[0] * 9) * Math.sin(x / 113 + L[0] * 3)));
         if (x >= blk) { blk = x + 40 + r() * 140; bh = r() < 0.45 ? L[2] * (0.5 + r() * 0.6) : 0; } // flat-roofed buildings
-        c.lineTo(x, hz - Math.max(h, bh) * L[0] * 2);
+        c.lineTo(x, hz - Math.max(h, bh) * L[0] * 1.1);
       }
       c.lineTo(W, hz); c.closePath(); c.fill();
     });
     if (night) for (i = 0; i < 260; i++) { c.fillStyle = 'rgba(255,' + (190 + r() * 50 | 0) + ',120,' + (0.4 + r() * 0.5) + ')'; c.fillRect(r() * W, hz - r() * 26, 1.6, 1.6); }
     var gg = c.createLinearGradient(0, hz, 0, H); // ground beyond the site
-    gg.addColorStop(0, night ? '#1B1D24' : '#C9C0AE'); gg.addColorStop(1, night ? '#08090C' : '#9C9380');
+    gg.addColorStop(0, night ? '#1B1D24' : '#A9B096'); gg.addColorStop(1, night ? '#08090C' : '#7E8770');
     c.fillStyle = gg; c.fillRect(0, hz, W, H - hz);
     var hzG = c.createLinearGradient(0, hz - 40, 0, hz + 10); hzG.addColorStop(0, 'rgba(255,255,255,0)'); hzG.addColorStop(1, night ? 'rgba(60,60,80,.35)' : 'rgba(240,240,236,.55)');
     c.fillStyle = hzG; c.fillRect(0, hz - 40, W, 50); // aerial haze on the horizon
@@ -1261,7 +1280,7 @@
     if (!sky) return;
     var key = S.night ? 'n' : 'd'; if (!skyTex[key]) skyTex[key] = skyPanorama(S.night);
     var sm = sky.children[0].material; if (sm.map !== skyTex[key]) { sm.map = skyTex[key]; sm.needsUpdate = true; }
-    sky.children[1].material.color.set(S.night ? 0x2A2C30 : 0xD3C9B8);
+    sky.children[1].material.color.set(S.night ? 0x23262A : 0x9BA488);
   }
 
   // Wet areas, kitchens and service rooms (from Revit rooms) get practical finishes in every scheme.
@@ -1615,6 +1634,231 @@
       mirrorGroup.add(mir);
     });
   }
+
+  /* Kitchens rebuilt in the manner of a modular flat-pack kitchen (60 cm modules): the modelled
+     worktop surfaces give the runs, a modelled appliance top in a run marks the cooker, modelled
+     tops above 1.55 m mark tall units (the fridge). Base units in white gloss lacquer with slim
+     steel bar handles, a recessed plinth and a quartz worktop; a built-in oven under a black
+     glass hob with a steel hood above; a sink under the window; wall units only where solid wall
+     stands behind them (never over a window, the sink window or the hob); a steel French-door
+     fridge. The modelled pieces are hidden once the rebuild succeeds. */
+
+  /* Suspended ceilings: bathrooms and kitchens get a flat gypsum ceiling hung at 2.6 m / 2.7 m
+     (where the slab is higher), as built; the downlights are then laid out on it. */
+  function buildFalseCeilings() {
+    if (!meshGroups.ceil) return;
+    var ceils = []; meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
+    var mat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.95, flatShading: true, clippingPlanes: [cutPlane] });
+    triplanar(mat, procFor('gypsum'), 1.6, 1.6, 0.2);
+    var rc = new THREE.Raycaster(), upV = new THREE.Vector3(0, 1, 0);
+    D.levels.forEach(function (L) {
+      var fy = L.elevation + (L._slabTop || 0);
+      L.rooms.forEach(function (r) {
+        var h = r.type === 'wet' ? 2.6 : r.type === 'kitchen' ? 2.7 : 0; if (!h || !r.poly || r.poly.length < 3) return;
+        var cx = 0, cy = 0; r.poly.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= r.poly.length; cy /= r.poly.length;
+        var w = P(cx, cy); rc.set(new THREE.Vector3(w.x, fy + 1.5, w.z), upV); rc.near = 0; rc.far = 6;
+        var hit = rc.intersectObjects(ceils, false)[0]; if (!hit || hit.point.y - fy < h + 0.15) return;
+        var shp = new THREE.Shape(r.poly.map(function (q) { return new THREE.Vector2(q[0] - CX, -(q[1] - CY)); }));
+        var g = new THREE.ShapeGeometry(shp); g.rotateX(Math.PI / 2);
+        var m = new THREE.Mesh(g, mat); m.position.y = fy + h; m.receiveShadow = true; meshGroups.ceil.add(m);
+      });
+    });
+  }
+  function greedyRects(mask, nu, nv) {
+    var used = new Uint8Array(nu * nv), out = [];
+    for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
+      var k = i * nv + j; if (!mask[k] || used[k]) continue;
+      var w = 1; while (j + w < nv && mask[i * nv + j + w] && !used[i * nv + j + w]) w++;
+      var h = 1, ok = true;
+      while (ok && i + h < nu) { for (var q = 0; q < w; q++) if (!mask[(i + h) * nv + j + q] || used[(i + h) * nv + j + q]) { ok = false; break; } if (ok) h++; }
+      for (var a = 0; a < h; a++) for (var b = 0; b < w; b++) used[(i + a) * nv + j + b] = 1;
+      out.push({ i0: i, i1: i + h, j0: j, j1: j + w });
+    }
+    return out;
+  }
+  function morph(mask, nu, nv, r, grow) { // dilate (grow) or erode by r cells
+    var out = new Uint8Array(nu * nv);
+    for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
+      var hit = !grow;
+      for (var a = -r; a <= r && hit !== grow; a++) for (var b = -r; b <= r; b++) {
+        var ii = i + a, jj = j + b, v = ii >= 0 && jj >= 0 && ii < nu && jj < nv ? mask[ii * nv + jj] : 0;
+        if (grow && v) { hit = true; break; } if (!grow && !v) { hit = false; break; }
+      }
+      out[i * nv + j] = hit ? 1 : 0;
+    }
+    return out;
+  }
+  function buildKitchen() {
+    if (!KIT.length) return;
+    var lacq = new THREE.MeshStandardMaterial({ color: 0xF4F3F0, roughness: 0.16, envMapIntensity: 1, clippingPlanes: [cutPlane] });
+    var plinth = new THREE.MeshStandardMaterial({ color: 0xD6D4D0, roughness: 0.5, clippingPlanes: [cutPlane] });
+    var steel = new THREE.MeshStandardMaterial({ color: 0xC9CBCD, metalness: 0.85, roughness: 0.28, clippingPlanes: [cutPlane] });
+    var bar = new THREE.MeshStandardMaterial({ color: 0xD8D9DB, metalness: 1, roughness: 0.22, clippingPlanes: [cutPlane] });
+    var blackGlass = new THREE.MeshStandardMaterial({ color: 0x0E0F11, metalness: 0.2, roughness: 0.05, envMapIntensity: 1.3, clippingPlanes: [cutPlane] });
+    var ring = new THREE.MeshStandardMaterial({ color: 0x5A5C60, roughness: 0.4, clippingPlanes: [cutPlane] });
+    var quartz = MX().top, up = new THREE.Vector3(0, 1, 0);
+    var walls = []; ['wall', 'ext'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) walls.push(o); }); });
+    var ceils = []; if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
+    var rc = new THREE.Raycaster(), built = 0, CELLK = 0.05;
+    D.levels.forEach(function (L) {
+      var fy = L.elevation + (L._slabTop || 0);
+      L.rooms.forEach(function (room) {
+        if (room.type !== 'kitchen' || !room.poly || room.poly.length < 3) return;
+        var wp = room.poly.map(function (q) { return [q[0] - CX, -(q[1] - CY)]; }), best = 0, ang = 0;
+        wp.forEach(function (q, i) { var n2 = wp[(i + 1) % wp.length], len = Math.hypot(n2[0] - q[0], n2[1] - q[1]); if (len > best) { best = len; ang = Math.atan2(n2[1] - q[1], n2[0] - q[0]); } });
+        var A = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)), C = new THREE.Vector3(-Math.sin(ang), 0, Math.cos(ang));
+        var U0 = 1e9, U1 = -1e9, V0 = 1e9, V1 = -1e9;
+        wp.forEach(function (q) { var u = q[0] * A.x + q[1] * A.z, v = q[0] * C.x + q[1] * C.z; U0 = Math.min(U0, u); U1 = Math.max(U1, u); V0 = Math.min(V0, v); V1 = Math.max(V1, v); });
+        U0 -= 0.2; V0 -= 0.2; U1 += 0.2; V1 += 0.2;
+        var nu = Math.ceil((U1 - U0) / CELLK), nv = Math.ceil((V1 - V0) / CELLK), code = new Uint8Array(nu * nv), hs = [], tallH = [];
+        function inRoom(x, z) { return inPoly(x + CX, -z + CY, room.poly); }
+        KIT.forEach(function (t) {
+          var v = t.v, ymin = Math.min(v[0][1], v[1][1], v[2][1]); if (ymin < fy - 0.2 || ymin > fy + 3) return;
+          var mx = (v[0][0] + v[1][0] + v[2][0]) / 3, mz = (v[0][2] + v[1][2] + v[2][2]) / 3; if (!inRoom(mx, mz)) return;
+          var ux = v[1][0] - v[0][0], uy = v[1][1] - v[0][1], uz = v[1][2] - v[0][2], vx = v[2][0] - v[0][0], vy = v[2][1] - v[0][1], vz = v[2][2] - v[0][2];
+          var ny = uz * vx - ux * vz, nl = Math.hypot(uy * vz - uz * vy, ny, ux * vy - uy * vx) || 1, hy = (v[0][1] + v[1][1] + v[2][1]) / 3 - fy, cd;
+          if (Math.abs(ny) / nl > 0.95 && hy > 0.7 && hy < 1.0) { cd = t.wood ? 1 : 2; hs.push(hy); }
+          else if (Math.abs(ny) / nl > 0.9 && hy > 1.55 && hy < 2.4) { cd = 3; tallH.push(hy); }
+          else return;
+          var P2 = v.map(function (q) { return [(q[0] * A.x + q[2] * A.z - U0) / CELLK, (q[0] * C.x + q[2] * C.z - V0) / CELLK]; });
+          var i0 = Math.max(0, Math.floor(Math.min(P2[0][0], P2[1][0], P2[2][0]))), i1 = Math.min(nu - 1, Math.ceil(Math.max(P2[0][0], P2[1][0], P2[2][0])));
+          var j0 = Math.max(0, Math.floor(Math.min(P2[0][1], P2[1][1], P2[2][1]))), j1 = Math.min(nv - 1, Math.ceil(Math.max(P2[0][1], P2[1][1], P2[2][1])));
+          for (var i = i0; i <= i1; i++) for (var j = j0; j <= j1; j++) {
+            var px = i + 0.5, py = j + 0.5, a = P2[0], b = P2[1], c = P2[2];
+            var d1 = (px - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (py - b[1]), d2 = (px - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (py - c[1]), d3 = (px - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (py - a[1]);
+            if ((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)) continue;
+            var k = i * nv + j; if (cd > code[k]) code[k] = cd;
+          }
+        });
+        if (!hs.length) return;
+        var H = median(hs), tallTop = Math.min(Math.max(median(tallH) || 1.85, 1.75), 2.1);
+        var runM = new Uint8Array(nu * nv), tallM = new Uint8Array(nu * nv);
+        for (var k = 0; k < nu * nv; k++) { if (code[k] === 1 || code[k] === 2) runM[k] = 1; if (code[k] === 3) tallM[k] = 1; }
+        runM = morph(morph(runM, nu, nv, 2, true), nu, nv, 2, false); tallM = morph(morph(tallM, nu, nv, 2, true), nu, nv, 2, false);
+        for (k = 0; k < nu * nv; k++) if (tallM[k]) runM[k] = 0;
+        // keep every door's opening and swing clear (1 m each side of the leaf line)
+        leafPivots.forEach(function (lf) {
+          var bx = new THREE.Box3().setFromObject(lf.inner); if (bx.isEmpty() || bx.min.y > fy + 1 || bx.max.y < fy + 0.5) return;
+          var Hh = P(lf.x, lf.y), c3 = bx.getCenter(new THREE.Vector3()), ud = new THREE.Vector3(c3.x - Hh.x, 0, c3.z - Hh.z), half = ud.length(); if (half < 0.15) return; ud.normalize();
+          var nd = new THREE.Vector3(-ud.z, 0, ud.x);
+          for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
+            var wx = A.x * (U0 + (i + 0.5) * CELLK) + C.x * (V0 + (j + 0.5) * CELLK), wz = A.z * (U0 + (i + 0.5) * CELLK) + C.z * (V0 + (j + 0.5) * CELLK);
+            var t = (wx - Hh.x) * ud.x + (wz - Hh.z) * ud.z, d = (wx - Hh.x) * nd.x + (wz - Hh.z) * nd.z;
+            if (t > -0.1 && t < half * 2 + 0.1 && Math.abs(d) < 1.0) { runM[i * nv + j] = 0; tallM[i * nv + j] = 0; }
+          }
+        });
+        function frameOf(rr, minDepth) { // world frame of a cell rectangle: long axis, depth, which side is the wall
+          var u0 = U0 + rr.i0 * CELLK, u1 = U0 + rr.i1 * CELLK, v0 = V0 + rr.j0 * CELLK, v1 = V0 + rr.j1 * CELLK, du = u1 - u0, dv = v1 - v0;
+          if (Math.min(du, dv) < minDepth) return null;
+          var alongU = du >= dv, len = alongU ? du : dv, dep = alongU ? dv : du;
+          var cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, ctr = A.clone().multiplyScalar(cu).addScaledVector(C, cv);
+          var sideN = alongU ? C : A, half = dep / 2;
+          var pA = ctr.clone().addScaledVector(sideN, -(half + 0.12)), pB = ctr.clone().addScaledVector(sideN, half + 0.12);
+          var inA = inRoom(pA.x, pA.z), inB = inRoom(pB.x, pB.z);
+          var F = !inA && inB ? sideN.clone() : inA && !inB ? sideN.clone().negate() : !inA && !inB ? sideN.clone() : null; // F points into the room
+          var island = !F; if (island) F = sideN.clone();
+          return { ctr: ctr, len: len, dep: dep, F: F, X: new THREE.Vector3().crossVectors(up, F), island: island, rr: rr };
+        }
+        function wallAt(G, x, y, z, far) { // solid wall straight behind a local point?
+          var o = new THREE.Vector3(x, y, z).applyMatrix4(G.matrix), d = new THREE.Vector3(0, 0, -1).transformDirection(G.matrix);
+          rc.set(o, d); rc.near = 0; rc.far = far; return rc.intersectObjects(walls, false)[0];
+        }
+        function group(f, h) { var G = new THREE.Group(); G.matrixAutoUpdate = false; G.matrix.makeBasis(f.X, up, f.F).setPosition(f.ctr.x, fy, f.ctr.z); kitchenGroup.add(G); G.updateMatrixWorld(true); return G; }
+        function box(G, mat, w, h, d, x, y, z, r) { var m = new THREE.Mesh(r ? rboxGeo(w, h, d, r) : new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; G.add(m); return m; }
+        function handle(G, x, y, z, len, vertical) { var m = box(G, bar, vertical ? 0.012 : len, vertical ? len : 0.012, 0.014, x, y, z + 0.022, 0.004); return m; }
+        // tall units: steel French-door fridge (or a lacquered larder when narrow)
+        greedyRects(tallM, nu, nv).forEach(function (rr) {
+          var f = frameOf(rr, 0.45); if (!f || f.len < 0.5) return;
+          var G = group(f), W = Math.min(f.len, 0.95), Dd = Math.min(f.dep, 0.72), hz = Dd / 2 - 0.02;
+          if (W < 0.7) {
+            box(G, lacq, W - 0.006, tallTop - 0.1, Dd - 0.02, 0, 0.1 + (tallTop - 0.1) / 2, -0.01, 0.002); box(G, plinth, W, 0.1, Dd - 0.08, 0, 0.05, -0.04);
+            handle(G, W / 2 - 0.06, 1.05, hz, 0.5, true); built++; return;
+          }
+          box(G, steel, W - 0.01, tallTop - 0.02, Dd - 0.06, 0, 0.01 + (tallTop - 0.02) / 2, -0.03, 0.01);
+          var split = tallTop * 0.36;
+          [-1, 1].forEach(function (sg) { // two doors above, a freezer drawer below
+            box(G, steel, W / 2 - 0.008, tallTop - split - 0.02, 0.03, sg * W / 4, split + (tallTop - split) / 2, hz, 0.006);
+            var hb = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.7, 12), bar); hb.position.set(-sg * 0.04, split + 0.25 + 0.35, hz + 0.045); G.add(hb);
+          });
+          box(G, steel, W - 0.016, split - 0.03, 0.03, 0, 0.02 + (split - 0.03) / 2, hz, 0.006);
+          box(G, bar, W * 0.6, 0.014, 0.016, 0, split - 0.09, hz + 0.03, 0.004);
+          box(G, blackGlass, 0.16, 0.26, 0.006, -W / 4, split + 0.75, hz + 0.016, 0.004); // water and ice panel
+          built++;
+        });
+        // base runs
+        var runs = greedyRects(runM, nu, nv).map(function (rr) { return frameOf(rr, 0.4); }).filter(function (f) { return f && f.len >= 0.4; });
+        var sinkDone = false;
+        runs.forEach(function (f) {
+          var G = group(f), Lr = f.len, Dd = Math.min(f.dep, 0.66), zb = -f.dep / 2, zf = zb + Dd, n = Math.max(1, Math.round(Lr / 0.6)), wm = Lr / n;
+          var top = H - 0.03, fh = top - 0.1;
+          box(G, plinth, Lr, 0.1, Dd - 0.07, 0, 0.05, zb + (Dd - 0.07) / 2);
+          box(G, lacq, Lr, fh, Dd - 0.02, 0, 0.1 + fh / 2, zb + (Dd - 0.02) / 2);
+          box(G, quartz, Lr, 0.03, Dd + 0.02, 0, H - 0.015, zb + (Dd + 0.02) / 2, 0.003);
+          // which module carries the cooker (most appliance cells), which has a window behind
+          var cook = -1, cookN = 0, rr = f.rr;
+          for (var m = 0; m < n; m++) {
+            var cnt = 0;
+            for (var i = rr.i0; i < rr.i1; i++) for (var j = rr.j0; j < rr.j1; j++) {
+              var p3 = A.clone().multiplyScalar(U0 + (i + 0.5) * CELLK).addScaledVector(C, V0 + (j + 0.5) * CELLK);
+              var lx = (p3.x - f.ctr.x) * f.X.x + (p3.z - f.ctr.z) * f.X.z;
+              if (lx >= -Lr / 2 + m * wm && lx < -Lr / 2 + (m + 1) * wm && code[i * nv + j] === 2) cnt++;
+            }
+            if (cnt > cookN) { cookN = cnt; cook = m; }
+          }
+          if (cookN * CELLK * CELLK < 0.06) cook = -1;
+          var win = [];
+          for (m = 0; m < n; m++) { var xm = -Lr / 2 + (m + 0.5) * wm; win.push(!f.island && !wallAt(G, xm, 1.75, zb + 0.05, 0.3)); }
+          var sink = -1;
+          if (!sinkDone) { for (m = 0; m < n; m++) if (win[m] && m !== cook) { sink = m; break; } if (sink < 0 && n >= 3 && !f.island) sink = cook === Math.floor(n / 2) ? 0 : Math.floor(n / 2); if (sink >= 0) sinkDone = true; }
+          for (m = 0; m < n; m++) {
+            var x = -Lr / 2 + (m + 0.5) * wm, zF = zf - 0.009 + 0.0;
+            if (m === cook) { // built-in oven under a black glass hob
+              box(G, lacq, wm - 0.004, 0.12, 0.018, x, top - 0.065, zF, 0.002); handle(G, x, top - 0.03, zF, wm * 0.5);
+              var oh = 0.6, oy = top - 0.13 - oh / 2;
+              box(G, blackGlass, wm - 0.03, oh, 0.02, x, oy, zF, 0.004);
+              box(G, steel, wm - 0.03, 0.07, 0.022, x, oy + oh / 2 - 0.035, zF + 0.002, 0.003);
+              box(G, bar, wm * 0.7, 0.014, 0.016, x, oy + oh / 2 - 0.1, zF + 0.03, 0.004);
+              box(G, lacq, wm - 0.004, 0.1 + top - 0.13 - oh - 0.1 - 0.004, 0.018, x, 0.1 + (top - 0.13 - oh - 0.1) / 2, zF, 0.002);
+              box(G, blackGlass, Math.min(0.58, wm - 0.02), 0.006, Math.min(0.5, Dd - 0.1), x, H + 0.003, zb + Dd / 2, 0.003);
+              [[-0.13, -0.1, 0.09], [0.13, -0.1, 0.07], [-0.13, 0.12, 0.07], [0.13, 0.12, 0.09]].forEach(function (q) {
+                var t2 = new THREE.Mesh(new THREE.TorusGeometry(q[2], 0.003, 6, 40), ring); t2.rotation.x = Math.PI / 2; t2.position.set(x + q[0], H + 0.007, zb + Dd / 2 + q[1]); G.add(t2);
+              });
+              if (!f.island) { // steel chimney hood to the ceiling
+                box(G, steel, Math.min(0.9, wm + 0.1), 0.06, 0.5, x, 1.68, zb + 0.25, 0.006);
+                var o = new THREE.Vector3(x, 1.7, zb + 0.12).applyMatrix4(G.matrix); rc.set(o, up); rc.near = 0; rc.far = 3;
+                var ch = rc.intersectObjects(ceils, false)[0], ctop = ch ? ch.point.y - fy : 2.7;
+                if (ctop > 1.8) box(G, steel, 0.26, ctop - 1.71, 0.24, x, 1.71 + (ctop - 1.71) / 2, zb + 0.12);
+              }
+              continue;
+            }
+            if (m % 3 === 1 && m !== sink) { // a drawer stack
+              [[0.1, 0.2], [0.3, 0.26], [0.56, top - 0.56 - 0.1]].forEach(function (d) {
+                var y0 = top - d[0] - 0.003, h2 = Math.max(0.12, d[1]) - 0.004; box(G, lacq, wm - 0.004, h2, 0.018, x, y0 - h2 / 2, zF, 0.002); handle(G, x, y0 - 0.04, zF, wm * 0.5);
+              });
+            } else { box(G, lacq, wm - 0.004, fh - 0.006, 0.018, x, 0.1 + fh / 2, zF, 0.002); handle(G, x, top - 0.05, zF, wm * 0.5); }
+            if (m === sink) { // undermount steel sink and a chrome tap
+              box(G, new THREE.MeshStandardMaterial({ color: 0x8E9196, metalness: 0.9, roughness: 0.25, clippingPlanes: [cutPlane] }), Math.min(0.5, wm - 0.1), 0.004, Math.min(0.4, Dd - 0.2), x, H + 0.001, zb + Dd / 2 + 0.03, 0.02);
+              var tp = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.3, 16), bar); tp.position.set(x, H + 0.15, zb + 0.08); G.add(tp);
+              var sp = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 10, 24, Math.PI), bar); sp.position.set(x, H + 0.3, zb + 0.08 + 0.09); sp.rotation.y = Math.PI / 2; G.add(sp);
+            }
+          }
+          // wall units: 60 cm modules where solid wall stands behind at 1.6 and 2.1 m; not over the hob, the sink window or a window
+          if (!f.island) for (m = 0; m < n; m++) {
+            if (m === cook || win[m]) continue;
+            var x2 = -Lr / 2 + (m + 0.5) * wm;
+            var solid = [x2 - wm / 2 + 0.06, x2, x2 + wm / 2 - 0.06].every(function (xx) { return wallAt(G, xx, 1.5, zb + 0.05, 0.3) && wallAt(G, xx, 1.85, zb + 0.05, 0.3) && wallAt(G, xx, 2.15, zb + 0.05, 0.3); });
+            if (!solid) continue;
+            box(G, lacq, wm - 0.004, 0.72, 0.33, x2, 1.45 + 0.36, zb + 0.165, 0.002);
+            box(G, lacq, wm - 0.006, 0.716, 0.018, x2, 1.45 + 0.36, zb + 0.339, 0.002);
+            handle(G, x2, 1.49, zb + 0.339, wm * 0.5);
+            var led = new THREE.Mesh(new THREE.BoxGeometry(wm - 0.04, 0.006, 0.012), ledMat); led.position.set(x2, 1.447, zb + 0.29); G.add(led);
+          }
+          built++;
+        });
+      });
+    });
+    if (built) kitMeshes.forEach(function (o) { o.visible = false; });
+  }
   var skirtGroup = new THREE.Group(); scene.add(skirtGroup);
   function buildSkirting() {
     if (!meshGroups.wall) return;
@@ -1894,7 +2138,13 @@
   function travertine(c, n, r) { // warm travertine: soft horizontal veining and small pits
     c.fillStyle = '#ece4d6'; c.fillRect(0, 0, n, n);
     for (var k = 0; k < 40; k++) { c.fillStyle = 'rgba(190,170,140,' + (0.05 + r() * 0.08) + ')'; c.fillRect(0, r() * n, n, 1 + r() * 7); }
-    for (var i = 0; i < 900; i++) { c.fillStyle = 'rgba(120,100,80,' + (0.2 + r() * 0.3) + ')'; c.beginPath(); c.ellipse(r() * n, r() * n, 0.6 + r() * 2.2, 0.4 + r() * 1.2, 0, 0, Math.PI * 2); c.fill(); }
+    for (var i = 0; i < 1400; i++) { c.fillStyle = 'rgba(150,128,100,' + (0.08 + r() * 0.14) + ')'; c.beginPath(); c.ellipse(r() * n, r() * n, 0.4 + r() * 1.4, 0.2 + r() * 0.5, 0, 0, Math.PI * 2); c.fill(); }
+    for (i = 0; i < 9000; i++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.025)' : 'rgba(255,255,255,.05)'; c.fillRect(r() * n, r() * n, 1.3, 1.3); }
+  }
+  function woolPlain(c, n, r) { // cut-pile wool: an even field with soft tonal variation
+    c.fillStyle = '#efe9df'; c.fillRect(0, 0, n, n);
+    for (var k = 0; k < 30; k++) { var gx = r() * n, gy = r() * n, g = c.createRadialGradient(gx, gy, 0, gx, gy, 60 + r() * 120); g.addColorStop(0, 'rgba(' + (r() < 0.5 ? '0,0,0,.025' : '255,255,255,.04') + ')'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, n, n); }
+    for (var i = 0; i < 42000; i++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)'; c.fillRect(r() * n, r() * n, 1.5, 1.5); }
   }
   function carved(c, n, r) { // hand-carved rug: fields of parallel grooves and concentric arcs
     c.fillStyle = '#efe9df'; c.fillRect(0, 0, n, n);
@@ -1912,7 +2162,7 @@
       var c = document.createElement('canvas'); c.width = c.height = 512;
       var cx = c.getContext('2d');
       if (kind === 'woodV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
-      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: carved, marble: marble, boucle: boucle, travertine: travertine, plaster: plaster, gypsum: gypsum })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37, plaster: 41, gypsum: 43 }[kind]));
+      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: woolPlain, marble: marble, boucle: boucle, travertine: travertine, plaster: plaster, gypsum: gypsum })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37, plaster: 41, gypsum: 43 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
@@ -1924,7 +2174,7 @@
     bump = bump || 0;
     mat.onBeforeCompile = function (sh) {
       if (zones) { var Z = zoneUniforms(); Object.keys(Z).forEach(function (k) { sh.uniforms[k] = Z[k]; }); }
-      sh.uniforms.triMap = { value: tex }; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) }; sh.uniforms.triBump = { value: bump };
+      sh.uniforms.triMap = mat.userData.triMapU || (mat.userData.triMapU = { value: tex }); mat.userData.triTex = tex; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) }; sh.uniforms.triBump = { value: bump };
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', ['#include <common>', 'varying vec3 vTriPos;', 'uniform sampler2D triMap;', 'uniform vec2 triScale;', 'uniform float triBump;', zones ? 'uniform sampler2D zoneMask; uniform sampler2D zoneTile; uniform vec4 zoneLv; uniform vec4 zoneB; float zoneW = 0.0;' : '',
@@ -1978,7 +2228,7 @@
   function paletteFor(p, pal) {
     var l = p.hsl && p.hsl.l != null ? p.hsl.l : 0.5;
     switch (p.kind) {
-      case 'wood': return { color: l > 0.45 ? pal.woodL : pal.woodD };
+      case 'wood': return { color: '#F3F2EF', rough: 0.2, plain: true }; // white lacquer
       case 'fabric': return { color: l > 0.82 ? pal.fabL : pal.fabM };
       case 'charcoal': return { color: pal.fabD };
       case 'accent': return { color: pal.accent };
@@ -1987,12 +2237,15 @@
     }
     return null;
   }
+  var plainT = null;
+  function plainTex() { if (!plainT) { var c = document.createElement('canvas'); c.width = c.height = 4; var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 4, 4); plainT = new THREE.CanvasTexture(c); } return plainT; }
   function dressFurniture(scheme) {
     var pal = PALETTES[scheme];
     furnMats.forEach(function (f) {
       var v = pal ? paletteFor(f.p, pal) : null;
       f.mat.color.set(v ? v.color : f.p.color);
       f.mat.roughness = v && v.rough != null ? v.rough : f.p.rough;
+      var u = f.mat.userData.triMapU; if (u) u.value = v && v.plain ? plainTex() : f.mat.userData.triTex;
     });
   }
   function lookMaterial(b, smooth) {
@@ -2008,16 +2261,22 @@
      read as soft forms while box edges stay crisp. */
   var COS_CREASE = Math.cos(35 * Math.PI / 180), WET = { wet: 1 };
   var KITCHEN = { kitchen: 1 };
-  function furnParts(g, cabinets) {
+  var KIT = [], kitMeshes = [];
+  function furnParts(g, cabinets, kitAll) {
     var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
     var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
     function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.04) return true; return false; }
-    var keep = [], rug = [], wet = [], top = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
+    var keep = [], rug = [], wet = [], top = [], kit = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
     for (var t = 0; t < idx.length; t += 3) {
       var a = idx[t], b = idx[t + 1], c = idx[t + 2];
       if (onFloor(p[a * 3 + 1] * k + oy) && onFloor(p[b * 3 + 1] * k + oy) && onFloor(p[c * 3 + 1] * k + oy)) { rug.push(a, b, c); continue; }
       // pieces standing in bathrooms/WCs are sanitary ware: porcelain, not fabric
       var cx = (p[a * 3] + p[b * 3] + p[c * 3]) / 3 * k + ox, cy = (p[a * 3 + 1] + p[b * 3 + 1] + p[c * 3 + 1]) / 3 * k + oy, cz = (p[a * 3 + 2] + p[b * 3 + 2] + p[c * 3 + 2]) / 3 * k + oz;
+      if (kitAll && roomAt(cx - CX, cy, cz + CY, KITCHEN)) { // kitchen casework and appliances
+        kit.push(a, b, c);
+        KIT.push({ v: [a, b, c].map(function (q) { return [p[q * 3] * k + ox - CX, p[q * 3 + 1] * k + oy, p[q * 3 + 2] * k + oz + CY]; }), wood: !!cabinets });
+        continue;
+      }
       if (cabinets) {
         var ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2], vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
         var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
@@ -2028,7 +2287,7 @@
     }
     var rugGeo = null;
     if (rug.length >= 6) { rugGeo = new THREE.BufferGeometry(); rugGeo.setAttribute('position', g.attributes.position); rugGeo.setIndex(rug); }
-    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null };
+    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null, kit: kit.length ? creased(p, kit) : null };
   }
   function creased(p, idx) {
     var F = idx.length / 3, nv = p.length / 3, fn = new Float32Array(F * 3);
@@ -2073,7 +2332,7 @@
   var elemGroups = {}, elemTris = {}, realGroup = new THREE.Group(), realBuilt = false;
   scene.add(realGroup);
   function elemGroup(id, grp) {
-    if (!elemGroups[id]) { elemGroups[id] = new THREE.Group(); grp.add(elemGroups[id]); }
+    if (!elemGroups[id]) { elemGroups[id] = new THREE.Group(); elemGroups[id].userData.elemId = id; grp.add(elemGroups[id]); }
     return elemGroups[id];
   }
   function collectTris(id, g, root) {
@@ -2423,7 +2682,7 @@
         if (sd === 0) X.u0 -= d; if (sd === 1) X.u1 += d; if (sd === 2) X.v0 -= d; if (sd === 3) X.v1 += d;
       });
       var du = Math.min(5, X.u1 - X.u0), dv = Math.min(5, X.v1 - X.v0), cu = (X.u0 + X.u1) / 2, cv = (X.v0 + X.v1) / 2;
-      if (du < 1.3 || dv < 1.3 || rugTaken(O, A, Cv, cu, cv, du, dv)) return;
+      if (du < 1.3 || dv < 1.3 || rugTaken(O, A, Cv, cu, cv, du, dv, r0.base)) return;
       var G = new THREE.Group(); G.matrixAutoUpdate = false; G.matrix.makeBasis(A, new THREE.Vector3(0, 1, 0), Cv).setPosition(O.x, r0.base, O.z);
       var rug = put(G, rboxGeo(du, 0.014, dv, 0.005), rugMat(style, du / dv), cu, 0.007, cv); rug.castShadow = false;
       realGroup.add(G);
@@ -2440,21 +2699,11 @@
     var t = new THREE.CanvasTexture(cvs); t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return (rugMats[key] = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.025, roughness: 1, envMapIntensity: 0.3, clippingPlanes: [cutPlane] }));
   }
-  function rugModern(c, W, H, r) { // hand-tufted, tone on tone: soft organic fields with carved outlines
-    c.fillStyle = '#E7E0D4'; c.fillRect(0, 0, W, H);
-    for (var k = 0; k < 8; k++) {
-      var x = r() * W, y = r() * H, rx = 120 + r() * 280, ry = 80 + r() * 200;
-      c.fillStyle = r() < 0.5 ? 'rgba(170,155,135,.22)' : 'rgba(255,255,255,.35)';
-      c.beginPath(); c.ellipse(x, y, rx, ry, r() * Math.PI, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = 'rgba(120,105,85,.25)'; c.lineWidth = 2; c.stroke();
-    }
-    c.strokeStyle = 'rgba(130,115,95,.18)'; c.lineWidth = 1.5;
-    for (k = 0; k < 14; k++) {
-      var y0 = r() * H; c.beginPath(); c.moveTo(0, y0);
-      for (var x2 = 0; x2 <= W; x2 += 32) c.lineTo(x2, y0 + Math.sin(x2 / 170 + k) * 30 + Math.sin(x2 / 53 + k * 2) * 8);
-      c.stroke();
-    }
-    c.strokeStyle = 'rgba(150,135,115,.6)'; c.lineWidth = 10; c.strokeRect(5, 5, W - 10, H - 10); // binding
+  function rugModern(c, W, H, r) { // plain hand-tufted wool with a quiet tonal border
+    c.fillStyle = '#E4DDD1'; c.fillRect(0, 0, W, H);
+    var m = Math.min(W, H), b = m * 0.06;
+    c.strokeStyle = 'rgba(150,135,115,.35)'; c.lineWidth = m * 0.012; c.strokeRect(b, b, W - 2 * b, H - 2 * b);
+    c.strokeStyle = 'rgba(150,135,115,.5)'; c.lineWidth = 8; c.strokeRect(4, 4, W - 8, H - 8);
   }
   function rugPersian(c, W, H, r) { // bordered medallion rug in navy, rust, gold and ivory
     var navy = '#1E2A44', gold = '#B8955A', ivory = '#E8DFCC', rust = '#7E3E30', m = Math.min(W, H);
@@ -2615,25 +2864,20 @@
       put(G, new THREE.CylinderGeometry(R, R, 0.04, 40), mt.travertine, cu, topH - 0.02, cv);
       return;
     }
-    if (lo / sh > 1.3 || round) { // travertine pill on two drums
-      var top = put(G, pillGeo(lo, sh, 0.07), mt.travertine, cu, topH - 0.035, cv); if (!longU) top.rotation.y = Math.PI / 2;
-      [-1, 1].forEach(function (sd) {
-        var off = sd * (lo / 2 - sh * 0.42);
-        put(G, new THREE.CylinderGeometry(sh * 0.27, sh * 0.27, topH - 0.07, 32), mt.travertine, cu + (longU ? off : 0), (topH - 0.07) / 2, cv + (longU ? 0 : off));
-      });
-      return;
+    // coffee table: a honed travertine top on a recessed plinth (round when the piece is round or square)
+    var tb = topH - 0.05;
+    if (round || lo / sh < 1.15) {
+      put(G, new THREE.CylinderGeometry(sh / 2, sh / 2, 0.05, 64), mt.travertine, cu, topH - 0.025, cv);
+      put(G, new THREE.CylinderGeometry(sh * 0.3, sh * 0.32, tb, 48), mt.travertine, cu, tb / 2, cv);
+    } else {
+      put(G, rboxGeo(du, 0.05, dv, 0.012), mt.travertine, cu, topH - 0.025, cv);
+      put(G, rboxGeo(Math.max(0.2, du - 0.26), tb, Math.max(0.2, dv - 0.26), 0.008), mt.travertine, cu, tb / 2, cv);
     }
-    // square coffee table: marble on slim bronze legs, nesting tray table beneath
-    put(G, rboxGeo(du, 0.025, dv, 0.006), mt.top, cu, topH - 0.0125, cv);
-    var leg = new THREE.BoxGeometry(0.016, topH - 0.025, 0.016);
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg, mt.metal, cu + s[0] * (du / 2 - 0.012), (topH - 0.025) / 2, cv + s[1] * (dv / 2 - 0.012)); });
-    var nu = du * 0.55, nv = dv * 0.55, nh = topH * 0.5, ncu = cu + du * 0.18, ncv = cv + dv * 0.24;
-    put(G, rboxGeo(nu, 0.02, nv, 0.004), mt.woodL, ncu, nh - 0.01, ncv);
-    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (e) { // tray lip
-      put(G, new THREE.BoxGeometry(e[0] ? 0.012 : nu, 0.03, e[1] ? 0.012 : nv), mt.woodL, ncu + e[0] * (nu / 2 - 0.006), nh + 0.015, ncv + e[1] * (nv / 2 - 0.006));
-    });
-    var leg2 = new THREE.BoxGeometry(0.012, nh - 0.02, 0.012);
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, leg2, mt.metal, ncu + s[0] * (nu / 2 - 0.01), (nh - 0.02) / 2, ncv + s[1] * (nv / 2 - 0.01)); });
+    // styling: two stacked books and a low ceramic bowl
+    var ox = longU ? lo * 0.2 : 0, oz = longU ? 0 : lo * 0.2;
+    put(G, rboxGeo(0.3, 0.03, 0.22, 0.004), mt.cream, cu - ox, topH + 0.015, cv - oz, 0.15);
+    put(G, rboxGeo(0.26, 0.025, 0.19, 0.004), mt.pillowA, cu - ox, topH + 0.042, cv - oz, -0.1);
+    put(G, new THREE.SphereGeometry(0.1, 32, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mt.ceramic, cu + ox, topH + 0.05, cv + oz, 0, Math.PI).scale.set(1, 0.55, 1);
   }
   function buildTable(m, G, mt) {
     var topH = 0; cellsWhere(m, function (h) { if (h > topH) topH = h; return false; });
@@ -2797,8 +3041,18 @@
       if (willGo[id]) return;
       elemGroups[id].traverse(function (o) { if (o.isMesh && o.userData.rug) { var b = new THREE.Box3().setFromObject(o); rugBoxes.push([b.min.x, b.min.z, b.max.x, b.max.z]); } });
     });
-    var seatRecs = [];
-    function rugTaken(O, A, Cv, cu, cv, du, dv) {
+    var seatRecs = [], tableBoxes = [];
+    var revitRugs = []; if (meshGroups.furn) meshGroups.furn.traverse(function (o) {
+      if (!o.isMesh || !o.userData.rug) return;
+      for (var q = o.parent; q; q = q.parent) if (q.userData && q.userData.elemId != null && willGo[q.userData.elemId]) return;
+      revitRugs.push(o);
+    });
+    var downRc = new THREE.Raycaster(), downV = new THREE.Vector3(0, -1, 0);
+    function rugTaken(O, A, Cv, cu, cv, du, dv, base) {
+      if (base != null && revitRugs.length && [[0, 0], [-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]].some(function (k) {
+        var u = cu + k[0] * du, v = cv + k[1] * dv; downRc.set(new THREE.Vector3(O.x + A.x * u + Cv.x * v, base + 0.5, O.z + A.z * u + Cv.z * v), downV); downRc.far = 0.7;
+        return downRc.intersectObjects(revitRugs, false).length > 0;
+      })) return true;
       var xs = [], zs = [];
       [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (k) { var u = cu + k[0] * du / 2, v = cv + k[1] * dv / 2; xs.push(O.x + A.x * u + Cv.x * v); zs.push(O.z + A.z * u + Cv.z * v); });
       var bx = [Math.min.apply(null, xs), Math.min.apply(null, zs), Math.max.apply(null, xs), Math.max.apply(null, zs)], area = (bx[2] - bx[0]) * (bx[3] - bx[1]);
@@ -2837,6 +3091,16 @@
       if (!ok) return;
       if (G.userData.headSide != null) G.userData.front = [A, A, Cv, Cv][G.userData.headSide].clone().multiplyScalar(G.userData.headSide % 2 ? -1 : 1);
       G.matrixAutoUpdate = false; G.matrix.makeBasis(A, up, Cv).setPosition(O.x, m.base, O.z);
+      if (G.userData.table && (kind === 'table' || kind === 'dining')) {
+        var tr = G.userData.table.rect, tc = [[tr.u0, tr.v0], [tr.u1, tr.v0], [tr.u0, tr.v1], [tr.u1, tr.v1]].map(function (c) { return O.clone().addScaledVector(A, c[0]).addScaledVector(Cv, c[1]); });
+        var tb2 = [Math.min.apply(null, tc.map(function (c) { return c.x; })), Math.min.apply(null, tc.map(function (c) { return c.z; })), Math.max.apply(null, tc.map(function (c) { return c.x; })), Math.max.apply(null, tc.map(function (c) { return c.z; })), m.base];
+        var dup = tableBoxes.some(function (o) {
+          var w = Math.min(tb2[2], o[2]) - Math.max(tb2[0], o[0]), h = Math.min(tb2[3], o[3]) - Math.max(tb2[1], o[1]);
+          return Math.abs(o[4] - tb2[4]) < 0.5 && w > 0 && h > 0 && w * h > 0.3 * Math.min((tb2[2] - tb2[0]) * (tb2[3] - tb2[1]), (o[2] - o[0]) * (o[3] - o[1]));
+        });
+        if (dup) { if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true; return; }
+        tableBoxes.push(tb2);
+      }
       G.userData.elem = f.id; G.userData.room = mt.room; G.userData.kind = kind; realGroup.add(G); made++;
       if (mt.seatInfo) {
         var si = mt.seatInfo, rr2 = si.r, cs = [[rr2.u0, rr2.v0], [rr2.u1, rr2.v0], [rr2.u0, rr2.v1], [rr2.u1, rr2.v1]].map(function (c) { return O.clone().addScaledVector(A, c[0]).addScaledVector(Cv, c[1]); });
@@ -2848,6 +3112,8 @@
     groupRugs(seatRecs, rugTaken);
     buildChandeliers();
     dressWetAndKitchen();
+    buildFalseCeilings();
+    buildKitchen();
     applyRealFurniture();
     return made;
   }
