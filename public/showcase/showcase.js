@@ -1770,7 +1770,7 @@
     b.trunk = rmat('wood', 0.25, '#6A5644', 0.85, 'wood', 0.3);
     b.soil = rmat('soil', 0.1, '#3B3127', 1);
     b.planter = rmat('stone', 0.75, '#CFC7B9', 0.85, 'stone', 0.35);
-    b.pillowA = rmat('accent', 0.62, '#B7A592', 0.95, 'fabric', 0.14); // taupe
+    b.pillowA = rmat('fabric', 0.62, '#B7A592', 0.95, 'fabric', 0.14); // taupe
     b.pillowB = rmat('charcoal', 0.35, '#5E5852', 0.95, 'fabric', 0.14); // charcoal
     b.chairFab = rmat('fabric', 0.78, '#D3CFC8', 0.95, 'fabric', 0.14); // light grey weave
     return b;
@@ -1829,7 +1829,7 @@
     bx(W + 0.12, hbH, 0.07, W / 2, 0.12 + hbH / 2, -0.015, mt.boucle, 0, 0.03); // backing panel
     var padTop = hbTop - 0.03, pad0 = mTop + 0.02, rows = 2, cols = Math.max(2, Math.round((W + 0.1) / 0.45)), ph = (padTop - pad0) / rows, pw2 = (W + 0.1) / cols;
     for (var rr = 0; rr < rows; rr++) for (var cc = 0; cc < cols; cc++) // padded squares
-      bx(pw2 - 0.012, ph - 0.012, 0.1, W / 2 - (W + 0.1) / 2 + pw2 * (cc + 0.5), pad0 + ph * (rr + 0.5), 0.06, mt.boucle, 0, 0.045);
+      bx(pw2 - 0.035, ph - 0.035, 0.1, W / 2 - (W + 0.1) / 2 + pw2 * (cc + 0.5), pad0 + ph * (rr + 0.5), 0.06, mt.boucle, 0, 0.05);
     var gl = at(W / 2, -0.06), glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, 0.45), glowMatBed());
     glow.position.set(gl[0], hbTop + 0.18, gl[1]); glow.rotation.y = head === 2 ? 0 : head === 3 ? Math.PI : head === 0 ? Math.PI / 2 : -Math.PI / 2;
     G.add(glow); // LED wash on the wall above the headboard
