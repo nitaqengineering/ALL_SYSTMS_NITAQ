@@ -479,7 +479,17 @@
   /* Ambient occlusion (SSAO) in walk mode on capable screens: soft contact shadows where
      furniture meets the floor, in corners and under shelves. Off in the dollhouse (its section
      cut is not seen by the AO pass) and on phones, and switchable in the walk controls. */
-  var composer = null, ssao = null;
+  var composer = null, ssao = null, bloom = null, fxaa = null;
+  // Final grade: a touch of warmth, contrast and saturation, and a soft vignette.
+  var GRADE = {
+    uniforms: { tDiffuse: { value: null }, vig: { value: 0.3 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: ['uniform sampler2D tDiffuse; uniform float vig; varying vec2 vUv;',
+      'void main() { vec4 c = texture2D(tDiffuse, vUv); vec3 x = c.rgb * vec3(1.02, 1.0, 0.975);',
+      'float l = dot(x, vec3(0.299, 0.587, 0.114)); x = mix(vec3(l), x, 1.07);',
+      'x = mix(x, x * x * (3.0 - 2.0 * x), 0.16); vec2 d = vUv - 0.5; x *= 1.0 - vig * dot(d, d) * 1.5;',
+      'gl_FragColor = vec4(clamp(x, 0.0, 1.0), c.a); }'].join('\n')
+  };
   function useAO() {
     if (!S.walk || !S.ao || !MESH || !THREE.SSAOPass) return false;
     if (!composer) {
@@ -489,7 +499,10 @@
       // the model carries no vertex normals (flat-shaded from faces): the AO normal pass must too
       ssao.normalMaterial.flatShading = true; ssao.normalMaterial.needsUpdate = true;
       composer.addPass(ssao);
+      if (THREE.UnrealBloomPass) { bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.3, 0.55, 0.88); composer.addPass(bloom); }
       composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+      composer.addPass(new THREE.ShaderPass(GRADE));
+      if (THREE.FXAAShader) { fxaa = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaa); }
       sizeAO();
     }
     return true;
@@ -498,6 +511,7 @@
     if (!composer) return;
     var w = stage.clientWidth, h = stage.clientHeight, r = renderer.getPixelRatio();
     composer.setPixelRatio(r); composer.setSize(w, h);
+    if (fxaa) fxaa.material.uniforms.resolution.value.set(1 / (w * r), 1 / (h * r));
   }
   function applyLens() {
     camera.far = S.walk ? 160 : 500; // a tighter depth range in walk mode keeps the AO precise
@@ -727,7 +741,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (sky) sky.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -768,7 +782,7 @@
       camera.lookAt(cam.t);
     }
     if (sky) sky.visible = S.walk;
-    if (useAO()) composer.render(); else renderer.render(scene, camera);
+    if (useAO()) { if (bloom) bloom.strength = S.night ? 0.75 : 0.28; composer.render(); } else renderer.render(scene, camera);
     $('labels').style.visibility = S.walk ? 'hidden' : '';
     var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
     L.rooms.forEach(function (r) {
@@ -861,7 +875,7 @@
           var fp = furnParts(g);
           if (fp.rug) {
             var rm = new THREE.Mesh(fp.rug, makeMaterial(finish('rug', new THREE.Color(b.color), {}), false));
-            rm.receiveShadow = true; parent.add(rm);
+            rm.receiveShadow = true; rm.userData.rug = true; parent.add(rm);
           }
           if (fp.wet) {
             var wc = new THREE.Color(b.color), whsl = {}; wc.getHSL(whsl);
@@ -1078,7 +1092,7 @@
     glassMat.onBeforeCompile = function (sh) {
       sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', [
         'float glassF = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0);',
-        'gl_FragColor = vec4( outgoingLight, mix(0.12, 0.8, glassF) );'].join('\n'));
+        'gl_FragColor = vec4( outgoingLight, mix(0.06, 0.72, glassF) );'].join('\n'));
     };
     glassMat.customProgramCacheKey = function () { return 'fresnel-glass'; };
   }
@@ -1089,22 +1103,50 @@
     for (var si = 0; si < sp.count; si++) skyCol.push(0, 0, 0);
     skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyCol, 3));
     sky = new THREE.Group();
-    sky.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })));
+    sky.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })));
     // a ring, so it never cuts through a basement under the house
     var groundM = new THREE.Mesh(new THREE.RingGeometry(SIZE * 0.9, 140, 64), new THREE.MeshStandardMaterial({ color: 0xD3C9B8, roughness: 1 }));
     groundM.rotation.x = -Math.PI / 2; groundM.position.y = -0.05; groundM.receiveShadow = true; sky.add(groundM);
     sky.visible = false; scene.add(sky);
   }
+  var skyTex = {};
+  function skyPanorama(night) {
+    var W = 2048, H = 1024, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var c = cv.getContext('2d'), r = rng(night ? 5 : 3), hz = H * 0.5;
+    var g = c.createLinearGradient(0, 0, 0, hz);
+    if (night) { g.addColorStop(0, '#050913'); g.addColorStop(0.7, '#0E1628'); g.addColorStop(1, '#2A2C3A'); }
+    else { g.addColorStop(0, '#5E94C8'); g.addColorStop(0.55, '#A9C8E2'); g.addColorStop(1, '#EDEFEA'); }
+    c.fillStyle = g; c.fillRect(0, 0, W, hz);
+    if (night) { for (var i = 0; i < 900; i++) { c.fillStyle = 'rgba(255,255,255,' + (0.2 + r() * 0.6) + ')'; c.fillRect(r() * W, r() * hz * 0.8, 1.2, 1.2); } }
+    else for (var k = 0; k < 70; k++) { // soft cumulus banks, flatter toward the horizon
+      var y = hz * (0.15 + r() * 0.7), sx = 60 + r() * 220, sy = sx * (0.18 + 0.25 * (1 - y / hz)), x = r() * W;
+      for (var j = 0; j < 6; j++) {
+        var px = x + (r() - 0.5) * sx * 1.6, py = y + (r() - 0.5) * sy, gr = c.createRadialGradient(px, py, 0, px, py, sx * 0.6);
+        gr.addColorStop(0, 'rgba(255,255,255,' + (0.35 + r() * 0.3) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = gr; c.save(); c.translate(px, py); c.scale(1, sy / sx); c.translate(-px, -py); c.beginPath(); c.arc(px, py, sx * 0.6, 0, Math.PI * 2); c.fill(); c.restore();
+      }
+    }
+    // distant skyline: low rooftops and palm / tree canopies, hazier with distance
+    [[0.55, night ? '#1A2030' : '#B7C0C4', 18], [0.8, night ? '#141925' : '#98A49A', 26]].forEach(function (L) {
+      c.fillStyle = L[1]; c.beginPath(); c.moveTo(0, hz);
+      for (var x = 0; x <= W; x += 6) {
+        var h = L[2] * (0.4 + 0.6 * Math.abs(Math.sin(x / 37 + L[0] * 9) * Math.sin(x / 113 + L[0] * 3)));
+        if (r() < 0.04) h += L[2] * 1.2 * r(); c.lineTo(x, hz - h * L[0] * 2);
+      }
+      c.lineTo(W, hz); c.closePath(); c.fill();
+    });
+    if (night) for (i = 0; i < 260; i++) { c.fillStyle = 'rgba(255,' + (190 + r() * 50 | 0) + ',120,' + (0.4 + r() * 0.5) + ')'; c.fillRect(r() * W, hz - r() * 26, 1.6, 1.6); }
+    var gg = c.createLinearGradient(0, hz, 0, H); // ground beyond the site
+    gg.addColorStop(0, night ? '#1B1D24' : '#C9C0AE'); gg.addColorStop(1, night ? '#08090C' : '#9C9380');
+    c.fillStyle = gg; c.fillRect(0, hz, W, H - hz);
+    var hzG = c.createLinearGradient(0, hz - 40, 0, hz + 10); hzG.addColorStop(0, 'rgba(255,255,255,0)'); hzG.addColorStop(1, night ? 'rgba(60,60,80,.35)' : 'rgba(240,240,236,.55)');
+    c.fillStyle = hzG; c.fillRect(0, hz - 40, W, 50); // aerial haze on the horizon
+    var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t;
+  }
   function paintSky() {
     if (!sky) return;
-    var g = sky.children[0].geometry, pos = g.attributes.position, col = g.attributes.color, c = new THREE.Color();
-    var top = new THREE.Color(S.night ? 0x060B16 : 0x7FAED6), hor = new THREE.Color(S.night ? 0x1B2436 : 0xE8EEF2), bot = new THREE.Color(S.night ? 0x05070B : 0xC9C1B3);
-    for (var i = 0; i < pos.count; i++) {
-      var y = pos.getY(i) / 140;
-      if (y > 0) c.copy(hor).lerp(top, Math.pow(y, 0.55)); else c.copy(hor).lerp(bot, Math.min(1, -y * 4));
-      col.setXYZ(i, c.r, c.g, c.b);
-    }
-    col.needsUpdate = true;
+    var key = S.night ? 'n' : 'd'; if (!skyTex[key]) skyTex[key] = skyPanorama(S.night);
+    var sm = sky.children[0].material; if (sm.map !== skyTex[key]) { sm.map = skyTex[key]; sm.needsUpdate = true; }
     sky.children[1].material.color.set(S.night ? 0x2A2C30 : 0xD3C9B8);
   }
 
@@ -1114,6 +1156,18 @@
     var li = 0;
     D.levels.forEach(function (L, i) { if (L.elevation + (L._slabTop || 0) - 0.3 <= y) li = i; });
     return D.levels[li];
+  }
+  function roomTypeAt(wx, wy, wz) {
+    var L = levelAt(wy), x = wx + CX, y = -wz + CY, rm = L.rooms.filter(function (r) { return inPoly(x, y, r.poly); })[0];
+    if (rm) return rm.type;
+    // open areas often carry only a text label in Revit: take the nearest label within 7 m
+    var best = null, bd = 49;
+    (L.notes || []).forEach(function (n) { var d = (n.x - x) * (n.x - x) + (n.y - y) * (n.y - y); if (d < bd) { bd = d; best = n; } });
+    var nm2 = best ? (best.name || '') + ' ' + (best.nameAr || '') : '';
+    if (/majlis|مجلس/i.test(nm2)) return 'majlis';
+    if (/bed|sitting|master|نوم|جلسة/i.test(nm2)) return 'bedroom';
+    if (/living|family|game|lounge|معيشة|ألعاب/i.test(nm2)) return 'living';
+    return '';
   }
   function roomAt(wx, wy, wz, types) {
     var L = levelAt(wy), x = wx + CX, y = -wz + CY;
@@ -1453,6 +1507,7 @@
       for (var rr = 8; rr < o[2]; rr += 7) { c.beginPath(); c.arc(o[0], o[1], rr, 0, Math.PI * 2); c.stroke(); }
     });
     c.strokeStyle = 'rgba(120,110,95,.3)'; c.lineWidth = 3; c.strokeRect(0, 0, n, n);
+    for (var i = 0; i < 30000; i++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)'; c.fillRect(r() * n, r() * n, 1.5, 1.5); } // wool pile
   }
   function procFor(kind) {
     if (!procTex[kind]) {
@@ -1699,61 +1754,311 @@
     return { u0: m.u0 + i0 * CELL, u1: m.u0 + (i1 + 1) * CELL, v0: m.v0 + j0 * CELL, v1: m.v0 + (j1 + 1) * CELL, n: c.length, cells: c };
   }
 
-  // Upholstered seating (sofa modules, corner pieces, armchairs).
-  function buildSeat(m, G, mt) {
-    var r = occRect(m, function () { return true; }); if (!r) return false;
+  /* ---------- seating ----------
+     One reading of the Revit piece (footprint, seat height, which sides are backs or arms),
+     then a style chosen by the room it stands in:
+     - living / family rooms: a tailored contemporary sofa (track arms, crowned seat cushions,
+       loose plump back cushions, layered scatter pillows, a throw) on a recessed plinth, with a
+       tone-on-tone hand-tufted rug in front;
+     - majlis: low Arabic seating on a walnut base with a gold inlay, piped seat mattresses,
+       upright back cushions, bolsters at the open ends and a bordered medallion rug;
+     - bedrooms: a soft boucle loveseat on walnut legs, or a barrel lounge chair. */
+  var puffCache = {};
+  function puffyGeo(w, h, d, r, px, py, pz) { // rounded box whose faces bulge like a filled cushion
+    var key = [w, h, d, r, px, py, pz].map(function (x) { return (+x).toFixed(3); }).join(',');
+    if (puffCache[key]) return puffCache[key];
+    r = Math.max(0.003, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3));
+    var g = new THREE.BoxGeometry(w, h, d, 8, 6, 8), p = g.attributes.position, v = new THREE.Vector3(), c = new THREE.Vector3();
+    var lo = new THREE.Vector3(-w / 2 + r, -h / 2 + r, -d / 2 + r), hi = new THREE.Vector3(w / 2 - r, h / 2 - r, d / 2 - r);
+    for (var i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      var nx = v.x / (w / 2), ny = v.y / (h / 2), nz = v.z / (d / 2);
+      var bx = px * (1 - ny * ny) * (1 - nz * nz) * nx, by = py * (1 - nx * nx) * (1 - nz * nz) * ny, bz = pz * (1 - nx * nx) * (1 - ny * ny) * nz;
+      c.copy(v).clamp(lo, hi); v.sub(c); if (v.lengthSq() > 1e-12) v.setLength(r); v.add(c);
+      p.setXYZ(i, v.x + bx, v.y + by, v.z + bz);
+    }
+    g.computeVertexNormals();
+    return (puffCache[key] = g);
+  }
+  function tilt(o, sd, t) { if (sd === 0) o.rotation.z = t; if (sd === 1) o.rotation.z = -t; if (sd === 2) o.rotation.x = -t; if (sd === 3) o.rotation.x = t; }
+  function occFrac(m, q, minH) {
+    var i0 = Math.max(0, Math.floor((q.u0 - m.u0) / CELL)), i1 = Math.min(m.nu - 1, Math.ceil((q.u1 - m.u0) / CELL) - 1);
+    var j0 = Math.max(0, Math.floor((q.v0 - m.v0) / CELL)), j1 = Math.min(m.nv - 1, Math.ceil((q.v1 - m.v0) / CELL) - 1), tot = 0, ok = 0;
+    for (var i = i0; i <= i1; i++) for (var j = j0; j <= j1; j++) { tot++; if (m.H[i * m.nv + j] > minH) ok++; }
+    return tot ? ok / tot : 0;
+  }
+  function seatFrame(m) {
+    var r = occRect(m, function () { return true; }); if (!r) return null;
     var top = 0; cellsWhere(m, function (h) { if (h > top) top = h; return false; });
     var seatH = median(cellsWhere(m, function (h) { return h > 0.25 && h < 0.6; }).map(function (c) { return c[2]; })) || 0.42;
     var thr = seatH + 0.12, sides = [0, 1, 2, 3].map(function (s) { return stripStats(m, s, Math.min(0.3, ((s < 2 ? r.u1 - r.u0 : r.v1 - r.v0)) * 0.3), thr); });
     var backs = [], arms = [];
     sides.forEach(function (st, s) { if (st.frac > 0.5) (st.maxh >= top - 0.1 ? backs : arms).push(s); });
-    if (!backs.length && arms.length) { backs.push(arms.shift()); } // a module whose tallest side is lower than usual
-    var baseTop = Math.max(0.2, seatH - 0.13), BK = 0.2, AW = 0.18, body = mt.boucle || mt.body, ROLL = 0.26;
-    put(G, rboxGeo(r.u1 - r.u0 - 0.1, 0.06, r.v1 - r.v0 - 0.1, 0.01), mt.plinth, (r.u0 + r.u1) / 2, 0.03, (r.v0 + r.v1) / 2);
-    put(G, rboxGeo(r.u1 - r.u0 - 0.01, baseTop - 0.06, r.v1 - r.v0 - 0.01, 0.06), body, (r.u0 + r.u1) / 2, 0.06 + (baseTop - 0.06) / 2, (r.v0 + r.v1) / 2);
-    // seat area: what the backs and arms leave
-    var s = { u0: r.u0, u1: r.u1, v0: r.v0, v1: r.v1 };
-    backs.concat(arms).forEach(function (sd) { var t = backs.indexOf(sd) >= 0 ? BK : AW; if (sd === 0) s.u0 += t; if (sd === 1) s.u1 -= t; if (sd === 2) s.v0 += t; if (sd === 3) s.v1 -= t; });
-    var lenU = s.u1 - s.u0, lenV = s.v1 - s.v0, alongU = lenU >= lenV, len = alongU ? lenU : lenV, n = Math.max(1, Math.round(len / ROLL));
-    for (var i = 0; i < n; i++) { // channel-tufted seat: soft rolls running front to back
-      var a0 = (alongU ? s.u0 : s.v0) + len * i / n, a1 = a0 + len / n;
-      var cu = alongU ? (a0 + a1) / 2 : (s.u0 + s.u1) / 2, cv = alongU ? (s.v0 + s.v1) / 2 : (a0 + a1) / 2;
-      put(G, rboxGeo(alongU ? a1 - a0 - 0.006 : lenU - 0.01, 0.17, alongU ? lenV - 0.01 : a1 - a0 - 0.006, 0.075), mt.cushion, cu, baseTop + 0.085, cv);
+    if (!backs.length && arms.length) backs.push(arms.shift());
+    return { m: m, r: r, top: top, seatH: seatH, sides: sides, backs: backs, arms: arms };
+  }
+  function innerRect(F, BK, AW) {
+    var r = F.r, s = { u0: r.u0, u1: r.u1, v0: r.v0, v1: r.v1 };
+    F.backs.concat(F.arms).forEach(function (sd) { var t = F.backs.indexOf(sd) >= 0 ? BK : AW; if (sd === 0) s.u0 += t; if (sd === 1) s.u1 -= t; if (sd === 2) s.v0 += t; if (sd === 3) s.v1 -= t; });
+    return s;
+  }
+  function seatCells(F, s, la, lb) { // the seat area cut into cushions, keeping only occupied ones (L and U shapes)
+    var lenU = s.u1 - s.u0, lenV = s.v1 - s.v0, nu, nv, out = [];
+    if (lenU <= 0.1 || lenV <= 0.1) return out;
+    if (lenU >= lenV) { nu = Math.max(1, Math.round(lenU / la)); nv = lenV > 1.25 ? Math.max(1, Math.round(lenV / lb)) : 1; }
+    else { nv = Math.max(1, Math.round(lenV / la)); nu = lenU > 1.25 ? Math.max(1, Math.round(lenU / lb)) : 1; }
+    for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
+      var q = { u0: s.u0 + lenU * i / nu, u1: s.u0 + lenU * (i + 1) / nu, v0: s.v0 + lenV * j / nv, v1: s.v0 + lenV * (j + 1) / nv };
+      if (occFrac(F.m, q, 0.15) > 0.6) out.push(q);
     }
-    var backTop = Math.max(top, seatH + 0.3);
-    backs.forEach(function (sd) {
+    return out;
+  }
+  function backSpan(F, sd, BK) { // a back's run, stopping at the backs at right angles to it
+    var ax = along(F.r, sd), a0 = ax[0], a1 = ax[1];
+    F.backs.forEach(function (o) { if (o === sd || (o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
+    return [a0, a1];
+  }
+  function runCells(F, sd, a0, a1, step, minH) { // pieces of a back run where the piece really has a back
+    var n = Math.max(1, Math.round((a1 - a0) / step)), L = (a1 - a0) / n, out = [];
+    for (var k = 0; k < n; k++) {
+      var q = sideRect(F.r, sd, 0, 0.12, a0 + k * L, a0 + (k + 1) * L);
+      if (occFrac(F.m, { u0: q.u - q.du / 2, u1: q.u + q.du / 2, v0: q.v - q.dv / 2, v1: q.v + q.dv / 2 }, minH) > 0.4) out.push([a0 + k * L, a0 + (k + 1) * L]);
+    }
+    return out;
+  }
+
+  function mergeRuns(a) { var out = []; a.forEach(function (x) { var l = out[out.length - 1]; if (l && Math.abs(l[1] - x[0]) < 1e-6) l[1] = x[1]; else out.push([x[0], x[1]]); }); return out; }
+
+  function seatLiving(F, G, mt, opt) {
+    opt = opt || {};
+    var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0, cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
+    var seatH = Math.min(Math.max(F.seatH, 0.4), 0.46), BK = opt.soft ? 0.24 : 0.2, AW = opt.soft ? 0.2 : 0.13;
+    var fab = opt.fab || mt.cushion, legH = opt.legs ? 0.12 : 0.05, baseTop = seatH - 0.15, rad = opt.soft ? 0.06 : 0.025;
+    if (opt.legs) {
+      var lg = new THREE.CylinderGeometry(0.018, 0.012, legH, 12);
+      [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, lg, mt.wood, cu + s[0] * (du / 2 - 0.08), legH / 2, cv + s[1] * (dv / 2 - 0.08)); });
+    } else put(G, rboxGeo(Math.max(0.1, du - 0.12), legH, Math.max(0.1, dv - 0.12), 0.01), mt.plinth, cu, legH / 2, cv);
+    // the upholstered base follows the footprint cells (so an L sofa is an L, not a filled square)
+    (occFrac(F.m, r, 0.15) > 0.8 ? [r] : seatCells(F, r, 1.2, 0.6)).forEach(function (q) {
+      put(G, puffyGeo(q.u1 - q.u0 + 0.002, baseTop - legH, q.v1 - q.v0 + 0.002, rad, 0, 0, 0), fab, (q.u0 + q.u1) / 2, legH + (baseTop - legH) / 2, (q.v0 + q.v1) / 2);
+    });
+    var s = innerRect(F, BK, AW);
+    seatCells(F, s, 0.95, 0.9).forEach(function (q) { // crowned seat cushions
+      put(G, puffyGeo(q.u1 - q.u0 - 0.012, 0.15, q.v1 - q.v0 - 0.012, 0.045, 0.012, 0.035, 0.012), fab, (q.u0 + q.u1) / 2, baseTop + 0.075, (q.v0 + q.v1) / 2);
+    });
+    var backTop = Math.min(Math.max(F.top, seatH + 0.3), seatH + 0.4), armTop = seatH + 0.2;
+    F.backs.forEach(function (sd) {
+      var sp = backSpan(F, sd, BK);
+      mergeRuns(runCells(F, sd, sp[0], sp[1], 0.6, seatH + 0.12)).forEach(function (rc) { // back frame
+        var fr = sideRect(r, sd, 0, 0.13, rc[0], rc[1]);
+        put(G, puffyGeo(fr.du + (sd < 2 ? 0 : 0.002), backTop - legH, fr.dv + (sd < 2 ? 0.002 : 0), rad, 0, 0, 0), fab, fr.u, legH + (backTop - legH) / 2, fr.v);
+      });
+      var c0 = sp[0], c1 = sp[1];
+      F.arms.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0) c0 = Math.max(c0, r.u0 + AW); if (o === 2) c0 = Math.max(c0, r.v0 + AW); if (o === 1) c1 = Math.min(c1, r.u1 - AW); if (o === 3) c1 = Math.min(c1, r.v1 - AW); });
+      var hgt = backTop - baseTop - 0.15 + 0.06;
+      runCells(F, sd, c0, c1, 0.95, seatH + 0.12).forEach(function (rc) { // loose back cushions
+        var L2 = rc[1] - rc[0], cr = sideRect(r, sd, 0.11, 0.2, rc[0], rc[1]);
+        var bc = put(G, puffyGeo(sd < 2 ? 0.2 : L2 - 0.01, hgt, sd < 2 ? L2 - 0.01 : 0.2, 0.05, sd < 2 ? 0.05 : 0.012, 0.02, sd < 2 ? 0.012 : 0.05), fab, cr.u, baseTop + 0.15 + hgt / 2, cr.v);
+        tilt(bc, sd, 0.13);
+      });
+      // layered scatter pillows: a large one and a smaller darker one in front, at each end
+      var ends = [];
+      if (F.arms.indexOf(sd < 2 ? 2 : 0) >= 0) ends.push([c0 + 0.34, 1]);
+      if (F.arms.indexOf(sd < 2 ? 3 : 1) >= 0) ends.push([c1 - 0.34, -1]);
+      if (sd === F.backs[0]) { // a corner piece gets one in the corner
+        if (F.backs.indexOf(sd < 2 ? 2 : 0) >= 0) ends.push([c0 + 0.3, 1]);
+        else if (F.backs.indexOf(sd < 2 ? 3 : 1) >= 0) ends.push([c1 - 0.3, -1]);
+      }
+      ends.forEach(function (e, k) {
+        var pr = sideRect(r, sd, 0.3, 0.14, e[0] - 0.25, e[0] + 0.25);
+        var p1 = put(G, puffyGeo(sd < 2 ? 0.12 : 0.5, 0.48, sd < 2 ? 0.5 : 0.12, 0.02, sd < 2 ? 0.06 : 0.03, 0.03, sd < 2 ? 0.03 : 0.06), opt.pillow || mt.pillowA, pr.u, baseTop + 0.15 + 0.24, pr.v);
+        tilt(p1, sd, 0.3); p1.rotation.y += e[1] * 0.1;
+        if (opt.soft) return;
+        var at = e[0] + e[1] * 0.12, pr2 = sideRect(r, sd, 0.44, 0.12, at - 0.2, at + 0.2);
+        var p2 = put(G, puffyGeo(sd < 2 ? 0.11 : 0.4, 0.4, sd < 2 ? 0.4 : 0.11, 0.02, sd < 2 ? 0.055 : 0.025, 0.025, sd < 2 ? 0.025 : 0.055), mt.pillowB, pr2.u, baseTop + 0.15 + 0.2, pr2.v);
+        tilt(p2, sd, 0.22); p2.rotation.y -= e[1] * 0.14;
+      });
+    });
+    F.arms.forEach(function (sd, k) {
       var ax = along(r, sd), a0 = ax[0], a1 = ax[1];
-      backs.forEach(function (o) { if (o === sd || (o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
-      var fr = sideRect(r, sd, 0, 0.12, a0, a1);
-      put(G, rboxGeo(fr.du, backTop - 0.06 - 0.04, fr.dv, 0.05), body, fr.u, 0.06 + (backTop - 0.1) / 2, fr.v);
-      var nb = Math.max(1, Math.round((a1 - a0) / ROLL)), len2 = (a1 - a0) / nb;
-      for (var k = 0; k < nb; k++) {
-        var cr = sideRect(r, sd, 0.1, 0.17, a0 + k * len2, a0 + (k + 1) * len2), hgt = (backTop - baseTop - 0.15) * 0.92;
-        var cushion = put(G, rboxGeo(sd < 2 ? 0.17 : len2 - 0.006, hgt, sd < 2 ? len2 - 0.006 : 0.17, 0.08), mt.cushion, cr.u, baseTop + 0.17 + hgt / 2, cr.v);
-        var tilt = 0.12; // leans back
-        if (sd === 0) cushion.rotation.z = tilt; if (sd === 1) cushion.rotation.z = -tilt; if (sd === 2) cushion.rotation.x = -tilt; if (sd === 3) cushion.rotation.x = tilt;
-      }
-    });
-    arms.forEach(function (sd) {
-      var ax = along(r, sd), a0 = ax[0], a1 = ax[1], armTop = Math.max(seatH + 0.18, Math.min(sides[sd].maxh, backTop - 0.1));
-      backs.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
+      armTop = Math.min(Math.max(F.sides[sd].maxh, seatH + 0.16), seatH + 0.24);
+      F.backs.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK - 0.02; else a1 -= BK - 0.02; });
       var fr = sideRect(r, sd, 0, AW, a0, a1);
-      put(G, rboxGeo(fr.du, armTop - 0.06, fr.dv, 0.085), body, fr.u, 0.06 + (armTop - 0.06) / 2, fr.v);
+      put(G, puffyGeo(fr.du, armTop - legH, fr.dv, opt.soft ? 0.09 : 0.03, opt.soft ? 0.02 : 0.004, 0.012, opt.soft ? 0.02 : 0.004), fab, fr.u, legH + (armTop - legH) / 2, fr.v);
+      if (k || opt.noThrow) return; // a knitted throw folded over the first arm
+      var mid = (a0 + a1) / 2 + 0.05, t1 = sideRect(r, sd, -0.015, AW + 0.03, mid - 0.2, mid + 0.2), t2 = sideRect(r, sd, -0.016, 0.014, mid - 0.2, mid + 0.2);
+      put(G, rboxGeo(t1.du, 0.025, t1.dv, 0.01), mt.throwKnit, t1.u, armTop + 0.012, t1.v);
+      put(G, rboxGeo(t2.du, 0.36, t2.dv, 0.006), mt.throwKnit, t2.u, armTop - 0.17, t2.v);
     });
-    // scatter pillows along each back, alternating taupe and charcoal, leaning back
-    backs.forEach(function (sd) {
-      var ax = along(r, sd), a0 = ax[0] + (arms.length ? AW : 0) + 0.25, a1 = ax[1] - (arms.length ? AW : 0) - 0.25, span = a1 - a0;
-      if (span < 0.3) return;
-      var np = Math.max(1, Math.min(4, Math.round(span / 0.75))), pw = 0.46;
-      for (var k = 0; k < np; k++) {
-        var at = np === 1 ? (a0 + a1) / 2 : a0 + span * k / (np - 1), cr = sideRect(r, sd, 0.3, 0.13, at - pw / 2, at + pw / 2);
-        var pl = put(G, rboxGeo(sd < 2 ? 0.13 : pw, 0.42, sd < 2 ? pw : 0.13, 0.065), k % 2 ? mt.pillowB || mt.accent : mt.pillowA || mt.accent, cr.u, baseTop + 0.17 + 0.21, cr.v);
-        var tl = 0.22, yaw = (k % 2 ? -1 : 1) * 0.08;
-        if (sd === 0) pl.rotation.z = tl; if (sd === 1) pl.rotation.z = -tl; if (sd === 2) pl.rotation.x = -tl; if (sd === 3) pl.rotation.x = tl;
-        pl.rotation.y = yaw;
-      }
-    });
+    if (opt.rug !== false && F.backs.length) mt.seatInfo = { r: F.r, backs: F.backs, style: 'modern', BK: BK };
     return true;
+  }
+
+  function seatMajlis(F, G, mt) {
+    var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0, cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
+    if (!F.backs.length) { var bm = -1; F.sides.forEach(function (st, s) { if (st.maxh > bm) { bm = st.maxh; F.backs = [s]; } }); }
+    var BK = 0.18, plH = 0.1, seatTop = 0.38;
+    (occFrac(F.m, r, 0.15) > 0.8 ? [r] : seatCells(F, r, 1.2, 0.6)).forEach(function (q) { // walnut base with a gold inlay band
+      var w = q.u1 - q.u0, d = q.v1 - q.v0, x = (q.u0 + q.u1) / 2, z = (q.v0 + q.v1) / 2;
+      put(G, rboxGeo(w - 0.02 + 0.002, plH, d - 0.02 + 0.002, 0.008), mt.wood, x, plH / 2, z);
+      put(G, rboxGeo(w - 0.004, 0.012, d - 0.004, 0.002), mt.metal, x, plH - 0.03, z);
+    });
+    seatCells(F, innerRect(F, BK, 0), 1.9, 0.75).forEach(function (q) { // piped seat mattresses
+      var w = q.u1 - q.u0 - 0.012, d = q.v1 - q.v0 - 0.012, h = seatTop - plH, x = (q.u0 + q.u1) / 2, z = (q.v0 + q.v1) / 2;
+      put(G, puffyGeo(w, h, d, 0.035, 0.008, 0.022, 0.008), mt.cushion, x, plH + h / 2, z);
+      var y = seatTop - 0.018, pg = function (len) { return new THREE.CylinderGeometry(0.0065, 0.0065, len, 8); };
+      [-1, 1].forEach(function (sg) {
+        var a = put(G, pg(w - 0.05), mt.pipe, x, y, z + sg * (d / 2 - 0.012)); a.rotation.z = Math.PI / 2;
+        var b = put(G, pg(d - 0.05), mt.pipe, x + sg * (w / 2 - 0.012), y, z); b.rotation.x = Math.PI / 2;
+      });
+    });
+    F.backs.forEach(function (sd) {
+      var sp = backSpan(F, sd, BK), runs = runCells(F, sd, sp[0], sp[1], 0.9, 0.5);
+      runs.forEach(function (rc, k) { // upright back cushions, slightly reclined
+        var L2 = rc[1] - rc[0], cr = sideRect(r, sd, 0.01, 0.17, rc[0], rc[1]);
+        var bc = put(G, puffyGeo(sd < 2 ? 0.17 : L2 - 0.015, 0.52, sd < 2 ? L2 - 0.015 : 0.17, 0.035, sd < 2 ? 0.045 : 0.01, 0.015, sd < 2 ? 0.01 : 0.045), mt.body, cr.u, seatTop + 0.26, cr.v);
+        tilt(bc, sd, 0.05);
+        if (k % 2) return; // a small square cushion in front of every other one
+        var at = (rc[0] + rc[1]) / 2, pr = sideRect(r, sd, 0.22, 0.12, at - 0.21, at + 0.21);
+        var pl = put(G, puffyGeo(sd < 2 ? 0.12 : 0.42, 0.42, sd < 2 ? 0.42 : 0.12, 0.02, sd < 2 ? 0.05 : 0.025, 0.025, sd < 2 ? 0.025 : 0.05), mt.pipe, pr.u, seatTop + 0.2, pr.v);
+        tilt(pl, sd, 0.18);
+      });
+      // bolsters at the open ends of the run, gold end caps
+      var depth = Math.min(0.72, (sd < 2 ? du : dv) - BK - 0.04), ends = [];
+      if (F.arms.indexOf(sd < 2 ? 2 : 0) >= 0) ends.push(sp[0] + 0.12);
+      if (F.arms.indexOf(sd < 2 ? 3 : 1) >= 0) ends.push(sp[1] - 0.12);
+      ends.forEach(function (at) {
+        var br = sideRect(r, sd, BK, depth, at - 0.1, at + 0.1), bol = new THREE.Group(); bol.position.set(br.u, seatTop + 0.11, br.v);
+        if (sd < 2) bol.rotation.z = Math.PI / 2; else bol.rotation.x = Math.PI / 2;
+        put(bol, new THREE.CylinderGeometry(0.11, 0.11, depth - 0.03, 32), mt.body, 0, 0, 0);
+        [-1, 1].forEach(function (sg) { put(bol, new THREE.CylinderGeometry(0.112, 0.112, 0.014, 32), mt.metal, 0, sg * (depth / 2 - 0.01), 0); });
+        G.add(bol);
+      });
+    });
+    mt.seatInfo = { r: F.r, backs: F.backs, style: 'majlis', BK: BK };
+    return true;
+  }
+
+  function seatBedroom(F, G, mt) {
+    var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0;
+    // a module of a sofa (fewer than two arms) or a long piece: soft boucle sofa; a lone armchair: barrel chair
+    if (F.backs.length && (Math.max(du, dv) >= 1.25 || F.arms.length < 2)) return seatLiving(F, G, mt, { soft: true, legs: true, fab: mt.boucle, rug: false, noThrow: true });
+    // barrel lounge chair: boucle shell wrapped round a deep round seat, on a walnut ring
+    var bs = F.backs.length ? F.backs[0] : 2, f = [[1, 0], [-1, 0], [0, 1], [0, -1]][bs];
+    var C = new THREE.Group(); C.position.set((r.u0 + r.u1) / 2, 0, (r.v0 + r.v1) / 2); C.rotation.y = Math.atan2(f[0], f[1]); G.add(C);
+    var R = Math.min(Math.max(Math.min(du, dv) / 2, 0.34), 0.45), seat = 0.42;
+    put(C, new THREE.CylinderGeometry(R * 0.62, R * 0.66, 0.07, 40), mt.wood, 0, 0.035, 0);
+    put(C, new THREE.CylinderGeometry(R * 0.96, R * 0.9, seat - 0.2, 48), mt.boucle, 0, 0.07 + (seat - 0.2) / 2 - 0.0, 0);
+    put(C, new THREE.CylinderGeometry(R * 0.86, R * 0.88, 0.13, 48), mt.boucle, 0, seat - 0.07, 0.02);
+    put(C, shellGeo(R, 1.9, 0.74 - (seat - 0.13)), mt.boucle, 0, seat - 0.13, 0);
+    var lum = put(C, puffyGeo(0.42, 0.26, 0.12, 0.02, 0.02, 0.02, 0.05), mt.pillowA, 0, seat + 0.13, -R * 0.55); lum.rotation.x = -0.25;
+    return true;
+  }
+
+  // Seating dispatch by room.
+  function buildSeat(m, G, mt) {
+    var F = seatFrame(m); if (!F) return false;
+    if (mt.room === 'majlis') return seatMajlis(F, G, mt);
+    if (mt.room === 'bedroom') return seatBedroom(F, G, mt);
+    return seatLiving(F, G, mt, {});
+  }
+
+  /* Rugs in front of seating: sized from the seating (under the front of the seats, out over the
+     open side), skipped where a rug already lies. Texture drawn per rug with real UVs. */
+  /* One rug per seating group (modules that touch): sized from the group, under the front of
+     the seats and out over the side the seats face; skipped where a rug already lies. */
+  function groupRugs(recs, rugTaken) {
+    var used = [];
+    function gap(a, b) { return Math.max(a.wb[0] - b.wb[2], b.wb[0] - a.wb[2], a.wb[1] - b.wb[3], b.wb[1] - a.wb[3]); }
+    recs.forEach(function (r0, i) {
+      if (used[i]) return; used[i] = 1;
+      var cl = [r0];
+      for (var q = 0; q < cl.length; q++) recs.forEach(function (r1, j) { if (!used[j] && Math.abs(r1.base - cl[q].base) < 0.5 && gap(cl[q], r1) < 0.35) { used[j] = 1; cl.push(r1); } });
+      var O = r0.O, A = r0.A, Cv = r0.Cv, R = { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity }, style = 'modern', BK = r0.BK, backs = {};
+      function fu(w) { return (w.x - O.x) * A.x + (w.z - O.z) * A.z; }
+      function fv(w) { return (w.x - O.x) * Cv.x + (w.z - O.z) * Cv.z; }
+      cl.forEach(function (rc) {
+        if (rc.style === 'majlis') style = 'majlis';
+        rc.corners.forEach(function (w) { var u = fu(w), v = fv(w); R.u0 = Math.min(R.u0, u); R.u1 = Math.max(R.u1, u); R.v0 = Math.min(R.v0, v); R.v1 = Math.max(R.v1, v); });
+      });
+      cl.forEach(function (rc) { // which sides of the group are backs
+        rc.backs.forEach(function (sd) {
+          var n = [rc.A.clone().negate(), rc.A, rc.Cv.clone().negate(), rc.Cv][sd], a = n.x * A.x + n.z * A.z, b = n.x * Cv.x + n.z * Cv.z;
+          var side = Math.abs(a) > 0.7 ? (a < 0 ? 0 : 1) : (b < 0 ? 2 : 3), edge = rc.corners.map(side < 2 ? fu : fv), lim = [R.u0, R.u1, R.v0, R.v1][side];
+          if (Math.abs((side % 2 ? Math.max : Math.min).apply(null, edge) - lim) < 0.3) backs[side] = 1;
+        });
+      });
+      var X = { u0: R.u0, u1: R.u1, v0: R.v0, v1: R.v1 };
+      [0, 1, 2, 3].forEach(function (sd) {
+        var perp = sd < 2 ? [2, 3] : [0, 1], opp = sd ^ 1;
+        var d = backs[sd] ? -(BK + 0.45) : backs[opp] && !(backs[perp[0]] && backs[perp[1]]) ? 1.7 : 0.25;
+        if (sd === 0) X.u0 -= d; if (sd === 1) X.u1 += d; if (sd === 2) X.v0 -= d; if (sd === 3) X.v1 += d;
+      });
+      var du = Math.min(5, X.u1 - X.u0), dv = Math.min(5, X.v1 - X.v0), cu = (X.u0 + X.u1) / 2, cv = (X.v0 + X.v1) / 2;
+      if (du < 1.3 || dv < 1.3 || rugTaken(O, A, Cv, cu, cv, du, dv)) return;
+      var G = new THREE.Group(); G.matrixAutoUpdate = false; G.matrix.makeBasis(A, new THREE.Vector3(0, 1, 0), Cv).setPosition(O.x, r0.base, O.z);
+      var rug = put(G, rboxGeo(du, 0.014, dv, 0.005), rugMat(style, du / dv), cu, 0.007, cv); rug.castShadow = false;
+      realGroup.add(G);
+    });
+  }
+  var rugMats = {};
+  function rugMat(style, aspect) {
+    var key = style + (Math.round(aspect * 4) / 4); if (rugMats[key]) return rugMats[key];
+    var W = 1024, H = Math.round(Math.min(2048, Math.max(320, W / aspect)));
+    var cvs = document.createElement('canvas'); cvs.width = W; cvs.height = H;
+    var c = cvs.getContext('2d'), rr = rng(style === 'majlis' ? 71 : 73);
+    (style === 'majlis' ? rugPersian : rugModern)(c, W, H, rr);
+    for (var i = 0; i < W * H / 22; i++) { c.fillStyle = rr() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.05)'; c.fillRect(rr() * W, rr() * H, 1.6, 1.6); } // wool pile
+    var t = new THREE.CanvasTexture(cvs); t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return (rugMats[key] = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.025, roughness: 1, envMapIntensity: 0.3, clippingPlanes: [cutPlane] }));
+  }
+  function rugModern(c, W, H, r) { // hand-tufted, tone on tone: soft organic fields with carved outlines
+    c.fillStyle = '#E7E0D4'; c.fillRect(0, 0, W, H);
+    for (var k = 0; k < 8; k++) {
+      var x = r() * W, y = r() * H, rx = 120 + r() * 280, ry = 80 + r() * 200;
+      c.fillStyle = r() < 0.5 ? 'rgba(170,155,135,.22)' : 'rgba(255,255,255,.35)';
+      c.beginPath(); c.ellipse(x, y, rx, ry, r() * Math.PI, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(120,105,85,.25)'; c.lineWidth = 2; c.stroke();
+    }
+    c.strokeStyle = 'rgba(130,115,95,.18)'; c.lineWidth = 1.5;
+    for (k = 0; k < 14; k++) {
+      var y0 = r() * H; c.beginPath(); c.moveTo(0, y0);
+      for (var x2 = 0; x2 <= W; x2 += 32) c.lineTo(x2, y0 + Math.sin(x2 / 170 + k) * 30 + Math.sin(x2 / 53 + k * 2) * 8);
+      c.stroke();
+    }
+    c.strokeStyle = 'rgba(150,135,115,.6)'; c.lineWidth = 10; c.strokeRect(5, 5, W - 10, H - 10); // binding
+  }
+  function rugPersian(c, W, H, r) { // bordered medallion rug in navy, rust, gold and ivory
+    var navy = '#1E2A44', gold = '#B8955A', ivory = '#E8DFCC', rust = '#7E3E30', m = Math.min(W, H);
+    var b1 = m * 0.03, b2 = m * 0.12, bw = b2 - b1;
+    c.fillStyle = ivory; c.fillRect(0, 0, W, H);
+    c.fillStyle = navy; c.fillRect(b1, b1, W - 2 * b1, H - 2 * b1);
+    c.fillStyle = rust; c.fillRect(b2, b2, W - 2 * b2, H - 2 * b2);
+    function dia(x, y, s) { c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + s, y); c.lineTo(x, y + s); c.lineTo(x - s, y); c.closePath(); c.fill(); }
+    c.fillStyle = gold;
+    for (var x = b1 + bw * 0.45; x < W - b1; x += bw * 0.9) { dia(x, (b1 + b2) / 2, bw * 0.26); dia(x, H - (b1 + b2) / 2, bw * 0.26); }
+    for (var y = b1 + bw * 0.45; y < H - b1; y += bw * 0.9) { dia((b1 + b2) / 2, y, bw * 0.26); dia(W - (b1 + b2) / 2, y, bw * 0.26); }
+    c.strokeStyle = ivory; c.lineWidth = m * 0.006; c.strokeRect(b2 - m * 0.01, b2 - m * 0.01, W - 2 * b2 + m * 0.02, H - 2 * b2 + m * 0.02);
+    c.strokeStyle = gold; c.lineWidth = m * 0.004; c.strokeRect(b1 + m * 0.008, b1 + m * 0.008, W - 2 * b1 - m * 0.016, H - 2 * b1 - m * 0.016);
+    c.save(); c.beginPath(); c.rect(b2, b2, W - 2 * b2, H - 2 * b2); c.clip();
+    var cs = m * 0.09; c.strokeStyle = 'rgba(184,149,90,.4)'; c.lineWidth = 2;
+    for (var d = -H; d < W + H; d += cs) {
+      c.beginPath(); c.moveTo(d, 0); c.lineTo(d + H, H); c.stroke();
+      c.beginPath(); c.moveTo(d, 0); c.lineTo(d - H, H); c.stroke();
+    }
+    c.fillStyle = 'rgba(232,223,204,.5)';
+    for (var yy = 0, row = 0; yy < H; yy += cs / 2, row++) for (var xx = (row % 2) * cs / 2; xx < W; xx += cs) { c.beginPath(); c.arc(xx, yy, m * 0.007, 0, Math.PI * 2); c.fill(); }
+    var cx = W / 2, cy = H / 2, R = Math.min(W - 2 * b2, H - 2 * b2) * 0.32, ex = W > H ? 1.4 : 1, ey = H > W ? 1.4 : 1;
+    [[1, navy], [0.88, gold], [0.8, ivory], [0.64, rust], [0.5, gold], [0.38, navy], [0.18, ivory]].forEach(function (s) {
+      c.fillStyle = s[1]; c.beginPath();
+      for (var i = 0; i <= 96; i++) { var a = i / 96 * Math.PI * 2, rr = R * s[0] * (1 + 0.1 * Math.cos(a * 8)); c[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * rr * ex, cy + Math.sin(a) * rr * ey); }
+      c.closePath(); c.fill();
+    });
+    [[b2, b2], [W - b2, b2], [b2, H - b2], [W - b2, H - b2]].forEach(function (p) {
+      [[0.5, navy], [0.4, gold], [0.3, ivory], [0.18, rust]].forEach(function (s) { c.fillStyle = s[1]; c.beginPath(); c.arc(p[0], p[1], R * s[0], 0, Math.PI * 2); c.fill(); });
+    });
+    c.restore();
+    for (var k = 0; k < 30; k++) { c.fillStyle = 'rgba(' + (r() < 0.5 ? '0,0,0' : '255,255,255') + ',' + (0.02 + r() * 0.03) + ')'; c.fillRect(0, r() * H, W, 4 + r() * 20); } // abrash
   }
 
   // Pieces in a calm, contemporary style (boucle, travertine, walnut and oak, cream, bronze),
@@ -1773,6 +2078,7 @@
     b.pillowA = rmat('fabric', 0.62, '#B7A592', 0.95, 'fabric', 0.14); // taupe
     b.pillowB = rmat('charcoal', 0.35, '#5E5852', 0.95, 'fabric', 0.14); // charcoal
     b.chairFab = rmat('fabric', 0.78, '#D3CFC8', 0.95, 'fabric', 0.14); // light grey weave
+    b.pipe = rmat('accent', 0.4, '#7A5C3A', 0.9, 'fabric', 0.14); // majlis piping and cushions
     return b;
   }
   function glowMatBed() {
@@ -1910,7 +2216,7 @@
   // Curved-back upholstered dining chair (reference), oak legs, facing (fu, fv).
   var shellCache = {};
   function shellGeo(R, span, h) {
-    var key = R.toFixed(3) + h.toFixed(3); if (shellCache[key]) return shellCache[key];
+    var key = R.toFixed(3) + h.toFixed(3) + span.toFixed(2); if (shellCache[key]) return shellCache[key];
     var s = new THREE.Shape(), t = 0.05, a0 = -span, a1 = span, n = 24;
     for (var i = 0; i <= n; i++) { var a = a0 + (a1 - a0) * i / n; s[i ? 'lineTo' : 'moveTo'](R * Math.sin(a), R * Math.cos(a)); }
     for (i = n; i >= 0; i--) { a = a0 + (a1 - a0) * i / n; s.lineTo((R - t) * Math.sin(a), (R - t) * Math.cos(a)); }
@@ -2055,12 +2361,35 @@
     mt.rugC = rmat('rug', 0.9, '#E3DCCF', 1, 'rug', 2.4);
     var fronts = []; ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) fronts.push(o); }); });
     var wrc = new THREE.Raycaster();
+    // rugs already lying in the model (those of pieces that stay), and the ones placed here
+    var willGo = {}, rugBoxes = [];
+    D.furniture.forEach(function (f) { if (redressKind(f.name)) willGo[f.id] = 1; });
+    Object.keys(elemGroups).forEach(function (id) {
+      if (willGo[id]) return;
+      elemGroups[id].traverse(function (o) { if (o.isMesh && o.userData.rug) { var b = new THREE.Box3().setFromObject(o); rugBoxes.push([b.min.x, b.min.z, b.max.x, b.max.z]); } });
+    });
+    var seatRecs = [];
+    function rugTaken(O, A, Cv, cu, cv, du, dv) {
+      var xs = [], zs = [];
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (k) { var u = cu + k[0] * du / 2, v = cv + k[1] * dv / 2; xs.push(O.x + A.x * u + Cv.x * v); zs.push(O.z + A.z * u + Cv.z * v); });
+      var bx = [Math.min.apply(null, xs), Math.min.apply(null, zs), Math.max.apply(null, xs), Math.max.apply(null, zs)], area = (bx[2] - bx[0]) * (bx[3] - bx[1]);
+      var hit = rugBoxes.some(function (o) {
+        var w = Math.min(bx[2], o[2]) - Math.max(bx[0], o[0]), h = Math.min(bx[3], o[3]) - Math.max(bx[1], o[1]);
+        return w > 0 && h > 0 && w * h > 0.08 * Math.min(area, (o[2] - o[0]) * (o[3] - o[1]));
+      });
+      if (!hit) rugBoxes.push(bx);
+      return hit;
+    }
     D.furniture.forEach(function (f) {
       var kind = redressKind(f.name);
       if (kind === 'plant') { var pg = buildPlant(f, mt); if (pg) { pg.userData.elem = f.id; realGroup.add(pg); made++; } return; }
       var tris = elemTris[f.id]; if (!tris || !kind) return;
       var al = Math.hypot(f.ax[0], f.ax[1]) || 1, A = new THREE.Vector3(f.ax[0] / al, 0, -f.ax[1] / al), Cv = new THREE.Vector3().crossVectors(A, up);
       var O = P(f.p[0], f.p[1]), m = heightMap(tris, O, A, Cv), G = new THREE.Group();
+      var r0 = occRect(m, function () { return true; });
+      mt.room = r0 ? roomTypeAt(O.x + A.x * (r0.u0 + r0.u1) / 2 + Cv.x * (r0.v0 + r0.v1) / 2, m.base + 0.2, O.z + A.z * (r0.u0 + r0.u1) / 2 + Cv.z * (r0.v0 + r0.v1) / 2) : '';
+      mt.seatInfo = null;
+      mt.rugTaken = function (cu, cv, du, dv) { return rugTaken(O, A, Cv, cu, cv, du, dv); };
       var back = -1;
       if (kind === 'tv') { // the side of the unit that has a wall right behind it
         var rr = occRect(m, function () { return true; }), best = 0.7;
@@ -2079,9 +2408,15 @@
       if (!ok) return;
       if (G.userData.headSide != null) G.userData.front = [A, A, Cv, Cv][G.userData.headSide].clone().multiplyScalar(G.userData.headSide % 2 ? -1 : 1);
       G.matrixAutoUpdate = false; G.matrix.makeBasis(A, up, Cv).setPosition(O.x, m.base, O.z);
-      G.userData.elem = f.id; realGroup.add(G); made++;
+      G.userData.elem = f.id; G.userData.room = mt.room; G.userData.kind = kind; realGroup.add(G); made++;
+      if (mt.seatInfo) {
+        var si = mt.seatInfo, rr2 = si.r, cs = [[rr2.u0, rr2.v0], [rr2.u1, rr2.v0], [rr2.u0, rr2.v1], [rr2.u1, rr2.v1]].map(function (c) { return O.clone().addScaledVector(A, c[0]).addScaledVector(Cv, c[1]); });
+        seatRecs.push({ O: O, A: A, Cv: Cv, base: m.base, backs: si.backs, style: si.style, BK: si.BK, corners: cs,
+          wb: [Math.min.apply(null, cs.map(function (c) { return c.x; })), Math.min.apply(null, cs.map(function (c) { return c.z; })), Math.max.apply(null, cs.map(function (c) { return c.x; })), Math.max.apply(null, cs.map(function (c) { return c.z; }))] });
+      }
       if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true;
     });
+    groupRugs(seatRecs, rugTaken);
     applyRealFurniture();
     return made;
   }
