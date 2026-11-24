@@ -741,7 +741,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (sky) sky.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -782,6 +782,7 @@
       camera.lookAt(cam.t);
     }
     if (sky) sky.visible = S.walk;
+    mirrorGroup.visible = S.walk;
     if (useAO()) { if (bloom) bloom.strength = S.night ? 0.75 : 0.28; composer.render(); } else renderer.render(scene, camera);
     $('labels').style.visibility = S.walk ? 'hidden' : '';
     var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
@@ -872,14 +873,19 @@
         // Glass: one reflective tinted material (Revit glass colours are often saturated cyan).
         var smooth = false;
         if (b.grp === 'furn' && !glass) { // rugs split off; the rest smooth-shaded
-          var fp = furnParts(g);
+          var fp = furnParts(g, proposal(b).kind === 'wood');
+          if (fp.top) { // kitchen worktop: white quartz with a soft vein
+            var tm = new THREE.Mesh(fp.top, makeMaterial({ kind: 'quartz', color: new THREE.Color('#F1EEE8'), rough: 0.14, metal: 0, tex: 'marble', scale: 0.9 }, true));
+            tm.castShadow = tm.receiveShadow = true; parent.add(tm); parent.add(new THREE.Mesh(fp.top, cap));
+          }
           if (fp.rug) {
             var rm = new THREE.Mesh(fp.rug, makeMaterial(finish('rug', new THREE.Color(b.color), {}), false));
             rm.receiveShadow = true; rm.userData.rug = true; parent.add(rm);
           }
           if (fp.wet) {
             var wc = new THREE.Color(b.color), whsl = {}; wc.getHSL(whsl);
-            var wp = whsl.l > 0.6 && whsl.s < 0.3 ? finish('porcelain', wc, whsl) : proposal(b);
+            var pk = proposal(b).kind, wp = pk === 'metal' ? { kind: 'chrome', color: new THREE.Color('#E9E9EA'), rough: 0.08, metal: 1, tex: null, scale: 1 }
+              : pk === 'black' ? proposal(b) : { kind: 'china', color: new THREE.Color('#F7F6F3'), rough: 0.1, metal: 0, tex: null, scale: 1 };
             var wm = new THREE.Mesh(fp.wet, makeMaterial(wp, true));
             wm.castShadow = wm.receiveShadow = true; parent.add(wm); parent.add(new THREE.Mesh(fp.wet, cap));
           }
@@ -952,14 +958,28 @@
     return t;
   }
   // Large-format slabs with grey veining: 4 slabs of 120 x 120 cm per texture.
+  // Natural marble veins: a slow random walk drawn twice, a wide soft halo and a fine line, with branches.
+  function veins(c, n, r, cnt, rgb, k) {
+    k = k || 1;
+    for (var i = 0; i < cnt; i++) {
+      var x = r() * n, y = r() * n, a = r() * Math.PI * 2, pts = [[x, y]];
+      for (var s2 = 0; s2 < 70; s2++) { a += (r() - 0.5) * 0.32; x += Math.cos(a) * 12; y += Math.sin(a) * 12; pts.push([x, y]); }
+      var br = []; if (r() < 0.6) { var b0 = pts[(r() * 60) | 0], ba = a + (r() - 0.5) * 2, bx = b0[0], by = b0[1]; br.push([bx, by]); for (s2 = 0; s2 < 25; s2++) { ba += (r() - 0.5) * 0.4; bx += Math.cos(ba) * 10; by += Math.sin(ba) * 10; br.push([bx, by]); } }
+      [[7, 0.05 * k, 'blur(5px)'], [1.4, (0.16 + r() * 0.22) * k, 'blur(0.5px)']].forEach(function (st) {
+        c.filter = st[2]; c.strokeStyle = 'rgba(' + rgb + ',' + st[1] + ')';
+        [pts, br].forEach(function (line, li) {
+          if (line.length < 2) return; c.lineWidth = st[0] * (li ? 0.5 : 0.6 + r() * 0.8); c.beginPath();
+          line.forEach(function (q, j) { c[j ? 'lineTo' : 'moveTo'](q[0], q[1]); }); c.stroke();
+        });
+      });
+    }
+    c.filter = 'none';
+  }
   function marble(c, n, r) {
     c.fillStyle = '#F3F1EC'; c.fillRect(0, 0, n, n);
-    for (var i = 0; i < 26; i++) {
-      c.strokeStyle = 'rgba(105,105,112,' + (0.14 + r() * 0.26) + ')'; c.lineWidth = 0.8 + r() * 3;
-      c.beginPath(); var x = r() * n, y = r() * n; c.moveTo(x, y);
-      for (var j = 0; j < 5; j++) { x += (r() - 0.3) * 260; y += (r() - 0.5) * 200; c.quadraticCurveTo(x - 60, y + 40, x, y); }
-      c.stroke();
-    }
+    var cl = c.createRadialGradient(n * 0.3, n * 0.4, 0, n * 0.3, n * 0.4, n * 0.8); cl.addColorStop(0, 'rgba(255,255,255,.35)'); cl.addColorStop(1, 'rgba(225,222,215,.25)');
+    c.fillStyle = cl; c.fillRect(0, 0, n, n); // soft cloudiness
+    veins(c, n, r, 16, '110,110,118');
     c.strokeStyle = 'rgba(140,135,130,.8)'; c.lineWidth = 2.5;
     for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
   }
@@ -982,6 +1002,96 @@
     for (var i = 0; i < 9000; i++) { c.fillStyle = 'rgba(' + (r() > .5 ? '255,255,255' : '120,115,110') + ',.05)'; c.fillRect(r() * n, r() * n, 2, 2); }
     c.strokeStyle = 'rgba(150,145,140,.7)'; c.lineWidth = 2;
     for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
+  }
+
+  /* Wet rooms and kitchens on the walls: a plan mask per level (red = wet room, tiled full
+     height; green = kitchen, a backsplash band 0.9-1.55 m) read by the wall shader 15 cm in
+     front of each wall pixel, so a wall face shared by a bathroom and a bedroom is tiled only on
+     the bathroom's stretch. Tiles: 60 x 120 slabs per scheme. */
+  var zoneU = null, wallTiles = {};
+  function zoneUniforms() {
+    if (zoneU) return zoneU;
+    var N = 512, cv = document.createElement('canvas'); cv.width = N * 4; cv.height = N;
+    var c = cv.getContext('2d'), x0 = minX - CX - 1, z0 = -(maxY - CY) - 1, span = Math.max(maxX - minX, maxY - minY) + 2, lv = [1e5, 1e5, 1e5, 1e5];
+    c.fillStyle = '#000'; c.fillRect(0, 0, N * 4, N); c.globalCompositeOperation = 'lighter';
+    D.levels.slice(0, 4).forEach(function (L, i) {
+      lv[i] = L.elevation + (L._slabTop || 0);
+      (L.slabs || []).forEach(function (sl) {
+        c.fillStyle = '#0000ff'; c.beginPath();
+        sl.poly.forEach(function (q, k) { var wx = q[0] - CX, wz = -(q[1] - CY); c[k ? 'lineTo' : 'moveTo']((wx - x0) / span * N + i * N, (wz - z0) / span * N); });
+        c.closePath(); c.fill();
+      });
+      L.rooms.forEach(function (r) {
+        var col = r.type === 'wet' ? '#ff0000' : r.type === 'kitchen' ? '#00ff00' : null; if (!col || !r.poly) return;
+        c.fillStyle = col; c.beginPath();
+        r.poly.forEach(function (q, k) { var wx = q[0] - CX, wz = -(q[1] - CY); c[k ? 'lineTo' : 'moveTo']((wx - x0) / span * N + i * N, (wz - z0) / span * N); });
+        c.closePath(); c.fill();
+      });
+    });
+    var t = new THREE.CanvasTexture(cv); t.flipY = false; t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    zoneU = { zoneMask: { value: t }, zoneTile: { value: wallTile(S.finish) }, zonePaint: { value: new THREE.Color('#E8E0D2').convertSRGBToLinear() }, extPl: { value: procFor('plaster') }, zoneLv: { value: new THREE.Vector4(lv[0], lv[1], lv[2], lv[3]) }, zoneB: { value: new THREE.Vector4(x0, z0, span, 0) } };
+    return zoneU;
+  }
+  function wallTile(id) {
+    var style = id === 'warm' ? 'warm' : id === 'calm' ? 'calm' : 'classic';
+    if (!wallTiles[style]) {
+      var cv = document.createElement('canvas'); cv.width = cv.height = 1024;
+      var c = cv.getContext('2d'), r = rng(style === 'warm' ? 53 : style === 'calm' ? 59 : 47), n = 1024;
+      c.fillStyle = style === 'warm' ? '#E6DCCB' : style === 'calm' ? '#D9D7D3' : '#F4F2EE'; c.fillRect(0, 0, n, n);
+      var i;
+      if (style === 'classic') veins(c, n, r, 18, '110,110,118');
+      else if (style === 'warm') for (i = 0; i < 46; i++) { c.fillStyle = 'rgba(180,160,130,' + (0.05 + r() * 0.08) + ')'; c.fillRect(0, r() * n, n, 1 + r() * 8); }
+      for (i = 0; i < 14000; i++) { c.fillStyle = 'rgba(' + (r() < 0.5 ? '0,0,0,.025' : '255,255,255,.05') + ')'; c.fillRect(r() * n, r() * n, 1.5, 1.5); }
+      c.strokeStyle = 'rgba(160,155,148,.85)'; c.lineWidth = 2.5; // 60 wide x 120 high, 2 mm joints
+      for (var gx = 0; gx <= n; gx += n / 4) { c.beginPath(); c.moveTo(gx, 0); c.lineTo(gx, n); c.stroke(); }
+      for (var gy = 0; gy <= n; gy += n / 2) { c.beginPath(); c.moveTo(0, gy); c.lineTo(n, gy); c.stroke(); }
+      var t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      wallTiles[style] = t;
+    }
+    return wallTiles[style];
+  }
+
+  /* Exterior walls drawn the other way round in Revit export their room-side face as facade.
+     Their materials learn to tell: where the point 15-30 cm in front of the face stands over a
+     floor slab of that level, the face is indoors and takes the wall paint (and the wet-room or
+     kitchen tiles); outward faces keep the facade material. */
+  var extDone = false;
+  function extInterior() {
+    if (extDone || !meshGroups.ext) return; extDone = true;
+    var mats = [];
+    meshGroups.ext.traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide && mats.indexOf(o.material) < 0) mats.push(o.material); });
+    mats.forEach(function (mat) {
+      var prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey;
+      mat.onBeforeCompile = function (sh, r) {
+        if (prev) prev.call(this, sh, r);
+        var Z = zoneUniforms(); Object.keys(Z).forEach(function (k) { sh.uniforms[k] = Z[k]; });
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vExtPos;')
+          .replace('#include <project_vertex>', '#include <project_vertex>\nvExtPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', ['#include <common>', 'varying vec3 vExtPos;',
+          'uniform sampler2D zoneMask; uniform sampler2D zoneTile; uniform sampler2D extPl; uniform vec4 zoneLv; uniform vec4 zoneB; uniform vec3 zonePaint;',
+          'float extIn = 0.0; float extTile = 0.0;'].join('\n'))
+          .replace('#include <color_fragment>', ['#include <color_fragment>',
+            '{ vec3 zn = normalize(cross(dFdx(vExtPos), dFdy(vExtPos))); if (dot(zn, cameraPosition - vExtPos) < 0.0) zn = -zn;',
+            '  if (abs(zn.y) < 0.5) {',
+            '    float li = vExtPos.y < zoneLv.y - 0.3 ? 0.0 : vExtPos.y < zoneLv.z - 0.3 ? 1.0 : vExtPos.y < zoneLv.w - 0.3 ? 2.0 : 3.0;',
+            '    float fy = li < 0.5 ? zoneLv.x : li < 1.5 ? zoneLv.y : li < 2.5 ? zoneLv.z : zoneLv.w;',
+            '    vec2 zp = vExtPos.xz + zn.xz * 0.3, zq = vExtPos.xz + zn.xz * 0.15;',
+            '    vec4 zm = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li) * 0.25, (zp.y - zoneB.y) / zoneB.z));',
+            '    vec4 zr = texture2D(zoneMask, vec2(((zq.x - zoneB.x) / zoneB.z + li) * 0.25, (zq.y - zoneB.y) / zoneB.z));',
+            '    extIn = step(0.5, zm.b); float hy = vExtPos.y - fy;',
+            '    extTile = extIn * max(step(0.5, zr.r), step(0.5, zr.g) * step(0.9, hy) * step(hy, 1.55));',
+            '    vec3 tn = pow(abs(zn), vec3(4.0)); tn /= (tn.x + tn.y + tn.z);',
+            '    vec4 pl = texture2D(extPl, vExtPos.zy / 1.6) * tn.x + texture2D(extPl, vExtPos.xz / 1.6) * tn.y + texture2D(extPl, vExtPos.xy / 1.6) * tn.z;',
+            '    vec4 zt = texture2D(zoneTile, vExtPos.zy / 2.4) * tn.x + texture2D(zoneTile, vExtPos.xz / 2.4) * tn.y + texture2D(zoneTile, vExtPos.xy / 2.4) * tn.z;',
+            '    diffuseColor.rgb = mix(diffuseColor.rgb, zonePaint * sRGBToLinear(pl).rgb, extIn);',
+            '    diffuseColor.rgb = mix(diffuseColor.rgb, sRGBToLinear(zt).rgb, extTile);',
+            '  } }'].join('\n'))
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.92, extIn); roughnessFactor = mix(roughnessFactor, 0.14, extTile);');
+      };
+      mat.customProgramCacheKey = function () { return (prevKey ? prevKey.call(this) : '') + 'extin'; };
+      mat.extensions = { derivatives: true };
+      mat.needsUpdate = true;
+    });
   }
   var SCHEMES = [
     { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
@@ -1017,7 +1127,7 @@
       else if (typeof v === 'string') {
         mat.color.set(v); mat.map = null;
         if (!mat.userData.surface && (f.kind === 'wall' || f.kind === 'ceil')) { // once: a quiet surface texture
-          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6, f.kind === 'wall' ? 0.3 : 0.2);
+          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6, f.kind === 'wall' ? 0.3 : 0.2, f.kind === 'wall');
           mat.flatShading = true; mat.userData.surface = true; mat.needsUpdate = true;
         }
       }
@@ -1034,6 +1144,7 @@
     $('finNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
     dressFurniture(sc.id);
     applyTrim(sc);
+    if (MESH) { zoneUniforms().zoneTile.value = wallTile(sc.id); if (typeof sc.wall === 'string') zoneUniforms().zonePaint.value.set(sc.wall).convertSRGBToLinear(); extInterior(); }
   }
   function renderFinishes() {
     var fins = $('fins'), has = finishMeshes.length > 0;
@@ -1179,7 +1290,7 @@
   function splitZones() {
     var va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
     finishMeshes.slice().forEach(function (f) {
-      if (f.kind !== 'floor' && f.kind !== 'wall') return;
+      if (f.kind !== 'floor') return;
       var g = f.m.geometry, idx = g.index.array, pos = g.attributes.position, mw = f.m.matrixWorld;
       var keep = [], zone = [], types = f.kind === 'floor' ? ZONE_FLOOR : ZONE_WALL;
       for (var t = 0; t < idx.length; t += 3) {
@@ -1296,6 +1407,10 @@
     var ceils = []; if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
     var rc = new THREE.Raycaster(), upV = new THREE.Vector3(0, 1, 0);
     var bars = [], gaps = [], corn = [], ROOMS = { living: 1, majlis: 1, bedroom: 1, dining: 1 }, NOT = { wet: 1, service: 1 };
+    function faces(pl, t, fy) { // the room in front of a point of the wall
+      var x = pl.n.x * pl.d + pl.tan.x * t + pl.n.x * 0.35, z = pl.n.z * pl.d + pl.tan.z * t + pl.n.z * 0.35;
+      return roomTypeAt(x, fy + 0.2, z);
+    }
     Object.keys(planes).forEach(function (k) {
       var pl = planes[k], floors = {};
       // runs along the floor: bottom edges of the faces, per floor level
@@ -1321,7 +1436,7 @@
             var t = r[0];
             while (t < r[1] - 0.05) {
               var t2 = Math.min(r[1], t + 0.5);
-              if (covered(pl, (t + t2) / 2, fy + H - 0.05)) corn.push({ pl: pl, t0: t, t1: t2, y: fy + H });
+              if (covered(pl, (t + t2) / 2, fy + H - 0.05) && !NOT[faces(pl, (t + t2) / 2, fy)]) corn.push({ pl: pl, t0: t, t1: t2, y: fy + H });
               t = t2;
             }
           }
@@ -1332,13 +1447,13 @@
           for (var i = 0; i < np; i++) {
             var a = r[0] + 0.15 + i * (pw + 0.15), b2 = a + pw;
             [[0.2, 0.78], [1.02, top]].forEach(function (yy) {
-              if (yy[1] - yy[0] < 0.3 || !rectFree(pl, a, b2, fy + yy[0], fy + yy[1])) return;
+              if (yy[1] - yy[0] < 0.3 || !ROOMS[faces(pl, (a + b2) / 2, fy)] || !rectFree(pl, a, b2, fy + yy[0], fy + yy[1])) return;
               bars.push({ pl: pl, t0: a, t1: b2, y0: fy + yy[0], y1: fy + yy[1] });
             });
           }
           for (var t3 = r[0]; t3 < r[1] - 0.05; t3 += 0.5) { // chair rail, broken at openings
             var t4 = Math.min(r[1], t3 + 0.5);
-            if (covered(pl, (t3 + t4) / 2, fy + 0.9)) gaps.push({ pl: pl, t0: t3, t1: t4, y: fy + 0.9, rail: true });
+            if (covered(pl, (t3 + t4) / 2, fy + 0.9) && ROOMS[faces(pl, (t3 + t4) / 2, fy)]) gaps.push({ pl: pl, t0: t3, t1: t4, y: fy + 0.9, rail: true });
           }
         });
       });
@@ -1457,6 +1572,48 @@
       trimParts.ceilFrame.visible = S.finish === 'classic';
     }
     applyCeiling();
+  }
+
+  /* Bathrooms: sanitary ware in glossy white vitreous china and fittings in chrome (split by room
+     in furnParts), and real mirrors: a reflector over each mirror's glass, rendered only in walk
+     mode. Kitchens: the worktop surfaces of the cabinets become white quartz (furnParts). */
+  var mirrorGroup = new THREE.Group(), kitchenGroup = new THREE.Group();
+  scene.add(mirrorGroup, kitchenGroup);
+  function dressWetAndKitchen() { // mirrors: wall-hung glass in wet rooms (above 0.8 m) becomes a reflector
+    if (!THREE.Reflector) return;
+    var mWalls = []; ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) mWalls.push(o); }); });
+    var planes = {}, va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+    scene.traverse(function (o) {
+      if (!o.isMesh || o.material !== glassMat) return;
+      o.updateMatrixWorld(true);
+      var g = o.geometry, pos = g.attributes.position, idx = g.index ? g.index.array : null, cnt = idx ? idx.length : pos.count;
+      for (var t = 0; t < cnt; t += 3) {
+        va.fromBufferAttribute(pos, idx ? idx[t] : t).applyMatrix4(o.matrixWorld); vb.fromBufferAttribute(pos, idx ? idx[t + 1] : t + 1).applyMatrix4(o.matrixWorld); vc.fromBufferAttribute(pos, idx ? idx[t + 2] : t + 2).applyMatrix4(o.matrixWorld);
+        n.crossVectors(e1.subVectors(vb, va), e2.subVectors(vc, va)); var ar = n.length(); if (ar < 1e-6) continue; n.divideScalar(ar);
+        if (Math.abs(n.y) > 0.1) continue;
+        var ymin = Math.min(va.y, vb.y, vc.y), L = levelAt(ymin + 0.1), fy = L.elevation + (L._slabTop || 0);
+        if (ymin - fy < 0.8) continue;
+        n.y = 0; n.normalize(); if (n.x < -1e-6 || (Math.abs(n.x) < 1e-6 && n.z < 0)) n.negate(); // one key for both faces
+        var d = n.x * va.x + n.z * va.z, key = Math.round(Math.atan2(n.z, n.x) * 50) + '|' + Math.round(d * 20);
+        var pl = planes[key] || (planes[key] = { n: n.clone(), d: d, t0: 1e9, t1: -1e9, y0: 1e9, y1: -1e9 });
+        [va, vb, vc].forEach(function (v) { var tt = -pl.n.z * v.x + pl.n.x * v.z; pl.t0 = Math.min(pl.t0, tt); pl.t1 = Math.max(pl.t1, tt); pl.y0 = Math.min(pl.y0, v.y); pl.y1 = Math.max(pl.y1, v.y); });
+      }
+    });
+    Object.keys(planes).forEach(function (k) {
+      var pl = planes[k], w = pl.t1 - pl.t0, h = pl.y1 - pl.y0; if (w < 0.25 || h < 0.3 || w > 3 || h > 2) return;
+      var tm = (pl.t0 + pl.t1) / 2, c = new THREE.Vector3(pl.n.x * pl.d - pl.n.z * tm, (pl.y0 + pl.y1) / 2, pl.n.z * pl.d + pl.n.x * tm), nrm = pl.n.clone();
+      var front = roomTypeAt(c.x + nrm.x * 0.4, pl.y0, c.z + nrm.z * 0.4) === 'wet', back = roomTypeAt(c.x - nrm.x * 0.4, pl.y0, c.z - nrm.z * 0.4) === 'wet';
+      if (!front && !back) return;
+      if (!front) nrm.negate();
+      // a mirror hangs on solid wall; a window's glass has the opening behind it
+      var behind = new THREE.Raycaster(c.clone().addScaledVector(nrm, 0.02), nrm.clone().negate(), 0, 0.15);
+      if (!behind.intersectObjects(mWalls, false).length) return;
+      var pr = Math.min(1, 2 / Math.max(w, h));
+      var mir = new THREE.Reflector(new THREE.PlaneGeometry(w - 0.01, h - 0.01), { color: 0xC9CBCC, clipBias: 0.003, textureWidth: Math.round(512 * w * pr), textureHeight: Math.round(512 * h * pr) });
+      mir.position.copy(c).addScaledVector(nrm, 0.006); mir.lookAt(mir.position.clone().add(nrm));
+      var ob = mir.onBeforeRender; mir.onBeforeRender = function (r, sc2) { if (sc2.overrideMaterial) return; ob.apply(this, arguments); };
+      mirrorGroup.add(mir);
+    });
   }
   var skirtGroup = new THREE.Group(); scene.add(skirtGroup);
   function buildSkirting() {
@@ -1763,13 +1920,14 @@
     return procTex[kind];
   }
   // World-space texture projection blended by the face's normal (works without UVs).
-  function triplanar(mat, tex, sx, sy, bump) {
+  function triplanar(mat, tex, sx, sy, bump, zones) {
     bump = bump || 0;
     mat.onBeforeCompile = function (sh) {
+      if (zones) { var Z = zoneUniforms(); Object.keys(Z).forEach(function (k) { sh.uniforms[k] = Z[k]; }); }
       sh.uniforms.triMap = { value: tex }; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) }; sh.uniforms.triBump = { value: bump };
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', ['#include <common>', 'varying vec3 vTriPos;', 'uniform sampler2D triMap;', 'uniform vec2 triScale;', 'uniform float triBump;',
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', ['#include <common>', 'varying vec3 vTriPos;', 'uniform sampler2D triMap;', 'uniform vec2 triScale;', 'uniform float triBump;', zones ? 'uniform sampler2D zoneMask; uniform sampler2D zoneTile; uniform vec4 zoneLv; uniform vec4 zoneB; float zoneW = 0.0;' : '',
         'vec3 triPerturb(vec3 sp, vec3 sn, vec2 dH) {',
         '  vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = cross(sy, sn), r2 = cross(sn, sx);',
         '  float det = dot(sx, r1) * (gl_FrontFacing ? 1.0 : -1.0);',
@@ -1779,13 +1937,24 @@
           'vec3 triN = abs(normalize(cross(dFdx(vTriPos), dFdy(vTriPos))));',
           'vec3 triW = pow(triN, vec3(4.0)); triW /= (triW.x + triW.y + triW.z);',
           'vec4 triT = texture2D(triMap, vTriPos.zy * triScale) * triW.x + texture2D(triMap, vTriPos.xz * triScale) * triW.y + texture2D(triMap, vTriPos.xy * triScale) * triW.z;',
-          'diffuseColor *= sRGBToLinear(triT);'].join('\n'));
+          'diffuseColor *= sRGBToLinear(triT);',
+          zones ? [
+            '{ vec3 zn = normalize(cross(dFdx(vTriPos), dFdy(vTriPos))); if (dot(zn, cameraPosition - vTriPos) < 0.0) zn = -zn;',
+            '  vec2 zp = vTriPos.xz + zn.xz * 0.15;',
+            '  float li = vTriPos.y < zoneLv.y - 0.3 ? 0.0 : vTriPos.y < zoneLv.z - 0.3 ? 1.0 : vTriPos.y < zoneLv.w - 0.3 ? 2.0 : 3.0;',
+            '  float fy = li < 0.5 ? zoneLv.x : li < 1.5 ? zoneLv.y : li < 2.5 ? zoneLv.z : zoneLv.w;',
+            '  vec4 zm = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li) * 0.25, (zp.y - zoneB.y) / zoneB.z));',
+            '  float hy = vTriPos.y - fy;',
+            '  zoneW = (abs(zn.y) < 0.5) ? max(step(0.5, zm.r), step(0.5, zm.g) * step(0.9, hy) * step(hy, 1.55)) : 0.0;',
+            '  vec4 zt = texture2D(zoneTile, vTriPos.zy / 2.4) * triW.x + texture2D(zoneTile, vTriPos.xz / 2.4) * triW.y + texture2D(zoneTile, vTriPos.xy / 2.4) * triW.z;',
+            '  diffuseColor.rgb = mix(diffuseColor.rgb, sRGBToLinear(zt).rgb, zoneW); }'].join('\n') : ''].join('\n'));
+      if (zones) sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.14, zoneW);');
       if (bump > 0) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', [
         '#include <normal_fragment_maps>',
         'vec4 triS = texture2D(triMap, vTriPos.zy * triScale, 2.5) * triW.x + texture2D(triMap, vTriPos.xz * triScale, 2.5) * triW.y + texture2D(triMap, vTriPos.xy * triScale, 2.5) * triW.z;', 'float triH = dot(triS.rgb, vec3(0.3333));',
-        'normal = triPerturb(-vViewPosition, normal, vec2(dFdx(triH), dFdy(triH)) * triBump);'].join('\n'));
+        'normal = triPerturb(-vViewPosition, normal, vec2(dFdx(triH), dFdy(triH)) * triBump' + (zones ? ' * (1.0 - zoneW)' : '') + ');'].join('\n'));
     };
-    mat.customProgramCacheKey = function () { return 'triplanar' + (bump > 0 ? 'b' : ''); };
+    mat.customProgramCacheKey = function () { return 'triplanar' + (bump > 0 ? 'b' : '') + (zones ? 'z' : ''); };
     mat.extensions = { derivatives: true };
     return mat;
   }
@@ -1838,21 +2007,28 @@
      as wool; the rest gets smooth shading with a 35-degree crease, so cushions, chairs and plants
      read as soft forms while box edges stay crisp. */
   var COS_CREASE = Math.cos(35 * Math.PI / 180), WET = { wet: 1 };
-  function furnParts(g) {
+  var KITCHEN = { kitchen: 1 };
+  function furnParts(g, cabinets) {
     var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
     var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
     function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.04) return true; return false; }
-    var keep = [], rug = [], wet = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
+    var keep = [], rug = [], wet = [], top = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
     for (var t = 0; t < idx.length; t += 3) {
       var a = idx[t], b = idx[t + 1], c = idx[t + 2];
       if (onFloor(p[a * 3 + 1] * k + oy) && onFloor(p[b * 3 + 1] * k + oy) && onFloor(p[c * 3 + 1] * k + oy)) { rug.push(a, b, c); continue; }
       // pieces standing in bathrooms/WCs are sanitary ware: porcelain, not fabric
       var cx = (p[a * 3] + p[b * 3] + p[c * 3]) / 3 * k + ox, cy = (p[a * 3 + 1] + p[b * 3 + 1] + p[c * 3 + 1]) / 3 * k + oy, cz = (p[a * 3 + 2] + p[b * 3 + 2] + p[c * 3 + 2]) / 3 * k + oz;
+      if (cabinets) {
+        var ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2], vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
+        var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        var fl = levelAt(cy), hy = cy - (fl.elevation + (fl._slabTop || 0));
+        if (ny / nl > 0.95 && hy > 0.7 && hy < 1.0 && roomAt(cx - CX, cy, cz + CY, KITCHEN)) { top.push(a, b, c); continue; }
+      }
       (roomAt(cx - CX, cy, cz + CY, WET) ? wet : keep).push(a, b, c);
     }
     var rugGeo = null;
     if (rug.length >= 6) { rugGeo = new THREE.BufferGeometry(); rugGeo.setAttribute('position', g.attributes.position); rugGeo.setIndex(rug); }
-    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null };
+    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null };
   }
   function creased(p, idx) {
     var F = idx.length / 3, nv = p.length / 3, fn = new Float32Array(F * 3);
@@ -2671,6 +2847,7 @@
     });
     groupRugs(seatRecs, rugTaken);
     buildChandeliers();
+    dressWetAndKitchen();
     applyRealFurniture();
     return made;
   }
