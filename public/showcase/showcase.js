@@ -13,7 +13,7 @@
     ar: { k: 'عرض تفاعلي', sample: 'نموذج تجريبي', night: 'ليل', day: 'نهار', lang: 'EN',
       rotate: 'دوران', walk: 'تجوّل', doll: 'مجسّم', plan: 'مسقط', walls: 'جدران كاملة', reset: 'إعادة', furn: 'الفرش',
       loading: 'جاري تحميل المجسّم…',
-      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', realFurn: 'فرش واقعي بنفس توزيع الموديل', ceiling: 'تصميم السقف والإضاءة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
+      facts: 'بيانات المشروع', rooms: 'الفراغات', scenes: 'مشاهد جاهزة', finishes: 'اقتراح الخامات', doorWood: 'خشب الأبواب', realFurn: 'فرش واقعي بنفس توزيع الموديل', ceiling: 'تصميم السقف والإضاءة', scene: 'مشهد', outside: 'خارجي', near: 'قرب', total: 'مجموع الفراغات',
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
@@ -22,7 +22,7 @@
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
       loading: 'Loading model…',
-      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', realFurn: 'Realistic furniture in the model layout', ceiling: 'Ceiling and lighting', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
+      facts: 'Project facts', rooms: 'Spaces', scenes: 'Ready views', finishes: 'Finish options', doorWood: 'Door wood', realFurn: 'Realistic furniture in the model layout', ceiling: 'Ceiling and lighting', scene: 'View', outside: 'Outside', near: 'near', total: 'Spaces total',
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'walnut', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: !(window.matchMedia && matchMedia('(pointer: coarse)').matches), auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -84,7 +84,7 @@
   // Section plane: everything above it is cut away, like a Revit plan cut / section box top.
   renderer.localClippingEnabled = true;
   var cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
-  var meshGroups = {}, noteLbls = [], edgeQueue = [];
+  var meshGroups = {}, noteLbls = [], edgeQueue = [], capMat = null;
   // Exported surface groups that make up the building (walk mode collides with these):
   // arch = everything else built; wall/ext = interior/facade wall faces; floor/pave = interior
   // floor/open paving tops; ceil = slab and roof undersides.
@@ -293,6 +293,7 @@
     site.visible = levelY() >= -0.5; // site paving would cover a basement
     // Cut at plan height on the current level; "full walls" cuts just under the next floor slab.
     var L = D.levels[S.level], next = D.levels[S.level + 1];
+    if (capMat) capMat.visible = !S.walk;
     cutPlane.constant = S.walk ? 1e6 : S.full ? (next ? next.elevation - 0.45 : 1e6) : L.elevation + (L._slabTop || 0) + CUT;
     if (meshGroups.furn) meshGroups.furn.visible = S.furn;
     applyRealFurniture();
@@ -836,7 +837,13 @@
     }).then(function (buf) {
       var root = new THREE.Group(), s = MESH.step / 1000, o = MESH.origin;
       root.scale.set(s, s, s); root.position.set(o[0] / 1000 - CX, o[1] / 1000, o[2] / 1000 + CY);
-      var cap = new THREE.MeshBasicMaterial({ color: 0x101725, side: THREE.BackSide, clippingPlanes: [cutPlane] });
+      // Navy poché for cut walls. It must never win against a real surface at the same depth:
+      // Revit models stack elements within a millimetre (a 10 cm "wet" floor 1 mm above the slab),
+      // and their undersides showed through as navy triangles. Pushed back in depth, and only
+      // drawn while a section cut is active (none in walk mode).
+      var cap = new THREE.MeshBasicMaterial({ color: 0x101725, side: THREE.BackSide, clippingPlanes: [cutPlane],
+        polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 8 });
+      capMat = cap;
       MESH.buckets.forEach(function (b) {
         var g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(new Int16Array(buf, b.pos, b.verts * 3), 3));
@@ -873,6 +880,7 @@
       scene.add(root); applyLevel(); note.hidden = true;
       setupInterior(root);
       buildRealFurniture();
+      dressDoors();
       meshReady = true; mapLevel = -1; renderUI(); applyFinish();
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });
@@ -893,7 +901,7 @@
     var lx = (hg[0] * 1000 - MESH.origin[0]) / MESH.step, lz = (-hg[1] * 1000 - MESH.origin[2]) / MESH.step;
     var pivot = new THREE.Group(), inner = new THREE.Group();
     pivot.position.set(lx, 0, lz); inner.position.set(-lx, 0, -lz); pivot.add(inner); grp.add(pivot);
-    var rec = { pivot: pivot, inner: inner, x: hg[0], y: hg[1], sign: hg[2], ang: hg[3], t: 0 };
+    var rec = { pivot: pivot, inner: inner, x: hg[0], y: hg[1], sign: hg[2], ang: hg[3], t: 0, door: d };
     leafByKey[key] = rec; leafPivots.push(rec);
     return inner;
   }
@@ -1020,6 +1028,7 @@
     });
     applyFinish();
     renderCeilings();
+    renderDoorWood();
     var old = fins.parentNode.querySelector('.realfurn'); if (old) old.remove();
     if (D.furniture && D.furniture.length) {
       var lab = document.createElement('label'), cb = document.createElement('input');
@@ -1376,7 +1385,9 @@
   function procFor(kind) {
     if (!procTex[kind]) {
       var c = document.createElement('canvas'); c.width = c.height = 512;
-      ({ wood: grain, fabric: weave, stone: speckle, rug: wool, marble: marble })[kind](c.getContext('2d'), 512, rng({ wood: 11, fabric: 13, stone: 17, rug: 19, marble: 23 }[kind]));
+      var cx = c.getContext('2d');
+      if (kind === 'woodV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
+      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: wool, marble: marble })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
@@ -1437,6 +1448,8 @@
     });
   }
   function lookMaterial(b, smooth) {
+    // aluminium/steel doors (curtain-wall and service doors) keep a metal finish
+    if ((b.grp === 'door' || b.grp === 'leaf') && nameKind(lookOf(b)) !== 'metal') return doorWoodMat();
     if (!PROPOSE[b.grp]) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, flatShading: true, envMapIntensity: 0.75,
       side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
     return makeMaterial(proposal(b), smooth);
@@ -1818,6 +1831,140 @@
   function applyRealFurniture() {
     realGroup.visible = S.realFurn && S.furn;
     Object.keys(elemGroups).forEach(function (id) { var g = elemGroups[id]; g.visible = !(S.realFurn && g.userData.replaced); });
+  }
+
+
+  /* ---------- doors ----------
+     Every hinged door gets a real frame (jamb lining through the wall and casing on both
+     faces), three hinges on the hinge side and lever handles on both faces of each leaf (they
+     turn with it). Leaves and frames share one wood, chosen in the finishes panel. The opening
+     is read from the leaves themselves (closed at load) and the wall thickness by casting from
+     inside the jamb to both wall faces. */
+  var DOOR_WOODS = [
+    { id: 'walnut', ar: 'جوز', en: 'Walnut', color: '#5E3D27', rough: 0.45, grain: true },
+    { id: 'oak', ar: 'بلوط', en: 'Oak', color: '#B48C62', rough: 0.5, grain: true },
+    { id: 'white', ar: 'أبيض لاكيه', en: 'White lacquer', color: '#F2EFE9', rough: 0.3, grain: false },
+    { id: 'ash', ar: 'رمادي', en: 'Ash grey', color: '#8E8A84', rough: 0.5, grain: true }
+  ];
+  var doorMat = null, doorDetail = new THREE.Group();
+  scene.add(doorDetail);
+  function doorWoodMat() {
+    if (!doorMat) {
+      doorMat = new THREE.MeshStandardMaterial({ color: '#5E3D27', roughness: 0.45, flatShading: true, envMapIntensity: 0.7,
+        side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
+      triplanar(doorMat, procFor('woodV'), 0.9, 0.9);
+    }
+    return doorMat;
+  }
+  function applyDoorWood() {
+    var w = DOOR_WOODS.filter(function (x) { return x.id === S.doorWood; })[0] || DOOR_WOODS[0], m = doorWoodMat();
+    m.color.set(w.color); m.roughness = w.rough;
+    // lacquer: no grain (swap to a plain copy of the same material)
+    m.userData.plain = !w.grain;
+    doorPlain().color.set(w.color); doorPlain().roughness = w.rough;
+    var useMat = w.grain ? m : doorPlain();
+    [meshGroups.door, meshGroups.leaf, doorDetail].forEach(function (g) {
+      if (g) g.traverse(function (o) { if (o.isMesh && (o.material === m || o.material === doorPlainMat)) o.material = useMat; });
+    });
+    [].forEach.call($('doorWoods').children, function (b) { b.classList.toggle('on', b.dataset.id === w.id); });
+  }
+  var doorPlainMat = null;
+  function doorPlain() {
+    if (!doorPlainMat) doorPlainMat = new THREE.MeshStandardMaterial({ color: '#F2EFE9', roughness: 0.3, flatShading: true,
+      side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
+    return doorPlainMat;
+  }
+  function renderDoorWood() {
+    var box = $('doorWoods'); if (!box) return;
+    $('kDoor').textContent = T('doorWood'); box.innerHTML = '';
+    DOOR_WOODS.forEach(function (w) {
+      var b = document.createElement('button'), sw = document.createElement('span'), i = document.createElement('i');
+      b.className = 'fin'; b.dataset.id = w.id; sw.className = 'sw'; i.style.background = w.color; sw.appendChild(i);
+      b.appendChild(sw); b.appendChild(document.createTextNode(S.lang === 'ar' ? w.ar : w.en));
+      b.onclick = function () { S.doorWood = w.id; applyDoorWood(); };
+      box.appendChild(b);
+    });
+    applyDoorWood();
+  }
+  function dressDoors() {
+    if (!leafPivots.length) return;
+    var metal = M().metal, wood = doorWoodMat(), up = new THREE.Vector3(0, 1, 0);
+    var backs = []; ARCH.forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material.side === THREE.BackSide) backs.push(o); }); });
+    var rc = new THREE.Raycaster(), byDoor = {};
+    leafPivots.forEach(function (lf) {
+      var box = new THREE.Box3().setFromObject(lf.inner); if (box.isEmpty()) return;
+      var H = P(lf.x, lf.y), c = box.getCenter(new THREE.Vector3()), u = new THREE.Vector3(c.x - H.x, 0, c.z - H.z);
+      var half = u.length(); if (half < 0.15) return; u.normalize();
+      var n = new THREE.Vector3().crossVectors(u, up), size = box.getSize(new THREE.Vector3());
+      var thick = Math.max(0.03, Math.min(0.07, Math.abs(size.x * n.x) + Math.abs(size.z * n.z)));
+      // the leaf's real edges along u (the hinge axis can sit a few cm inside the frame rebate)
+      var t0 = Infinity, t1 = -Infinity;
+      [box.min.x, box.max.x].forEach(function (x) { [box.min.z, box.max.z].forEach(function (z) { var t = (x - H.x) * u.x + (z - H.z) * u.z; t0 = Math.min(t0, t); t1 = Math.max(t1, t); }); });
+      lf.geom = { H: H, u: u, n: n, W: half * 2, base: box.min.y, h: size.y, thick: thick, mid: c, t0: Math.max(t0, -0.05), t1: t1 };
+      (byDoor[lf.door] = byDoor[lf.door] || []).push(lf);
+      // lever handles on both faces near the leaf's free edge, turning with the leaf
+      var hx = H.clone().addScaledVector(u, half * 2 - 0.08);
+      [-1, 1].forEach(function (side) {
+        var at = hx.clone().addScaledVector(n, side * (thick / 2 + 0.012)); at.y = box.min.y + 1.0;
+        var rose = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.012, 24), metal);
+        rose.position.copy(at); rose.quaternion.setFromUnitVectors(up, n);
+        var lever = new THREE.Mesh(rboxGeo(0.13, 0.018, 0.018, 0.008), metal);
+        lever.position.copy(at).addScaledVector(n, side * 0.03).addScaledVector(u, -0.055);
+        lever.rotation.y = Math.atan2(-u.z, u.x);
+        [rose, lever].forEach(function (m) { m.castShadow = true; lf.inner.updateMatrixWorld(true); m.applyMatrix4(new THREE.Matrix4().copy(lf.inner.matrixWorld).invert()); lf.inner.add(m); });
+      });
+    });
+    Object.keys(byDoor).forEach(function (d) {
+      var leaves = byDoor[d], g0 = leaves[0].geom, u = g0.u, n = g0.n;
+      // the opening runs between the outermost hinge/edge points along u
+      var pts = []; leaves.forEach(function (lf) { var g = lf.geom; pts.push(g.H.clone().addScaledVector(g.u, g.t0), g.H.clone().addScaledVector(g.u, g.t1)); });
+      var o = pts[0], ts = pts.map(function (p) { return (p.x - o.x) * u.x + (p.z - o.z) * u.z; });
+      var tA = Math.min.apply(null, ts), tB = Math.max.apply(null, ts), A = o.clone().addScaledVector(u, tA), W = tB - tA;
+      var base = Math.min.apply(null, leaves.map(function (lf) { return lf.geom.base; })), h = Math.max.apply(null, leaves.map(function (lf) { return lf.geom.h; }));
+      // wall faces: cast both ways from inside the jamb, just beyond the opening
+      var probe = A.clone().addScaledVector(u, -0.05); probe.y = base + h * 0.5;
+      var faces = [-1, 1].map(function (sd) {
+        rc.set(probe, n.clone().multiplyScalar(sd)); rc.near = 0; rc.far = 0.6;
+        var hit = rc.intersectObjects(backs, false)[0]; return hit ? hit.distance : null;
+      });
+      // no exit on a side: the leaf sits flush with that face of the wall
+      if (faces[0] == null && faces[1] == null) faces = [0.1, 0.1];
+      else faces = faces.map(function (f) { return f == null ? 0 : f; });
+      var T = Math.min(0.6, faces[0] + faces[1]), mid = A.clone().addScaledVector(n, (faces[1] - faces[0]) / 2);
+      // the wall opening is usually a little larger than the leaves: find its reveals
+      var fronts = []; ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o2) { if (o2.isMesh && o2.material.side !== THREE.BackSide && o2.parent === meshGroups[k]) fronts.push(o2); }); });
+      var ctr = mid.clone().addScaledVector(u, W / 2); ctr.y = base + h * 0.5;
+      [[-1, 'a'], [1, 'b']].forEach(function (q) {
+        rc.set(ctr, u.clone().multiplyScalar(q[0])); rc.near = 0; rc.far = W / 2 + 0.12;
+        var hit = rc.intersectObjects(fronts, false)[0];
+        if (hit && hit.distance > W / 2 - 0.02) { var extra = hit.distance - W / 2; if (q[1] === 'a') { mid.addScaledVector(u, -extra); W += extra; } else W += extra; }
+      });
+      rc.set(ctr, up); rc.far = 0.3; var top = rc.intersectObjects(fronts, false)[0];
+      if (top && top.point.y > base + h - 0.02) h = top.point.y - base;
+      function piece(gw, gh, gd, cu, y, cn) { // gw along u, gd along n
+        var m = new THREE.Mesh(rboxGeo(gw, gh, gd, 0.004), wood), at = mid.clone().addScaledVector(u, cu).addScaledVector(n, cn);
+        m.position.set(at.x, y, at.z); m.rotation.y = Math.atan2(-u.z, u.x); m.castShadow = m.receiveShadow = true; doorDetail.add(m);
+      }
+      var lin = 0.025, cas = 0.07, cd = 0.018;
+      // jamb and head linings sit inside the opening, covering the wall reveals
+      piece(lin, h, T + 0.004, lin / 2, base + h / 2, 0); piece(lin, h, T + 0.004, W - lin / 2, base + h / 2, 0);
+      piece(W, lin, T + 0.004, W / 2, base + h - lin / 2, 0);
+      [-1, 1].forEach(function (sd) { // casing (architrave) on both wall faces, from the opening edge outward
+        var cn = sd * (T / 2 + cd / 2);
+        piece(cas, h + cas, cd, -cas / 2 + 0.004, base + (h + cas) / 2, cn);
+        piece(cas, h + cas, cd, W + cas / 2 - 0.004, base + (h + cas) / 2, cn);
+        piece(W + 2 * cas - 0.008, cas, cd, W / 2, base + h + cas / 2 - 0.004, cn);
+      });
+      // hinges on each leaf's hinge side
+      leaves.forEach(function (lf) {
+        var g = lf.geom;
+        [0.2, g.h / 2, g.h - 0.2].forEach(function (y) {
+          var k = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.1, 12), metal);
+          var at = g.H.clone().addScaledVector(g.u, 0.004); k.position.set(at.x, g.base + y, at.z); k.castShadow = true; doorDetail.add(k);
+        });
+      });
+    });
+    applyDoorWood();
   }
 
   if (MESH) loadMesh();
