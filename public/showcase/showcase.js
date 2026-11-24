@@ -1917,15 +1917,18 @@
       var fr = sideRect(r, s, off, depth, (a0 + a1) / 2 - w / 2, (a0 + a1) / 2 + w / 2);
       return put(G, rboxGeo(fr.du, h, fr.dv, Math.min(0.01, h / 2)), mat, fr.u, y, fr.v);
     }
+    var cons = len;
     if (back >= 0 && back <= 3 && G.userData.wall) {
-      box(0, 0.05, 2.35, 0.3 + 2.35 / 2, Math.min(len + 0.6, 3.6), mt.travertine); // feature panel
-      var tvW = Math.min(1.65, len * 0.72);
+      var tvW = Math.min(1.65, len * 0.72), panelW = tvW + 0.8; // panel frames the TV, ~40 cm each side
+      box(0, 0.05, 2.35, 0.3 + 2.35 / 2, panelW, mt.travertine);
       box(0.05, 0.035, tvW * 9 / 16, 1.3, tvW, mt.tv);
+      cons = Math.min(len, panelW + 0.4); a0 = (a0 + a1) / 2 - cons / 2; a1 = a0 + cons; // console a little beyond the panel
     } else {
       tvW = Math.min(1.45, len * 0.65);
       box(0.06, 0.04, tvW * 9 / 16, 0.62 + tvW * 9 / 32 + 0.04, tvW, mt.tv);
     }
-    box(0.05, dep, 0.3, 0.18 + 0.15, len, mt.wood); // floating console
+    box(0.05, dep, 0.3, 0.18 + 0.15, cons, mt.wood); // floating console
+    len = cons;
     var nd = Math.max(2, Math.round(len / 0.6)), dw = len / nd;
     for (var k = 1; k < nd; k++) { // drawer seams on the front
       var x = a0 + dw * k, fr = sideRect(r, s, 0.05 + dep, 0.004, x - 0.002, x + 0.002);
