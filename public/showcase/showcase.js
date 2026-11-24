@@ -1708,28 +1708,28 @@
     var backs = [], arms = [];
     sides.forEach(function (st, s) { if (st.frac > 0.5) (st.maxh >= top - 0.1 ? backs : arms).push(s); });
     if (!backs.length && arms.length) { backs.push(arms.shift()); } // a module whose tallest side is lower than usual
-    var baseTop = Math.max(0.2, seatH - 0.13), BK = 0.2, AW = 0.15;
+    var baseTop = Math.max(0.2, seatH - 0.13), BK = 0.2, AW = 0.18, body = mt.boucle || mt.body, ROLL = 0.26;
     put(G, rboxGeo(r.u1 - r.u0 - 0.1, 0.06, r.v1 - r.v0 - 0.1, 0.01), mt.plinth, (r.u0 + r.u1) / 2, 0.03, (r.v0 + r.v1) / 2);
-    put(G, rboxGeo(r.u1 - r.u0 - 0.01, baseTop - 0.06, r.v1 - r.v0 - 0.01, 0.03), mt.body, (r.u0 + r.u1) / 2, 0.06 + (baseTop - 0.06) / 2, (r.v0 + r.v1) / 2);
+    put(G, rboxGeo(r.u1 - r.u0 - 0.01, baseTop - 0.06, r.v1 - r.v0 - 0.01, 0.06), body, (r.u0 + r.u1) / 2, 0.06 + (baseTop - 0.06) / 2, (r.v0 + r.v1) / 2);
     // seat area: what the backs and arms leave
     var s = { u0: r.u0, u1: r.u1, v0: r.v0, v1: r.v1 };
     backs.concat(arms).forEach(function (sd) { var t = backs.indexOf(sd) >= 0 ? BK : AW; if (sd === 0) s.u0 += t; if (sd === 1) s.u1 -= t; if (sd === 2) s.v0 += t; if (sd === 3) s.v1 -= t; });
-    var lenU = s.u1 - s.u0, lenV = s.v1 - s.v0, alongU = lenU >= lenV, len = alongU ? lenU : lenV, n = Math.max(1, Math.round(len / 0.85));
-    for (var i = 0; i < n; i++) {
+    var lenU = s.u1 - s.u0, lenV = s.v1 - s.v0, alongU = lenU >= lenV, len = alongU ? lenU : lenV, n = Math.max(1, Math.round(len / ROLL));
+    for (var i = 0; i < n; i++) { // channel-tufted seat: soft rolls running front to back
       var a0 = (alongU ? s.u0 : s.v0) + len * i / n, a1 = a0 + len / n;
       var cu = alongU ? (a0 + a1) / 2 : (s.u0 + s.u1) / 2, cv = alongU ? (s.v0 + s.v1) / 2 : (a0 + a1) / 2;
-      put(G, rboxGeo(alongU ? a1 - a0 - 0.012 : lenU - 0.01, 0.15, alongU ? lenV - 0.01 : a1 - a0 - 0.012, 0.05), mt.cushion, cu, baseTop + 0.075, cv);
+      put(G, rboxGeo(alongU ? a1 - a0 - 0.006 : lenU - 0.01, 0.17, alongU ? lenV - 0.01 : a1 - a0 - 0.006, 0.075), mt.cushion, cu, baseTop + 0.085, cv);
     }
     var backTop = Math.max(top, seatH + 0.3);
     backs.forEach(function (sd) {
       var ax = along(r, sd), a0 = ax[0], a1 = ax[1];
       backs.forEach(function (o) { if (o === sd || (o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
       var fr = sideRect(r, sd, 0, 0.12, a0, a1);
-      put(G, rboxGeo(fr.du, backTop - 0.06 - 0.04, fr.dv, 0.04), mt.body, fr.u, 0.06 + (backTop - 0.1) / 2, fr.v);
-      var nb = Math.max(1, Math.round((a1 - a0) / 0.85)), len2 = (a1 - a0) / nb;
+      put(G, rboxGeo(fr.du, backTop - 0.06 - 0.04, fr.dv, 0.05), body, fr.u, 0.06 + (backTop - 0.1) / 2, fr.v);
+      var nb = Math.max(1, Math.round((a1 - a0) / ROLL)), len2 = (a1 - a0) / nb;
       for (var k = 0; k < nb; k++) {
         var cr = sideRect(r, sd, 0.1, 0.17, a0 + k * len2, a0 + (k + 1) * len2), hgt = (backTop - baseTop - 0.15) * 0.92;
-        var cushion = put(G, rboxGeo(sd < 2 ? 0.17 : len2 - 0.015, hgt, sd < 2 ? len2 - 0.015 : 0.17, 0.06), mt.cushion, cr.u, baseTop + 0.15 + hgt / 2, cr.v);
+        var cushion = put(G, rboxGeo(sd < 2 ? 0.17 : len2 - 0.006, hgt, sd < 2 ? len2 - 0.006 : 0.17, 0.08), mt.cushion, cr.u, baseTop + 0.17 + hgt / 2, cr.v);
         var tilt = 0.12; // leans back
         if (sd === 0) cushion.rotation.z = tilt; if (sd === 1) cushion.rotation.z = -tilt; if (sd === 2) cushion.rotation.x = -tilt; if (sd === 3) cushion.rotation.x = tilt;
       }
@@ -1738,13 +1738,21 @@
       var ax = along(r, sd), a0 = ax[0], a1 = ax[1], armTop = Math.max(seatH + 0.18, Math.min(sides[sd].maxh, backTop - 0.1));
       backs.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0 || o === 2) a0 += BK; else a1 -= BK; });
       var fr = sideRect(r, sd, 0, AW, a0, a1);
-      put(G, rboxGeo(fr.du, armTop - 0.06, fr.dv, 0.06), mt.body, fr.u, 0.06 + (armTop - 0.06) / 2, fr.v);
+      put(G, rboxGeo(fr.du, armTop - 0.06, fr.dv, 0.085), body, fr.u, 0.06 + (armTop - 0.06) / 2, fr.v);
     });
-    if (backs.length && arms.length) { // a scatter cushion where an arm meets the back
-      var b = backs[0], am = arms[0], cu = am === 0 ? s.u0 + 0.22 : am === 1 ? s.u1 - 0.22 : (s.u0 + s.u1) / 2, cv = am === 2 ? s.v0 + 0.22 : am === 3 ? s.v1 - 0.22 : (s.v0 + s.v1) / 2;
-      if (b === 0) cu = s.u0 + 0.12; if (b === 1) cu = s.u1 - 0.12; if (b === 2) cv = s.v0 + 0.12; if (b === 3) cv = s.v1 - 0.12;
-      put(G, rboxGeo(b < 2 ? 0.12 : 0.42, 0.4, b < 2 ? 0.42 : 0.12, 0.06), mt.accent, cu, baseTop + 0.35, cv, 0, 0);
-    }
+    // scatter pillows along each back, alternating taupe and charcoal, leaning back
+    backs.forEach(function (sd) {
+      var ax = along(r, sd), a0 = ax[0] + (arms.length ? AW : 0) + 0.25, a1 = ax[1] - (arms.length ? AW : 0) - 0.25, span = a1 - a0;
+      if (span < 0.3) return;
+      var np = Math.max(1, Math.min(4, Math.round(span / 0.75))), pw = 0.46;
+      for (var k = 0; k < np; k++) {
+        var at = np === 1 ? (a0 + a1) / 2 : a0 + span * k / (np - 1), cr = sideRect(r, sd, 0.3, 0.13, at - pw / 2, at + pw / 2);
+        var pl = put(G, rboxGeo(sd < 2 ? 0.13 : pw, 0.42, sd < 2 ? pw : 0.13, 0.065), k % 2 ? mt.pillowB || mt.accent : mt.pillowA || mt.accent, cr.u, baseTop + 0.17 + 0.21, cr.v);
+        var tl = 0.22, yaw = (k % 2 ? -1 : 1) * 0.08;
+        if (sd === 0) pl.rotation.z = tl; if (sd === 1) pl.rotation.z = -tl; if (sd === 2) pl.rotation.x = -tl; if (sd === 3) pl.rotation.x = tl;
+        pl.rotation.y = yaw;
+      }
+    });
     return true;
   }
 
@@ -1762,6 +1770,9 @@
     b.trunk = rmat('wood', 0.25, '#6A5644', 0.85, 'wood', 0.3);
     b.soil = rmat('soil', 0.1, '#3B3127', 1);
     b.planter = rmat('stone', 0.75, '#CFC7B9', 0.85, 'stone', 0.35);
+    b.pillowA = rmat('accent', 0.62, '#B7A592', 0.95, 'fabric', 0.14); // taupe
+    b.pillowB = rmat('charcoal', 0.35, '#5E5852', 0.95, 'fabric', 0.14); // charcoal
+    b.chairFab = rmat('fabric', 0.78, '#D3CFC8', 0.95, 'fabric', 0.14); // light grey weave
     return b;
   }
   function glowMatBed() {
@@ -1815,7 +1826,10 @@
     for (var k = 0; k < np; k++) bx(pw - 0.05, 0.36, 0.17, 0.05 + pw * (k + 0.5), mTop + 0.17, 0.25, mt.linen, 0.28, 0.07);
     if (W > 1.3) bx(0.55, 0.26, 0.13, W / 2, mTop + 0.14, 0.42, mt.throwKnit, 0.2, 0.06); // lumbar
     var hbTop = Math.max(best, 1.05), hbH = hbTop - 0.12;
-    bx(W + 0.12, hbH, 0.14, W / 2, 0.12 + hbH / 2, 0.02, mt.boucle, 0, 0.065); // one soft headboard panel
+    bx(W + 0.12, hbH, 0.07, W / 2, 0.12 + hbH / 2, -0.015, mt.boucle, 0, 0.03); // backing panel
+    var padTop = hbTop - 0.03, pad0 = mTop + 0.02, rows = 2, cols = Math.max(2, Math.round((W + 0.1) / 0.45)), ph = (padTop - pad0) / rows, pw2 = (W + 0.1) / cols;
+    for (var rr = 0; rr < rows; rr++) for (var cc = 0; cc < cols; cc++) // padded squares
+      bx(pw2 - 0.012, ph - 0.012, 0.1, W / 2 - (W + 0.1) / 2 + pw2 * (cc + 0.5), pad0 + ph * (rr + 0.5), 0.06, mt.boucle, 0, 0.045);
     var gl = at(W / 2, -0.06), glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, 0.45), glowMatBed());
     glow.position.set(gl[0], hbTop + 0.18, gl[1]); glow.rotation.y = head === 2 ? 0 : head === 3 ? Math.PI : head === 0 ? Math.PI / 2 : -Math.PI / 2;
     G.add(glow); // LED wash on the wall above the headboard
@@ -1852,11 +1866,11 @@
   function tableAt(G, mt, rect, topH, round, dining) {
     var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
     var longU = du >= dv, lo = Math.max(du, dv), sh = Math.min(du, dv);
-    if (dining) { // cream top on two oak pedestal slabs
-      put(G, rboxGeo(du, 0.05, dv, 0.015), mt.cream, cu, topH - 0.025, cv);
+    if (dining) { // travertine top on two travertine slab legs
+      put(G, rboxGeo(du, 0.06, dv, 0.012), mt.travertine || mt.cream, cu, topH - 0.03, cv);
       [-1, 1].forEach(function (sd) {
         var off = sd * (lo / 2 - Math.min(0.45, lo * 0.22));
-        put(G, rboxGeo(longU ? 0.16 : sh * 0.62, topH - 0.05, longU ? sh * 0.62 : 0.16, 0.02), mt.woodL, cu + (longU ? off : 0), (topH - 0.05) / 2, cv + (longU ? 0 : off));
+        put(G, rboxGeo(longU ? 0.12 : sh * 0.6, topH - 0.06, longU ? sh * 0.6 : 0.12, 0.01), mt.travertine || mt.woodL, cu + (longU ? off : 0), (topH - 0.06) / 2, cv + (longU ? 0 : off));
       });
       return;
     }
@@ -1907,13 +1921,13 @@
   function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
     var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
     w = Math.min(Math.max(w, 0.46), 0.58); d = Math.min(Math.max(d, 0.48), 0.58); hTop = Math.min(Math.max(hTop, 0.78), 0.86);
-    var seat = 0.47, legG = new THREE.CylinderGeometry(0.017, 0.012, seat - 0.05, 12);
+    var seat = 0.47, legG = new THREE.CylinderGeometry(0.016, 0.01, seat - 0.05, 12), fab = mt.chairFab || mt.cushion;
     [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) {
-      var lg = put(C, legG, mt.woodL, s[0] * (w / 2 - 0.05), (seat - 0.05) / 2, s[1] * (d / 2 - 0.05));
+      var lg = put(C, legG, mt.wood, s[0] * (w / 2 - 0.05), (seat - 0.05) / 2, s[1] * (d / 2 - 0.05));
       lg.rotation.z = -s[0] * 0.06; lg.rotation.x = s[1] * 0.06; // slight splay
     });
-    put(C, rboxGeo(w, 0.1, d, 0.045), mt.cushion, 0, seat, 0.01);
-    var back = put(C, shellGeo(w * 0.55, 1.25, hTop - seat - 0.1), mt.cushion, 0, seat + 0.09, 0.03);
+    put(C, rboxGeo(w, 0.1, d, 0.045), fab, 0, seat, 0.01);
+    var back = put(C, shellGeo(w * 0.55, 1.25, hTop - seat - 0.1), fab, 0, seat + 0.09, 0.03);
     return C;
   }
   function buildChair(m, G, mt) {
