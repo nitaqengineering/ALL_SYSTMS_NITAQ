@@ -1017,7 +1017,7 @@
       else if (typeof v === 'string') {
         mat.color.set(v); mat.map = null;
         if (!mat.userData.surface && (f.kind === 'wall' || f.kind === 'ceil')) { // once: a quiet surface texture
-          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6);
+          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6, f.kind === 'wall' ? 0.6 : 0.3);
           mat.flatShading = true; mat.userData.surface = true; mat.needsUpdate = true;
         }
       }
@@ -1033,6 +1033,7 @@
     [].forEach.call(fins.children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
     $('finNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
     dressFurniture(sc.id);
+    applyTrim(sc);
   }
   function renderFinishes() {
     var fins = $('fins'), has = finishMeshes.length > 0;
@@ -1129,9 +1130,11 @@
     // distant skyline: low rooftops and palm / tree canopies, hazier with distance
     [[0.55, night ? '#1A2030' : '#B7C0C4', 18], [0.8, night ? '#141925' : '#98A49A', 26]].forEach(function (L) {
       c.fillStyle = L[1]; c.beginPath(); c.moveTo(0, hz);
+      var blk = 0, bh = 0;
       for (var x = 0; x <= W; x += 6) {
         var h = L[2] * (0.4 + 0.6 * Math.abs(Math.sin(x / 37 + L[0] * 9) * Math.sin(x / 113 + L[0] * 3)));
-        if (r() < 0.04) h += L[2] * 1.2 * r(); c.lineTo(x, hz - h * L[0] * 2);
+        if (x >= blk) { blk = x + 40 + r() * 140; bh = r() < 0.45 ? L[2] * (0.5 + r() * 0.6) : 0; } // flat-roofed buildings
+        c.lineTo(x, hz - Math.max(h, bh) * L[0] * 2);
       }
       c.lineTo(W, hz); c.closePath(); c.fill();
     });
@@ -1232,6 +1235,150 @@
   }
   /* Skirting: a 9 cm painted board along the bottom edge of each interior wall face that
      stands on a level's floor (door openings break the wall faces, so boards stop there). */
+
+  /* ---------- walls and ceilings: architectural trim ----------
+     From the exported wall faces (grouped by plane, so openings are known exactly):
+     - classic scheme: panel mouldings (lower and upper panels with a chair rail) on the walls of
+       living rooms, majlis, dining and bedrooms, and a cove cornice where walls meet ceilings;
+     - contemporary schemes: a 15 mm shadow-gap reveal at the top of the walls instead;
+     - 'as modelled': none. Trim is painted in the wall colour, a little glossier. */
+  var trimGroup = new THREE.Group(), trimMat = new THREE.MeshStandardMaterial({ color: 0xEFE9DF, roughness: 0.5, clippingPlanes: [cutPlane] });
+  var gapMat = new THREE.MeshStandardMaterial({ color: 0x2E2B28, roughness: 0.9, clippingPlanes: [cutPlane] }), trimParts = {};
+  scene.add(trimGroup);
+  function applyTrim(sc) {
+    if (typeof sc.wall === 'string') trimMat.color.set(sc.wall).offsetHSL(0, 0, 0.02);
+    if (trimParts.panels) trimParts.panels.visible = sc.id === 'classic';
+    if (trimParts.cornice) trimParts.cornice.visible = sc.id === 'classic';
+    if (trimParts.gap) trimParts.gap.visible = sc.id === 'warm' || sc.id === 'calm';
+  }
+  var corniceGeo = null;
+  function corniceGeometry() { // cavetto cornice: 115 x 115 mm, length 1 along x, out of the wall +z, top at y = 0
+    if (corniceGeo) return corniceGeo;
+    var sh = new THREE.Shape();
+    sh.moveTo(0, 0); sh.lineTo(0.115, 0); sh.lineTo(0.115, -0.012); sh.lineTo(0.1, -0.012);
+    sh.absarc(0.1, -0.1, 0.088, Math.PI / 2, Math.PI, false);
+    sh.lineTo(0.012, -0.115); sh.lineTo(0, -0.115); sh.closePath();
+    var g = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false, curveSegments: 10 });
+    g.rotateY(-Math.PI / 2); g.translate(0.5, 0, 0); g.computeVertexNormals();
+    return (corniceGeo = g);
+  }
+  function buildTrim() {
+    if (!meshGroups.wall) return;
+    var planes = {}, e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+    meshGroups.wall.traverse(function (mesh) { // interior wall faces grouped by plane
+      if (!mesh.isMesh || mesh.material.side === THREE.BackSide) return;
+      var g = mesh.geometry, idx = g.index ? g.index.array : null, pos = g.attributes.position, cnt = idx ? idx.length : pos.count;
+      for (var t = 0; t < cnt; t += 3) {
+        var vs = [0, 1, 2].map(function (i) { return new THREE.Vector3().fromBufferAttribute(pos, idx ? idx[t + i] : t + i).applyMatrix4(mesh.matrixWorld); });
+        n.crossVectors(e1.subVectors(vs[1], vs[0]), e2.subVectors(vs[2], vs[0]));
+        var ar = n.length(); if (ar < 1e-6) continue; n.divideScalar(ar);
+        if (Math.abs(n.y) > 0.05) continue;
+        n.y = 0; n.normalize();
+        var d = n.x * vs[0].x + n.z * vs[0].z, key = Math.round(Math.atan2(n.z, n.x) * 100) + '|' + Math.round(d * 50);
+        var pl = planes[key] || (planes[key] = { n: n.clone(), d: d, tan: new THREE.Vector3(-n.z, 0, n.x), tris: [] });
+        pl.tris.push(vs.map(function (v) { return [v.x * pl.tan.x + v.z * pl.tan.z, v.y]; }));
+      }
+    });
+    function covered(pl, t, y) { // is (t, y) on a wall face of this plane (not in an opening)?
+      for (var i = 0; i < pl.tris.length; i++) {
+        var a = pl.tris[i][0], b = pl.tris[i][1], c = pl.tris[i][2];
+        var d1 = (t - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (y - b[1]), d2 = (t - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (y - c[1]), d3 = (t - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (y - a[1]);
+        var neg = d1 < -1e-7 || d2 < -1e-7 || d3 < -1e-7, pos = d1 > 1e-7 || d2 > 1e-7 || d3 > 1e-7;
+        if (!(neg && pos)) return true;
+      }
+      return false;
+    }
+    function rectFree(pl, t0, t1, y0, y1) {
+      for (var i = 0; i <= 4; i++) for (var j = 0; j <= 4; j++) if (!covered(pl, t0 + (t1 - t0) * (0.02 + 0.96 * i / 4), y0 + (y1 - y0) * (0.02 + 0.96 * j / 4))) return false;
+      return true;
+    }
+    var ceils = []; if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
+    var rc = new THREE.Raycaster(), upV = new THREE.Vector3(0, 1, 0);
+    var bars = [], gaps = [], corn = [], ROOMS = { living: 1, majlis: 1, bedroom: 1, dining: 1 }, NOT = { wet: 1, service: 1 };
+    Object.keys(planes).forEach(function (k) {
+      var pl = planes[k], floors = {};
+      // runs along the floor: bottom edges of the faces, per floor level
+      pl.tris.forEach(function (tr) {
+        var ymin = Math.min(tr[0][1], tr[1][1], tr[2][1]), low = tr.filter(function (v) { return v[1] - ymin < 0.004; });
+        if (low.length !== 2) return;
+        var L = levelAt(ymin + 0.05), fy = L.elevation + (L._slabTop || 0);
+        if (Math.abs(ymin - fy) > 0.04) return;
+        (floors[fy.toFixed(2)] = floors[fy.toFixed(2)] || []).push([Math.min(low[0][0], low[1][0]), Math.max(low[0][0], low[1][0])]);
+      });
+      Object.keys(floors).forEach(function (fk) {
+        var fy = +fk, runs = floors[fk].sort(function (a, b) { return a[0] - b[0]; }), merged = [];
+        runs.forEach(function (r) { var l = merged[merged.length - 1]; if (l && r[0] <= l[1] + 0.02) l[1] = Math.max(l[1], r[1]); else merged.push([r[0], r[1]]); });
+        merged.forEach(function (r) {
+          var len = r[1] - r[0]; if (len < 0.6) return;
+          var tm = (r[0] + r[1]) / 2, mid = new THREE.Vector3(pl.n.x * pl.d + pl.tan.x * tm, fy, pl.n.z * pl.d + pl.tan.z * tm);
+          var probe = mid.clone().addScaledVector(pl.n, 0.35), type = roomTypeAt(probe.x, fy + 0.2, probe.z);
+          if (NOT[type]) return;
+          rc.set(new THREE.Vector3(probe.x, fy + 1.6, probe.z), upV); rc.near = 0; rc.far = 6;
+          var hit = rc.intersectObjects(ceils, false)[0], H = hit ? hit.point.y - fy : null;
+          if (H != null && H > 2.2) {
+            // cornice / shadow gap along the top of the run (where the wall really reaches the ceiling)
+            var t = r[0];
+            while (t < r[1] - 0.05) {
+              var t2 = Math.min(r[1], t + 0.5);
+              if (covered(pl, (t + t2) / 2, fy + H - 0.05)) corn.push({ pl: pl, t0: t, t1: t2, y: fy + H });
+              t = t2;
+            }
+          }
+          if (!ROOMS[type] || len < 1.2 || H == null || H < 2.4) return;
+          // panel mouldings: lower panels, chair rail at 0.9 m, upper panels
+          var top = Math.min(H - 0.35, 3.3), np = Math.max(1, Math.round((len - 0.3) / 1.05)), pw = (len - 0.3 - (np - 1) * 0.15) / np;
+          if (pw < 0.45) return;
+          for (var i = 0; i < np; i++) {
+            var a = r[0] + 0.15 + i * (pw + 0.15), b2 = a + pw;
+            [[0.2, 0.78], [1.02, top]].forEach(function (yy) {
+              if (yy[1] - yy[0] < 0.3 || !rectFree(pl, a, b2, fy + yy[0], fy + yy[1])) return;
+              bars.push({ pl: pl, t0: a, t1: b2, y0: fy + yy[0], y1: fy + yy[1] });
+            });
+          }
+          for (var t3 = r[0]; t3 < r[1] - 0.05; t3 += 0.5) { // chair rail, broken at openings
+            var t4 = Math.min(r[1], t3 + 0.5);
+            if (covered(pl, (t3 + t4) / 2, fy + 0.9)) gaps.push({ pl: pl, t0: t3, t1: t4, y: fy + 0.9, rail: true });
+          }
+        });
+      });
+    });
+    var M = new THREE.Matrix4(), R = new THREE.Matrix4(), S3 = new THREE.Matrix4(), box = new THREE.BoxGeometry(1, 1, 1);
+    function place(mesh, i, pl, t, y, along, h, dep, off) {
+      var x = pl.n.x * pl.d + pl.tan.x * t + pl.n.x * off, z = pl.n.z * pl.d + pl.tan.z * t + pl.n.z * off;
+      R.makeRotationY(Math.atan2(pl.n.x, pl.n.z)); // local z -> wall normal, local x -> along the wall
+      mesh.setMatrixAt(i, M.makeTranslation(x, y, z).multiply(R).multiply(S3.makeScale(along, h, dep)));
+    }
+    // panel frames: a flat 30 mm band with a raised 14 mm bead on it
+    var rails = gaps.filter(function (g) { return g.rail; }), nb = bars.length * 4 + rails.length;
+    if (nb) {
+      var flat = new THREE.InstancedMesh(box, trimMat, nb), bead = new THREE.InstancedMesh(box, trimMat, nb), k = 0;
+      bars.forEach(function (b) {
+        var w = b.t1 - b.t0, h = b.y1 - b.y0, tc = (b.t0 + b.t1) / 2, yc = (b.y0 + b.y1) / 2;
+        [[tc, b.y0, w, 0.03], [tc, b.y1, w, 0.03], [b.t0, yc, 0.03, h], [b.t1, yc, 0.03, h]].forEach(function (q) {
+          var horiz = q[3] === 0.03 && q[2] !== 0.03;
+          place(flat, k, b.pl, q[0], q[1], horiz ? q[2] + 0.03 : 0.03, horiz ? 0.03 : q[3] + 0.03, 0.008, 0.004);
+          place(bead, k, b.pl, q[0], q[1], horiz ? q[2] + 0.014 : 0.014, horiz ? 0.014 : q[3] + 0.014, 0.018, 0.009);
+          k++;
+        });
+      });
+      rails.forEach(function (g) {
+        place(flat, k, g.pl, (g.t0 + g.t1) / 2, g.y, g.t1 - g.t0, 0.06, 0.012, 0.006);
+        place(bead, k, g.pl, (g.t0 + g.t1) / 2, g.y + 0.01, g.t1 - g.t0, 0.025, 0.024, 0.012); k++;
+      });
+      [flat, bead].forEach(function (m) { m.castShadow = true; m.receiveShadow = true; });
+      trimParts.panels = new THREE.Group(); trimParts.panels.add(flat, bead); trimGroup.add(trimParts.panels);
+    }
+    if (corn.length) {
+      var cm = new THREE.InstancedMesh(corniceGeometry(), trimMat, corn.length), gm = new THREE.InstancedMesh(box, gapMat, corn.length);
+      corn.forEach(function (c, i) {
+        place(cm, i, c.pl, (c.t0 + c.t1) / 2, c.y - 0.002, c.t1 - c.t0 + 0.002, 1, 1, 0.001);
+        place(gm, i, c.pl, (c.t0 + c.t1) / 2, c.y - 0.008, c.t1 - c.t0 + 0.002, 0.016, 0.004, 0.0005);
+      });
+      cm.receiveShadow = true;
+      trimParts.cornice = cm; trimParts.gap = gm; trimGroup.add(cm, gm);
+    }
+    applyTrim(SCHEMES.filter(function (x) { return x.id === S.finish; })[0] || SCHEMES[0]);
+  }
   var skirtGroup = new THREE.Group(); scene.add(skirtGroup);
   function buildSkirting() {
     if (!meshGroups.wall) return;
@@ -1378,7 +1525,7 @@
   function setupInterior(root) {
     root.updateMatrixWorld(true);
     splitZones();
-    setTimeout(function () { buildCeilings(); buildSkirting(); applyCeiling(); }, 80);
+    setTimeout(function () { buildCeilings(); buildSkirting(); buildTrim(); applyCeiling(); }, 80);
   }
 
   /* ---------- proposed materials ----------
@@ -1522,27 +1669,38 @@
     return procTex[kind];
   }
   // World-space texture projection blended by the face's normal (works without UVs).
-  function triplanar(mat, tex, sx, sy) {
+  function triplanar(mat, tex, sx, sy, bump) {
+    bump = bump || 0;
     mat.onBeforeCompile = function (sh) {
-      sh.uniforms.triMap = { value: tex }; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) };
+      sh.uniforms.triMap = { value: tex }; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) }; sh.uniforms.triBump = { value: bump };
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nuniform sampler2D triMap;\nuniform vec2 triScale;')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', ['#include <common>', 'varying vec3 vTriPos;', 'uniform sampler2D triMap;', 'uniform vec2 triScale;', 'uniform float triBump;',
+        'vec3 triPerturb(vec3 sp, vec3 sn, vec2 dH) {',
+        '  vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = cross(sy, sn), r2 = cross(sn, sx);',
+        '  float det = dot(sx, r1) * (gl_FrontFacing ? 1.0 : -1.0);',
+        '  return normalize(abs(det) * sn - sign(det) * (dH.x * r1 + dH.y * r2));',
+        '}'].join('\n'))
         .replace('#include <map_fragment>', [
           'vec3 triN = abs(normalize(cross(dFdx(vTriPos), dFdy(vTriPos))));',
           'vec3 triW = pow(triN, vec3(4.0)); triW /= (triW.x + triW.y + triW.z);',
           'vec4 triT = texture2D(triMap, vTriPos.zy * triScale) * triW.x + texture2D(triMap, vTriPos.xz * triScale) * triW.y + texture2D(triMap, vTriPos.xy * triScale) * triW.z;',
           'diffuseColor *= sRGBToLinear(triT);'].join('\n'));
+      if (bump > 0) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', [
+        '#include <normal_fragment_maps>',
+        'vec4 triS = texture2D(triMap, vTriPos.zy * triScale, 2.5) * triW.x + texture2D(triMap, vTriPos.xz * triScale, 2.5) * triW.y + texture2D(triMap, vTriPos.xy * triScale, 2.5) * triW.z;', 'float triH = dot(triS.rgb, vec3(0.3333));',
+        'normal = triPerturb(-vViewPosition, normal, vec2(dFdx(triH), dFdy(triH)) * triBump);'].join('\n'));
     };
-    mat.customProgramCacheKey = function () { return 'triplanar'; };
+    mat.customProgramCacheKey = function () { return 'triplanar' + (bump > 0 ? 'b' : ''); };
     mat.extensions = { derivatives: true };
     return mat;
   }
+  var BUMP = { fabric: 0.25, boucle: 0.45, rug: 0.6, travertine: 0.3, stone: 0.2, wood: 0.1 }; // relief per texture
   function makeMaterial(p, smooth) {
     var mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.rough, metalness: p.metal, flatShading: !smooth,
       envMapIntensity: p.metal ? 1 : 0.7, side: THREE.FrontSide, clippingPlanes: [cutPlane], clipShadows: true });
     furnMats.push({ mat: mat, p: p });
-    return p.tex ? triplanar(mat, procFor(p.tex), p.scale, p.scale) : mat;
+    return p.tex ? triplanar(mat, procFor(p.tex), p.scale, p.scale, BUMP[p.tex] || 0) : mat;
   }
   /* Interior palettes: with a finish scheme chosen, the furniture is dressed to match it rather
      than keeping a mix of Revit colours. Each proposed kind maps to a slot of the palette, the
