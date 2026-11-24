@@ -971,11 +971,11 @@
   }
   var SCHEMES = [
     { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
-    { id: 'classic', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#EFE9DF', ceil: '#FBFAF7', sw: ['#F3F1EC', '#EFE9DF', '#C9A25D'],
-      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان عاجي دافئ · أسقف جبس بيضاء · الحمامات والمطبخ: بورسلين 60×60 وسيراميك جدران 30×60', enD: 'Polished white veined marble 120×120 · warm ivory paint · white gypsum ceilings · wet areas and kitchen: porcelain 60×60, ceramic wall tiles 30×60' },
-    { id: 'warm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.45 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DCD5CA', ceil: '#FAF8F4', sw: ['#C9A57A', '#DCD5CA', '#FAF8F4'],
+    { id: 'classic', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#E8E0D2', ceil: '#FFFFFF', sw: ['#F3F1EC', '#E8E0D2', '#C9A25D'],
+      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان أوف وايت دافئ مطفي · أسقف جبس بيضاء · الحمامات والمطبخ: بورسلين 60×60 وسيراميك جدران 30×60', enD: 'Polished white veined marble 120×120 · warm ivory paint · white gypsum ceilings · wet areas and kitchen: porcelain 60×60, ceramic wall tiles 30×60' },
+    { id: 'warm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.45 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DDD5C8', ceil: '#FFFFFF', sw: ['#C9A57A', '#DDD5C8', '#FFFFFF'],
       arD: 'باركيه بلوط فاتح 20×120 · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Light oak planks 20×120 · greige paint · off-white ceilings' },
-    { id: 'calm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.35 }, ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#ECEAE6', ceil: '#FFFFFF', sw: ['#DAD7D1', '#ECEAE6', '#6E7787'],
+    { id: 'calm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.35 }, ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#E7E5E0', ceil: '#FFFFFF', sw: ['#DAD7D1', '#E7E5E0', '#6E7787'],
       arD: 'بورسلين رمادي فاتح مطفي 120×120 · دهان أبيض دافئ · سقف أبيض', enD: 'Matte light-grey porcelain 120×120 · warm white paint · white ceilings' }
   ];
   var texCache = {};
@@ -1000,7 +1000,13 @@
     finishMeshes.forEach(function (f) {
       var mat = f.m.material, v = sc[f.kind];
       if (!v) { mat.color.set(f.color); mat.map = null; }
-      else if (typeof v === 'string') { mat.color.set(v); mat.map = null; }
+      else if (typeof v === 'string') {
+        mat.color.set(v); mat.map = null;
+        if (!mat.userData.surface && (f.kind === 'wall' || f.kind === 'ceil')) { // once: a quiet surface texture
+          triplanar(mat, procFor(f.kind === 'wall' ? 'plaster' : 'gypsum'), 1.6, 1.6);
+          mat.flatShading = true; mat.userData.surface = true; mat.needsUpdate = true;
+        }
+      }
       else {
         var key = v[0].name + v[1];
         texCache[key] = texCache[key] || texture(v[0], v[1]);
@@ -1170,6 +1176,38 @@
     x.fillStyle = gr; x.fillRect(0, 0, 4, 128);
     return new THREE.CanvasTexture(c);
   }
+  /* Skirting: a 9 cm painted board along the bottom edge of each interior wall face that
+     stands on a level's floor (door openings break the wall faces, so boards stop there). */
+  var skirtGroup = new THREE.Group(); scene.add(skirtGroup);
+  function buildSkirting() {
+    if (!meshGroups.wall) return;
+    var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); }), segs = [];
+    var e = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+    meshGroups.wall.traverse(function (mesh) {
+      if (!mesh.isMesh || mesh.material.side === THREE.BackSide) return;
+      var g = mesh.geometry, idx = g.index ? g.index.array : null, pos = g.attributes.position, cnt = idx ? idx.length : pos.count;
+      for (var t = 0; t < cnt; t += 3) {
+        var vs = [0, 1, 2].map(function (i) { return new THREE.Vector3().fromBufferAttribute(pos, idx ? idx[t + i] : t + i).applyMatrix4(mesh.matrixWorld); });
+        n.crossVectors(e.subVectors(vs[1], vs[0]), c.subVectors(vs[2], vs[0])); n.y = 0;
+        if (n.lengthSq() < 1e-8) continue; n.normalize();
+        var ymin = Math.min(vs[0].y, vs[1].y, vs[2].y), low = vs.filter(function (v) { return v.y - ymin < 0.004; });
+        if (low.length !== 2 || low[0].distanceTo(low[1]) < 0.25) continue;
+        if (!floors.some(function (f) { return Math.abs(ymin - f) < 0.04; })) continue;
+        segs.push({ a: low[0], b: low[1], n: n.clone(), y: ymin });
+      }
+    });
+    if (!segs.length) return;
+    var mat = new THREE.MeshStandardMaterial({ color: 0xF4F2EE, roughness: 0.45, clippingPlanes: [cutPlane] });
+    var inst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, segs.length), M4 = new THREE.Matrix4(), S4 = new THREE.Matrix4(), R4 = new THREE.Matrix4(), mid = new THREE.Vector3(), d = new THREE.Vector3();
+    segs.forEach(function (sg, i) {
+      var len = sg.a.distanceTo(sg.b); d.subVectors(sg.b, sg.a).normalize();
+      var th = Math.atan2(-d.z, d.x); R4.makeRotationY(th);
+      mid.addVectors(sg.a, sg.b).multiplyScalar(0.5).addScaledVector(sg.n, 0.006);
+      M4.makeTranslation(mid.x, sg.y + 0.045, mid.z).multiply(R4).multiply(S4.makeScale(len, 0.09, 0.012));
+      inst.setMatrixAt(i, M4);
+    });
+    inst.receiveShadow = true; skirtGroup.add(inst);
+  }
   function buildCeilings() {
     var ceils = [];
     if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
@@ -1286,7 +1324,7 @@
   function setupInterior(root) {
     root.updateMatrixWorld(true);
     splitZones();
-    setTimeout(function () { buildCeilings(); applyCeiling(); }, 80);
+    setTimeout(function () { buildCeilings(); buildSkirting(); applyCeiling(); }, 80);
   }
 
   /* ---------- proposed materials ----------
@@ -1383,6 +1421,16 @@
       c.beginPath(); c.moveTo(d + n, 0); c.lineTo(d, n); c.stroke();
     }
   }
+  function plaster(c, n, r) { // matte emulsion over skimmed plaster: soft mottling, roller stipple
+    c.fillStyle = '#f7f6f3'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 40; i++) { var gx = r() * n, gy = r() * n, g = c.createRadialGradient(gx, gy, 0, gx, gy, 40 + r() * 100);
+      g.addColorStop(0, 'rgba(' + (r() < 0.5 ? '0,0,0,.01' : '255,255,255,.03') + ')'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, n, n); }
+    for (i = 0; i < 16000; i++) { c.fillStyle = 'rgba(' + (r() < 0.5 ? '0,0,0,.018' : '255,255,255,.04') + ')'; c.fillRect(r() * n, r() * n, 1.4, 1.4); }
+  }
+  function gypsum(c, n, r) { // smooth painted gypsum board
+    c.fillStyle = '#fbfbfa'; c.fillRect(0, 0, n, n);
+    for (var i = 0; i < 6000; i++) { c.fillStyle = 'rgba(0,0,0,.018)'; c.fillRect(r() * n, r() * n, 1.2, 1.2); }
+  }
   function boucle(c, n, r) { // looped boucle wool
     c.fillStyle = '#f1ede6'; c.fillRect(0, 0, n, n);
     for (var i = 0; i < 5200; i++) {
@@ -1411,7 +1459,7 @@
       var c = document.createElement('canvas'); c.width = c.height = 512;
       var cx = c.getContext('2d');
       if (kind === 'woodV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
-      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: carved, marble: marble, boucle: boucle, travertine: travertine })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37 }[kind]));
+      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: carved, marble: marble, boucle: boucle, travertine: travertine, plaster: plaster, gypsum: gypsum })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37, plaster: 41, gypsum: 43 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
