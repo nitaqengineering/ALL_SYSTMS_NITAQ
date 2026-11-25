@@ -939,7 +939,7 @@
     eg.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
     return eg;
   }
-  var veneerMat = null;
+  var veneerMat = null, venMeshes = [];
   function loadMesh() {
     var note = $('loading'); note.hidden = false; note.textContent = T('loading');
     fetch(MESH.file).then(function (r) {
@@ -978,7 +978,7 @@
           }
           if (fp.ven) { // walnut boards on white lacquer casework
             var vm = new THREE.Mesh(fp.ven, veneerMat || (veneerMat = makeMaterial({ kind: 'walnut', color: new THREE.Color('#FFFFFF'), rough: 0.4, metal: 0, tex: 'walnut', scale: 1.1 }, true)));
-            vm.castShadow = vm.receiveShadow = true; parent.add(vm); parent.add(new THREE.Mesh(fp.ven, cap));
+            vm.castShadow = vm.receiveShadow = true; parent.add(vm); venMeshes.push(vm); vm.userData.lacq = lookMaterial(b, true); parent.add(new THREE.Mesh(fp.ven, cap));
           }
           if (fp.rug) {
             var rm = new THREE.Mesh(fp.rug, makeMaterial(finish('rug', new THREE.Color(b.color), {}), false));
@@ -1867,6 +1867,148 @@
     items.forEach(function (m, i) { im.setMatrixAt(i, m); });
     im.renderOrder = 1; realGroup.add(im);
   }
+
+  /* Shelf and desk styling. The walnut boards' upward faces are merged into plates (one per
+     shelf / desk top). Desks (a top 0.68-0.82 m high, 40-90 cm deep) get a lamp, books and a
+     vase; shelves with 18-60 cm of clear height above get folded clothes and linen boxes in
+     dressing rooms and bedrooms, books and vases elsewhere. Everything small is instanced: two
+     draw calls for all the shelves of the house. */
+  function shelfPlates() {
+    var tris = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+    scene.updateMatrixWorld(true);
+    var above = []; // the other furniture surfaces (a stone counter over a board)
+    ['furn', 'arch', 'wall'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.visible && venMeshes.indexOf(o) < 0 && !(o.material && o.material.side === THREE.BackSide)) above.push(o); }); });
+    // horizontal faces of everything else, in a 0.25 m plan grid: a board with one just above it
+    // (a stone counter over a vanity) goes back to the cabinet's lacquer
+    var grid = {}, GS = 0.25, w1 = new THREE.Vector3(), w2 = new THREE.Vector3(), w3 = new THREE.Vector3();
+    above.forEach(function (o) {
+      if (!o.parent || !(o.parent === meshGroups.furn || o.parent.parent === meshGroups.furn)) return; // the Revit furniture and casework
+      var pa2 = o.geometry.attributes.position, ix = o.geometry.index, cnt = ix ? ix.count : pa2.count;
+      for (var t2 = 0; t2 < cnt; t2 += 3) {
+        w1.fromBufferAttribute(pa2, ix ? ix.getX(t2) : t2).applyMatrix4(o.matrixWorld); w2.fromBufferAttribute(pa2, ix ? ix.getX(t2 + 1) : t2 + 1).applyMatrix4(o.matrixWorld); w3.fromBufferAttribute(pa2, ix ? ix.getX(t2 + 2) : t2 + 2).applyMatrix4(o.matrixWorld);
+        if (Math.max(w1.y, w2.y, w3.y) - Math.min(w1.y, w2.y, w3.y) > 0.005) continue;
+        var e = { y: w1.y, x0: Math.min(w1.x, w2.x, w3.x), x1: Math.max(w1.x, w2.x, w3.x), z0: Math.min(w1.z, w2.z, w3.z), z1: Math.max(w1.z, w2.z, w3.z) };
+        if ((e.x1 - e.x0) * (e.z1 - e.z0) > 40) continue;
+        for (var gx = Math.floor(e.x0 / GS); gx <= Math.floor(e.x1 / GS); gx++) for (var gz = Math.floor(e.z0 / GS); gz <= Math.floor(e.z1 / GS); gz++) (grid[gx + ',' + gz] || (grid[gx + ',' + gz] = [])).push(e);
+      }
+    });
+    function coveredAt(x, y, z) {
+      var l = grid[Math.floor(x / GS) + ',' + Math.floor(z / GS)]; if (!l) return false;
+      for (var k2 = 0; k2 < l.length; k2++) { var e = l[k2]; if (e.y > y + 0.002 && e.y < y + 0.08 && x >= e.x0 && x <= e.x1 && z >= e.z0 && z <= e.z1) return true; }
+      return false;
+    }
+    venMeshes.forEach(function (m) {
+      var pa = m.geometry.attributes.position.array, na = m.geometry.attributes.normal.array, keepV = [], keepN = [], covV = [], covN = [];
+      for (var t = 0; t < pa.length; t += 9) {
+        a.fromArray(pa, t).applyMatrix4(m.matrixWorld); b.fromArray(pa, t + 3).applyMatrix4(m.matrixWorld); c.fromArray(pa, t + 6).applyMatrix4(m.matrixWorld);
+        var cov = coveredAt((a.x + b.x + c.x) / 3, Math.max(a.y, b.y, c.y), (a.z + b.z + c.z) / 3), V = cov ? covV : keepV, N = cov ? covN : keepN;
+        for (var q = 0; q < 9; q++) { V.push(pa[t + q]); N.push(na[t + q]); }
+      }
+      if (!covV.length) return;
+      function geo(V, N) { var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); return g; }
+      var cm = new THREE.Mesh(geo(covV, covN), m.userData.lacq); cm.castShadow = cm.receiveShadow = true; m.parent.add(cm);
+      m.geometry.dispose(); m.geometry = geo(keepV, keepN);
+    });
+    venMeshes.forEach(function (m) {
+      var g = m.geometry, pos = g.attributes.position, idx = g.index ? g.index.array : null, cnt = idx ? idx.length : pos.count;
+      for (var t = 0; t < cnt; t += 3) {
+        a.fromBufferAttribute(pos, idx ? idx[t] : t).applyMatrix4(m.matrixWorld); b.fromBufferAttribute(pos, idx ? idx[t + 1] : t + 1).applyMatrix4(m.matrixWorld); c.fromBufferAttribute(pos, idx ? idx[t + 2] : t + 2).applyMatrix4(m.matrixWorld);
+        n.subVectors(b, a).cross(c.clone().sub(a)); if (n.length() < 1e-8) continue; n.normalize();
+        if (n.y < 0.95) continue;
+        tris.push({ y: (a.y + b.y + c.y) / 3, x0: Math.min(a.x, b.x, c.x), x1: Math.max(a.x, b.x, c.x), z0: Math.min(a.z, b.z, c.z), z1: Math.max(a.z, b.z, c.z) });
+      }
+    });
+    var plates = [];
+    tris.forEach(function (t) { // merge into touching plates at the same height
+      var hit = null;
+      for (var i = 0; i < plates.length; i++) { var q = plates[i]; if (Math.abs(q.y - t.y) < 0.006 && t.x0 < q.x1 + 0.01 && t.x1 > q.x0 - 0.01 && t.z0 < q.z1 + 0.01 && t.z1 > q.z0 - 0.01) { hit = q; break; } }
+      if (hit) { hit.x0 = Math.min(hit.x0, t.x0); hit.x1 = Math.max(hit.x1, t.x1); hit.z0 = Math.min(hit.z0, t.z0); hit.z1 = Math.max(hit.z1, t.z1); }
+      else plates.push({ y: t.y, x0: t.x0, x1: t.x1, z0: t.z0, z1: t.z1 });
+    });
+    for (var pass = 0; pass < 3; pass++) for (var i = 0; i < plates.length; i++) for (var j = plates.length - 1; j > i; j--) { // second merge pass
+      var A = plates[i], B = plates[j];
+      if (Math.abs(A.y - B.y) < 0.006 && B.x0 < A.x1 + 0.01 && B.x1 > A.x0 - 0.01 && B.z0 < A.z1 + 0.01 && B.z1 > A.z0 - 0.01) { A.x0 = Math.min(A.x0, B.x0); A.x1 = Math.max(A.x1, B.x1); A.z0 = Math.min(A.z0, B.z0); A.z1 = Math.max(A.z1, B.z1); plates.splice(j, 1); }
+    }
+    plates.forEach(function (q) { // clear height to the next board above; covered = inside a cabinet
+      q.gap = 9; q.covered = false;
+      var qa = (q.x1 - q.x0) * (q.z1 - q.z0);
+      plates.forEach(function (o) {
+        if (!(o.y > q.y + 0.03 && o.x0 < q.x1 - 0.05 && o.x1 > q.x0 + 0.05 && o.z0 < q.z1 - 0.05 && o.z1 > q.z0 + 0.05)) return;
+        q.gap = Math.min(q.gap, o.y - q.y - 0.02);
+        var ov = (Math.min(o.x1, q.x1) - Math.max(o.x0, q.x0)) * (Math.min(o.z1, q.z1) - Math.max(o.z0, q.z0));
+        if (o.y - q.y < 1.7 && ov > qa * 0.8) q.covered = true;
+      });
+      var L = levelAt(q.y); q.hy = q.y - (L.elevation + (L._slabTop || 0));
+    });
+    plates.forEach(function (q) { // free height: also stop at any other furniture surface above
+      [[0.5, 0.5], [0.25, 0.5], [0.75, 0.5]].forEach(function (f) {
+        var x = q.x0 + (q.x1 - q.x0) * f[0], z = q.z0 + (q.z1 - q.z0) * f[1], l = grid[Math.floor(x / GS) + ',' + Math.floor(z / GS)] || [];
+        l.forEach(function (e) { if (e.y > q.y + 0.002 && x >= e.x0 && x <= e.x1 && z >= e.z0 && z <= e.z1) q.gap = Math.min(q.gap, e.y - q.y - 0.02); });
+      });
+    });
+    return plates;
+  }
+  function buildShelfDecor(mt) {
+    if (!venMeshes.length) return;
+    var plates = shelfPlates(), rnd = rng(211), soft = [], hard = [], beds = [], desks = [];
+    realGroup.children.forEach(function (G) { if (G.userData.kind === 'bed') beds.push(new THREE.Box3().setFromObject(G).getCenter(new THREE.Vector3())); });
+    var CLOTH = ['#ECE6DA', '#D6CCBB', '#B7A994', '#8C7B68', '#5B5650', '#2F3A4B', '#E9E9E6', '#6F7352', '#A88B6A'];
+    var BOOK = ['#E8E2D6', '#C9BBA5', '#8E7D69', '#4B4641', '#2F3A4B', '#7A432D', '#D8D2C6', '#565C3E'];
+    function item(list, x, y, z, w, h, d, ry, col) { list.push({ p: new THREE.Vector3(x, y + h / 2, z), s: new THREE.Vector3(w, h, d), r: ry, c: new THREE.Color(col) }); }
+    plates.forEach(function (q) {
+      var dx = q.x1 - q.x0, dz = q.z1 - q.z0, alongX = dx >= dz, L = Math.max(dx, dz), D = Math.min(dx, dz);
+      var cx = (q.x0 + q.x1) / 2, cz = (q.z0 + q.z1) / 2, ry = alongX ? 0 : Math.PI / 2;
+      function at(t, off) { return alongX ? [q.x0 + t, cz + (off || 0)] : [cx + (off || 0), q.z0 + t]; }
+      var room = roomAt(cx, q.y, cz, { service: 1, bedroom: 1 }), dress = (room && /dress|closet|wardrobe/i.test(room.name || '')) || roomTypeAt(cx, q.y, cz) === 'bedroom'
+        || beds.some(function (bc) { return Math.abs(bc.y - q.y) < 2 && Math.hypot(bc.x - cx, bc.z - cz) < 7; }); // a closet beside a bedroom
+      if (q.hy > 0.66 && q.hy < 0.84 && D >= 0.33 && D <= 0.95 && L >= 0.8 && q.gap > 0.35 && !q.covered) { // desk
+        if (desks.some(function (d) { return Math.hypot(d.x - cx, d.z - cz) < 0.6 && Math.abs(d.y - q.y) < 0.2; })) return;
+        desks.push({ x: cx, y: q.y, z: cz });
+        var e = at(L - 0.22), lb = at(0.32), vb = at(0.6, -D * 0.15);
+        put(realGroup, new THREE.CylinderGeometry(0.06, 0.08, 0.02, 24), mt.brass, e[0], q.y + 0.01, e[1]); // lamp: brass foot, ink stem, linen shade
+        put(realGroup, new THREE.CylinderGeometry(0.01, 0.01, 0.3, 10), mt.ink || mt.brass, e[0], q.y + 0.17, e[1]);
+        put(realGroup, new THREE.CylinderGeometry(0.09, 0.13, 0.17, 28, 1, true), mt.shade, e[0], q.y + 0.38, e[1]);
+        item(hard, lb[0], q.y, lb[1], 0.3, 0.03, 0.22, ry + 0.12, '#E8E2D6'); item(hard, lb[0], q.y + 0.03, lb[1], 0.26, 0.025, 0.19, ry - 0.08, '#2F3A4B');
+        vessel(realGroup, 'round', mt.sage || mt.ceramic, vb[0], q.y, vb[1], 0.7);
+        return;
+      }
+      if (q.hy < 0.25 || q.hy > 2.05 || D < 0.2 || D > 0.75 || L < 0.25 || q.gap < 0.18 || q.gap > 0.62) return;
+      var t = 0.05, depth = Math.min(D - 0.08, 0.32), H = q.gap;
+      while (t < L - 0.12) {
+        var pick = rnd(), p2;
+        if (pick < 0.18) { t += 0.12 + rnd() * 0.15; continue; } // a gap
+        if (dress) {
+          if (pick < 0.75) { // a stack of folded clothes
+            var w = 0.28 + rnd() * 0.06; if (t + w > L - 0.04) break;
+            var col = CLOTH[(rnd() * CLOTH.length) | 0], k = Math.max(1, Math.min(6, Math.floor((H - 0.04) / 0.055 * (0.5 + rnd() * 0.5)))), yy = q.y;
+            p2 = at(t + w / 2);
+            for (var j = 0; j < k; j++) { var th = 0.045 + rnd() * 0.015, c2 = rnd() < 0.6 ? col : CLOTH[(rnd() * CLOTH.length) | 0]; item(soft, p2[0], yy, p2[1], w - rnd() * 0.02, th, depth - rnd() * 0.03, ry + (rnd() - 0.5) * 0.06, c2); yy += th; }
+            t += w + 0.04;
+          } else { // a linen storage box
+            var bw = 0.32, bh = Math.min(0.24, H - 0.04); if (t + bw > L - 0.04) break;
+            p2 = at(t + bw / 2); item(hard, p2[0], q.y, p2[1], bw, bh, depth, ry, '#CFC4B1'); t += bw + 0.04;
+          }
+        } else {
+          if (pick < 0.7) { // a row of books standing
+            var nb = 4 + ((rnd() * 7) | 0), x = t;
+            for (var bI = 0; bI < nb; bI++) { var bt = 0.022 + rnd() * 0.02, bh2 = Math.min(H - 0.03, 0.18 + rnd() * 0.09); if (x + bt > L - 0.04) break; p2 = at(x + bt / 2); item(hard, p2[0], q.y, p2[1], bt, bh2, Math.min(depth, 0.15 + rnd() * 0.06), ry, BOOK[(rnd() * BOOK.length) | 0]); x += bt + 0.002; }
+            t = x + 0.05;
+          } else { // a vase or a low bowl
+            p2 = at(t + 0.1); if (H > 0.24) vessel(realGroup, rnd() < 0.5 ? 'round' : 'tall', rnd() < 0.5 ? (mt.ink || mt.ceramic) : mt.ceramic, p2[0], q.y, p2[1], Math.min(1, (H - 0.03) / 0.34)); else vessel(realGroup, 'bowl', mt.sage || mt.ceramic, p2[0], q.y, p2[1], 0.7);
+            t += 0.26;
+          }
+        }
+      }
+    });
+    var M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    [[soft, 0.95, 0.06], [hard, 0.7, 0.004]].forEach(function (set) {
+      var list = set[0]; if (!list.length) return;
+      var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: set[1], clippingPlanes: [cutPlane] });
+      var im = new THREE.InstancedMesh(rboxGeo(1, 1, 1, set[2]), mat, list.length);
+      list.forEach(function (it, i) { Q.setFromAxisAngle(up, it.r); M4.compose(it.p, Q, it.s); im.setMatrixAt(i, M4); im.setColorAt(i, it.c); });
+      im.castShadow = false; im.receiveShadow = true; realGroup.add(im);
+    });
+  }
   function greedyRects(mask, nu, nv) {
     var used = new Uint8Array(nu * nv), out = [];
     for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
@@ -2497,7 +2639,7 @@
      as wool; the rest gets smooth shading with a 35-degree crease, so cushions, chairs and plants
      read as soft forms while box edges stay crisp. */
   var COS_CREASE = Math.cos(35 * Math.PI / 180), WET = { wet: 1 };
-  var KITCHEN = { kitchen: 1 };
+  var KITCHEN = { kitchen: 1 }, SERVICE = { service: 1 };
   var KIT = [], kitMeshes = [];
   function furnParts(g, cabinets, kitAll) {
     var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
@@ -2521,7 +2663,8 @@
         if (ny / nl > 0.95 && hy > 0.7 && hy < 1.0 && roomAt(cx - CX, cy, cz + CY, KITCHEN)) { top.push(a, b, c); continue; }
         // outside kitchens and wet rooms: the boards (shelves, desk and console tops, their front
         // edges) in walnut, the carcass and doors staying white lacquer
-        if (hy > 0.15 && !roomAt(cx - CX, cy, cz + CY, KITCHEN) && !roomAt(cx - CX, cy, cz + CY, WET)) {
+        var svc = roomAt(cx - CX, cy, cz + CY, SERVICE);
+        if (hy > 0.15 && !roomAt(cx - CX, cy, cz + CY, KITCHEN) && !roomAt(cx - CX, cy, cz + CY, WET) && !(svc && !/dress|closet/i.test(svc.name || ''))) {
           var y0 = Math.min(p[a * 3 + 1], p[b * 3 + 1], p[c * 3 + 1]) * k, y1 = Math.max(p[a * 3 + 1], p[b * 3 + 1], p[c * 3 + 1]) * k, an = Math.abs(ny / nl);
           if (an > 0.95 || (an < 0.2 && y1 - y0 < 0.045)) { ven.push(a, b, c); continue; }
         }
@@ -3577,6 +3720,7 @@
     dressWetAndKitchen();
     buildFalseCeilings();
     buildKitchen();
+    buildShelfDecor(mt);
     buildContactShadows();
     applyRealFurniture();
     return made;
