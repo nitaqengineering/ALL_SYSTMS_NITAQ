@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'white', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: true, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'white', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: false, auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -325,7 +325,7 @@
       hemi.intensity = S.night ? 0.08 : (S.walk ? 0.2 : 0.22); sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
       if (S.walk && !S.night) { hemi.color.set(0xE6ECF2); hemi.groundColor.set(0xF2EADF); } // sky above, light bouncing up from the floors
       else hemi.groundColor.set(0xcfc8bb);
-      renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.95) : 0.82;
+      renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.84) : 0.82;
       envScale(S.walk ? 0.5 : 1);
       if (meshReady) { applyCeiling(); queueGlassEnv(); }
       lightCeilings();
@@ -508,8 +508,8 @@
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: ['uniform sampler2D tDiffuse; uniform float vig; varying vec2 vUv;',
       'void main() { vec4 c = texture2D(tDiffuse, vUv); vec3 x = c.rgb * vec3(1.02, 1.0, 0.975);',
-      'float l = dot(x, vec3(0.299, 0.587, 0.114)); x = mix(vec3(l), x, 1.07);',
-      'x = mix(x, x * x * (3.0 - 2.0 * x), 0.16); vec2 d = vUv - 0.5; x *= 1.0 - vig * dot(d, d) * 1.5;',
+      'float l = dot(x, vec3(0.299, 0.587, 0.114)); x = mix(vec3(l), x, 1.1);',
+      'x = mix(x, x * x * (3.0 - 2.0 * x), 0.32); vec2 d = vUv - 0.5; x *= 1.0 - vig * dot(d, d) * 1.5;',
       'gl_FragColor = vec4(clamp(x, 0.0, 1.0), c.a); }'].join('\n')
   };
   // Walk mode post-processing: full-resolution render, ambient occlusion computed at HALF
@@ -524,7 +524,7 @@
   };
   function halfAOPass() {
     var sa = new THREE.SSAOPass(scene, camera, 2, 2);
-    sa.kernelRadius = 0.5; sa.minDistance = 0.0006; sa.maxDistance = 0.004; // ignore tiny depth steps: flat floors stay clean
+    sa.kernelRadius = 0.2; sa.minDistance = 0.0006; sa.maxDistance = 0.003; // ignore tiny depth steps: flat floors stay clean
     sa.normalMaterial.flatShading = true; sa.normalMaterial.needsUpdate = true;
     var dt = new THREE.DepthTexture(); dt.type = renderer.capabilities.isWebGL2 ? THREE.UnsignedIntType : THREE.UnsignedShortType; // 16-bit depth blotches flat floors
     sa.normalRenderTarget.depthTexture = dt; sa.ssaoMaterial.uniforms.tDepth.value = dt; // depth from the normals pass: no beauty pass
@@ -539,10 +539,7 @@
       sa.renderPass(r, sa.ssaoMaterial, sa.ssaoRenderTarget);
       sa.renderPass(r, sa.blurMaterial, sa.blurRenderTarget);
       // a second blur (back into the ssao target) so the sampling noise cannot show as clouds
-      var bt = sa.blurMaterial.uniforms.tDiffuse; bt.value = sa.blurRenderTarget.texture;
-      sa.renderPass(r, sa.blurMaterial, sa.ssaoRenderTarget);
-      bt.value = sa.ssaoRenderTarget.texture;
-      mix.uniforms.tDiffuse.value = readBuffer.texture; mix.uniforms.tAO.value = sa.ssaoRenderTarget.texture;
+      mix.uniforms.tDiffuse.value = readBuffer.texture; mix.uniforms.tAO.value = sa.blurRenderTarget.texture;
       r.setRenderTarget(this.renderToScreen ? null : writeBuffer); quad.render(r);
     };
     pass.setSize = function (w, h) { sa.setSize(Math.max(2, Math.floor(w / 2)), Math.max(2, Math.floor(h / 2))); };
@@ -803,7 +800,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1853,7 +1850,7 @@
     });
     kitchenGroup.children.forEach(function (G) { if (G.isGroup) add(G, 1.0); });
     if (!items.length) return;
-    var mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: contactTexture(), transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, clippingPlanes: [cutPlane] });
+    var mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: contactTexture(), transparent: true, opacity: 0.62, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, clippingPlanes: [cutPlane] });
     var im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat, items.length);
     items.forEach(function (m, i) { im.setMatrixAt(i, m); });
     im.renderOrder = 1; realGroup.add(im);
