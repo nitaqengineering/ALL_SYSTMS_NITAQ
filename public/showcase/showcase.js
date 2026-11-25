@@ -520,13 +520,13 @@
   var AO_MIX = {
     uniforms: { tDiffuse: { value: null }, tAO: { value: null }, strength: { value: 1.0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float strength; varying vec2 vUv;\nvoid main() { vec4 c = texture2D(tDiffuse, vUv); float ao = texture2D(tAO, vUv).r; gl_FragColor = vec4(c.rgb * mix(1.0, pow(ao, 1.5), strength), c.a); }'
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float strength; varying vec2 vUv;\nvoid main() { vec4 c = texture2D(tDiffuse, vUv); float ao = texture2D(tAO, vUv).r; gl_FragColor = vec4(c.rgb * mix(1.0, pow(ao, 1.25), strength), c.a); }'
   };
   function halfAOPass() {
     var sa = new THREE.SSAOPass(scene, camera, 2, 2);
-    sa.kernelRadius = 0.6; sa.minDistance = 0.00003; sa.maxDistance = 0.006;
+    sa.kernelRadius = 0.5; sa.minDistance = 0.0006; sa.maxDistance = 0.004; // ignore tiny depth steps: flat floors stay clean
     sa.normalMaterial.flatShading = true; sa.normalMaterial.needsUpdate = true;
-    var dt = new THREE.DepthTexture(); dt.type = THREE.UnsignedShortType;
+    var dt = new THREE.DepthTexture(); dt.type = renderer.capabilities.isWebGL2 ? THREE.UnsignedIntType : THREE.UnsignedShortType; // 16-bit depth blotches flat floors
     sa.normalRenderTarget.depthTexture = dt; sa.ssaoMaterial.uniforms.tDepth.value = dt; // depth from the normals pass: no beauty pass
     var mix = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(AO_MIX.uniforms), vertexShader: AO_MIX.vertexShader, fragmentShader: AO_MIX.fragmentShader });
     var FSQ = (THREE.Pass && THREE.Pass.FullScreenQuad) || THREE.FullScreenQuad, quad = new FSQ(mix);
