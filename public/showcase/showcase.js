@@ -2355,12 +2355,44 @@
     c.strokeStyle = 'rgba(120,110,95,.3)'; c.lineWidth = 3; c.strokeRect(0, 0, n, n);
     for (var i = 0; i < 30000; i++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)'; c.fillRect(r() * n, r() * n, 1.5, 1.5); } // wool pile
   }
+
+  // Walnut, Calacatta marble and leather carry their own colours (the material colour stays white),
+  // and repeat without seams so the world-space projection shows no joints.
+  function walnut(c, n, r) { // straight-grained walnut veneer, grain running along the canvas x
+    c.fillStyle = '#5B4334'; c.fillRect(0, 0, n, n);
+    for (var b = 0; b < 26; b++) { // broad streaks of lighter and darker wood
+      var y = r() * n, h = 6 + r() * 40, col = r() < 0.5 ? 'rgba(34,24,18,' + (0.12 + r() * 0.18) + ')' : 'rgba(138,110,86,' + (0.08 + r() * 0.14) + ')';
+      c.filter = 'blur(' + (3 + r() * 6) + 'px)'; c.fillStyle = col;
+      [-n, 0, n].forEach(function (o) { c.fillRect(-20, y + o, n + 40, h); });
+    }
+    c.filter = 'none';
+    for (var i = 0; i < 380; i++) { // fine fibres, waves with whole periods across the tile
+      var yy = r() * n, a = 1 + r() * 3, k = (1 + ((r() * 3) | 0)) * Math.PI * 2 / n, ph = r() * 6.28;
+      c.strokeStyle = 'rgba(' + (r() < 0.7 ? '28,19,13,' + (0.05 + r() * 0.11) : '160,130,102,' + (0.04 + r() * 0.07)) + ')';
+      c.lineWidth = 0.5 + r() * 1.3;
+      [-n, 0, n].forEach(function (o) { c.beginPath(); for (var x = 0; x <= n; x += 8) c[x ? 'lineTo' : 'moveTo'](x, yy + o + Math.sin(x * k + ph) * a); c.stroke(); });
+    }
+    for (i = 0; i < 2500; i++) { c.fillStyle = 'rgba(20,10,5,' + (0.08 + r() * 0.12) + ')'; c.fillRect(r() * n, r() * n, 2 + r() * 5, 0.8); } // pores
+  }
+  function calacatta(c, n, r) { // warm white marble, soft grey veins with a few gold ones
+    c.fillStyle = '#F5F2EC'; c.fillRect(0, 0, n, n);
+    for (var k = 0; k < 14; k++) { var gx = r() * n, gy = r() * n, g = c.createRadialGradient(gx, gy, 0, gx, gy, 80 + r() * 160); g.addColorStop(0, r() < 0.5 ? 'rgba(225,219,208,.35)' : 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, n, n); }
+    var cv = document.createElement('canvas'); cv.width = cv.height = n; var v = cv.getContext('2d');
+    veins(v, n, r, 7, '120,118,122', 1.4); veins(v, n, r, 4, '176,142,88', 1.1); veins(v, n, r, 10, '150,148,150', 0.6);
+    [-n, 0, n].forEach(function (ox) { [-n, 0, n].forEach(function (oy) { c.drawImage(cv, ox, oy); }); }); // veins that cross an edge come back on the other side
+  }
+  function leather(c, n, r) { // cognac leather: tonal clouds and a fine pebble grain
+    c.fillStyle = '#7A4C33'; c.fillRect(0, 0, n, n);
+    for (var k = 0; k < 24; k++) { var gx = r() * n, gy = r() * n, rad = 40 + r() * 120;
+      [-n, 0, n].forEach(function (ox) { [-n, 0, n].forEach(function (oy) { var g = c.createRadialGradient(gx + ox, gy + oy, 0, gx + ox, gy + oy, rad); g.addColorStop(0, r() < 0.5 ? 'rgba(50,28,16,.1)' : 'rgba(170,120,88,.08)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, n, n); }); }); }
+    for (var i = 0; i < 12000; i++) { c.fillStyle = r() < 0.5 ? 'rgba(40,20,10,.035)' : 'rgba(255,220,190,.025)'; c.beginPath(); c.arc(r() * n, r() * n, 0.5 + r() * 0.7, 0, 6.283); c.fill(); }
+  }
   function procFor(kind) {
     if (!procTex[kind]) {
       var c = document.createElement('canvas'); c.width = c.height = 512;
       var cx = c.getContext('2d');
-      if (kind === 'woodV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
-      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: woolPlain, marble: marble, boucle: boucle, travertine: travertine, plaster: plaster, gypsum: gypsum })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37, plaster: 41, gypsum: 43 }[kind]));
+      if (kind === 'woodV' || kind === 'walnutV') { cx.translate(512, 0); cx.rotate(Math.PI / 2); } // grain running up the door
+      ({ wood: grain, woodV: grain, fabric: weave, stone: speckle, rug: woolPlain, marble: marble, boucle: boucle, travertine: travertine, plaster: plaster, gypsum: gypsum, walnut: walnut, walnutV: walnut, calacatta: calacatta, leather: leather })[kind](cx, 512, rng({ wood: 11, woodV: 29, fabric: 13, stone: 17, rug: 19, marble: 23, boucle: 31, travertine: 37, plaster: 41, gypsum: 43, walnut: 47, walnutV: 47, calacatta: 53, leather: 59 }[kind]));
       var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
       t.anisotropy = renderer.capabilities.getMaxAnisotropy();
       procTex[kind] = t;
@@ -3043,6 +3075,14 @@
     b.stone2 = rmat('ceramic2', 0.4, '#8C8274', 0.6); // darker stoneware
     b.candle = rmat('wax', 0.95, '#F6F2EA', 0.7);
     b.brass = rmat('brassD', 0.5, '#B08D57', 0.35, null, 1, 0.9);
+    // dining: walnut, Calacatta, cognac leather, sage stoneware, lemons
+    b.walnut = rmat('walnut', 0.3, '#FFFFFF', 0.42, 'walnutV', 1.1);
+    b.walnutH = rmat('walnut', 0.31, '#FFFFFF', 0.38, 'walnut', 1.1); // grain lying along a top
+    b.calacatta = rmat('stoneTop', 0.93, '#FFFFFF', 0.1, 'calacatta', 1.8);
+    b.leather = rmat('leather', 0.4, '#FFFFFF', 0.42, 'leather', 0.45);
+    b.sage = rmat('ceramic3', 0.55, '#8F9C84', 0.55);
+    b.ink = rmat('ceramic4', 0.2, '#2F3236', 0.4);
+    b.lemon = rmat('fruit', 0.65, '#E2BC3E', 0.5);
     return b;
   }
   function glowMatBed() {
@@ -3137,14 +3177,7 @@
     G.userData.table = { rect: rect, topH: topH, dining: !!dining };
     var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
     var longU = du >= dv, lo = Math.max(du, dv), sh = Math.min(du, dv);
-    if (dining) { // travertine top on two travertine slab legs
-      put(G, rboxGeo(du, 0.06, dv, 0.012), mt.travertine || mt.cream, cu, topH - 0.03, cv);
-      [-1, 1].forEach(function (sd) {
-        var off = sd * (lo / 2 - Math.min(0.45, lo * 0.22));
-        put(G, rboxGeo(longU ? 0.12 : sh * 0.6, topH - 0.06, longU ? sh * 0.6 : 0.12, 0.01), mt.travertine || mt.woodL, cu + (longU ? off : 0), (topH - 0.06) / 2, cv + (longU ? 0 : off));
-      });
-      return;
-    }
+    if (dining) { diningTable(G, mt, cu, cv, du, dv, topH); return; }
     if (lo <= 0.62) { // side table: travertine drum
       var R = sh / 2;
       put(G, new THREE.CylinderGeometry(R * 0.78, R * 0.82, topH - 0.04, 36), mt.travertine, cu, (topH - 0.04) / 2, cv);
@@ -3167,6 +3200,49 @@
     vessel(G, 'round', mt.stone2, cu + ox, topH, cv + oz, 0.9);
     vessel(G, 'bowl', mt.ceramic, cu + ox * 0.2, topH, cv + oz * 0.2, 0.8);
   }
+  /* Dining tables: a 3 cm Calacatta top with soft corners and an eased edge. Long tables stand on
+     two sculpted walnut pedestals (oval, wider at the top) on thin brass plinths; square ones are
+     round, on a fluted walnut drum with a brass foot. */
+  function softTopGeo(len, wid, rad, t) {
+    var s = new THREE.Shape(), a = len / 2 - rad, b = wid / 2 - rad;
+    s.moveTo(-a, -wid / 2); s.lineTo(a, -wid / 2); s.absarc(a, -b, rad, -Math.PI / 2, 0, false);
+    s.lineTo(len / 2, b); s.absarc(a, b, rad, 0, Math.PI / 2, false);
+    s.lineTo(-a, wid / 2); s.absarc(-a, b, rad, Math.PI / 2, Math.PI, false);
+    s.lineTo(-len / 2, -b); s.absarc(-a, -b, rad, Math.PI, Math.PI * 1.5, false);
+    var g = new THREE.ExtrudeGeometry(s, { depth: t - 0.012, bevelEnabled: true, bevelSize: 0.006, bevelThickness: 0.006, bevelSegments: 3, curveSegments: 16 });
+    g.rotateX(-Math.PI / 2); g.translate(0, -t / 2 + 0.006, 0); return g;
+  }
+  function flutedGeo(rt, rb, h, flutes) {
+    var g = new THREE.CylinderGeometry(rt, rb, h, flutes * 6, 1, false), p = g.attributes.position, v = new THREE.Vector3();
+    for (var i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i); var rr = Math.sqrt(v.x * v.x + v.z * v.z); if (rr < 1e-4) continue;
+      var a = Math.atan2(v.z, v.x), f = 1 - 0.05 * Math.pow(Math.abs(Math.sin(a * flutes / 2)), 0.6);
+      p.setXYZ(i, v.x * f, v.y, v.z * f);
+    }
+    g.computeVertexNormals(); return g;
+  }
+  function diningTable(G, mt, cu, cv, du, dv, topH) {
+    var longU = du >= dv, lo = Math.max(du, dv), sh = Math.min(du, dv), t = 0.03;
+    if (lo / sh < 1.25) { // round table on a fluted drum
+      var R = Math.min(du, dv) / 2;
+      put(G, new THREE.CylinderGeometry(R, R - 0.004, t, 72), mt.calacatta, cu, topH - t / 2, cv);
+      put(G, new THREE.CylinderGeometry(R - 0.03, R - 0.05, 0.02, 64), mt.walnutH, cu, topH - t - 0.01, cv); // shadow underside
+      put(G, flutedGeo(R * 0.34, R * 0.3, topH - t - 0.04, 20), mt.walnut, cu, 0.02 + (topH - t - 0.04) / 2, cv);
+      put(G, new THREE.CylinderGeometry(R * 0.4, R * 0.42, 0.02, 48), mt.brass, cu, 0.01, cv);
+      return;
+    }
+    var top = put(G, softTopGeo(lo, sh, Math.min(0.22, sh * 0.25), t), mt.calacatta, cu, topH - t / 2, cv);
+    if (!longU) top.rotation.y = Math.PI / 2;
+    put(G, rboxGeo(longU ? lo - 0.24 : sh - 0.24, 0.025, longU ? sh - 0.24 : lo - 0.24, 0.008), mt.walnutH, cu, topH - t - 0.0125, cv); // recessed walnut underframe
+    var legH = topH - t - 0.025 - 0.015, pw = Math.min(0.62, sh * 0.62), pd = 0.2;
+    [-1, 1].forEach(function (sd) {
+      var off = sd * (lo / 2 - Math.min(0.5, lo * 0.22)), x = cu + (longU ? off : 0), z = cv + (longU ? 0 : off);
+      var ped = put(G, new THREE.CylinderGeometry(0.5, 0.36, legH, 48), mt.walnut, x, 0.015 + legH / 2, z); // oval, wider at the top
+      ped.scale.set(longU ? pd : pw, 1, longU ? pw : pd);
+      var foot = put(G, new THREE.CylinderGeometry(0.5, 0.5, 0.015, 48), mt.brass, x, 0.0075, z);
+      foot.scale.set((longU ? pd : pw) * 0.82, 1, (longU ? pw : pd) * 0.82);
+    });
+  }
   function buildTable(m, G, mt) {
     var topH = 0; cellsWhere(m, function (h) { if (h > topH) topH = h; return false; });
     var rect = occRect(m, function (h) { return h > topH - 0.04; }); if (!rect) return false;
@@ -3187,14 +3263,19 @@
   }
   function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
     var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
-    w = Math.min(Math.max(w, 0.46), 0.58); d = Math.min(Math.max(d, 0.48), 0.58); hTop = Math.min(Math.max(hTop, 0.78), 0.86);
-    var seat = 0.47, legG = new THREE.CylinderGeometry(0.016, 0.01, seat - 0.05, 12), fab = mt.chairFab || mt.cushion;
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) {
-      var lg = put(C, legG, mt.wood, s[0] * (w / 2 - 0.05), (seat - 0.05) / 2, s[1] * (d / 2 - 0.05));
-      lg.rotation.z = -s[0] * 0.06; lg.rotation.x = s[1] * 0.06; // slight splay
+    w = Math.min(Math.max(w, 0.48), 0.56); d = Math.min(Math.max(d, 0.5), 0.56); hTop = Math.min(Math.max(hTop, 0.78), 0.84);
+    var seat = 0.47, wood = mt.walnut || mt.wood, skin = mt.leather || mt.chairFab || mt.cushion;
+    var legG = new THREE.CylinderGeometry(0.019, 0.012, seat - 0.07, 4); // square, tapering to the floor
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s2) {
+      var lg = put(C, legG, wood, s2[0] * (w / 2 - 0.045), (seat - 0.07) / 2, s2[1] * (d / 2 - 0.045), Math.PI / 4);
+      lg.rotation.z = -s2[0] * 0.05; lg.rotation.x = s2[1] * 0.05; // slight splay
     });
-    put(C, rboxGeo(w, 0.1, d, 0.045), fab, 0, seat, 0.01);
-    var back = put(C, shellGeo(w * 0.55, 1.25, hTop - seat - 0.1), fab, 0, seat + 0.09, 0.03);
+    put(C, rboxGeo(w - 0.04, 0.035, d - 0.05, 0.008), wood, 0, seat - 0.07, 0.01); // seat frame
+    put(C, rboxGeo(w, 0.075, d - 0.01, 0.03), skin, 0, seat - 0.01, 0.015); // leather cushion
+    put(C, rboxGeo(w - 0.06, 0.012, 0.004, 0.002), wood, 0, seat - 0.05, d / 2 + 0.01); // front lip
+    var R = w * 0.55, bh = hTop - seat - 0.06;
+    put(C, shellGeo(R, 1.2, bh), wood, 0, seat + 0.04, 0.03); // walnut shell
+    put(C, shellGeo(R - 0.045, 1.1, bh - 0.07), skin, 0, seat + 0.075, 0.03); // padded leather inside
     return C;
   }
   function buildChair(m, G, mt) {
@@ -3234,12 +3315,13 @@
     // centrepiece: a stone vase with olive sprigs
     // centrepiece: a travertine tray with three vases of different heights and two brass candlesticks
     var lu = rect.u1 - rect.u0 >= rect.v1 - rect.v0, trayL = Math.min(1.0, Math.max(rect.u1 - rect.u0, rect.v1 - rect.v0) * 0.4);
-    put(G, rboxGeo(lu ? trayL : 0.32, 0.02, lu ? 0.32 : trayL, 0.006), mt.travertine, cu, topH + 0.01, cv);
+    put(G, rboxGeo(lu ? trayL : 0.32, 0.02, lu ? 0.32 : trayL, 0.006), mt.walnutH || mt.travertine, cu, topH + 0.01, cv);
     var at = function (k) { return lu ? [cu + k, cv] : [cu, cv + k]; };
     var p1 = at(-trayL * 0.25), p2 = at(0.02), p3 = at(trayL * 0.28), p4 = at(-trayL * 0.62), p5 = at(trayL * 0.62);
-    vessel(G, 'tall', mt.ceramic, p1[0], topH + 0.02, p1[1]);
-    vessel(G, 'round', mt.stone2, p2[0], topH + 0.02, p2[1], 0.85);
-    vessel(G, 'bowl', mt.ceramic, p3[0], topH + 0.02, p3[1], 0.7);
+    vessel(G, 'tall', mt.sage || mt.ceramic, p1[0], topH + 0.02, p1[1]);
+    vessel(G, 'round', mt.ink || mt.stone2, p2[0], topH + 0.02, p2[1], 0.85);
+    vessel(G, 'bowl', mt.ceramic, p3[0], topH + 0.02, p3[1], 1.0);
+    if (mt.lemon) { var lg2 = new THREE.SphereGeometry(0.036, 16, 12); [[0, 0], [0.05, 0.02], [-0.045, 0.03], [0.01, -0.05]].forEach(function (o, k) { var l = put(G, lg2, mt.lemon, p3[0] + o[0], topH + 0.088 + (k ? 0 : 0.028), p3[1] + o[1]); l.scale.set(1, 0.85, 1.15); }); }
     [p4, p5].forEach(function (q) { vessel(G, 'candle', mt.brass, q[0], topH, q[1]); put(G, new THREE.CylinderGeometry(0.011, 0.011, 0.12, 12), mt.candle, q[0], topH + 0.24, q[1]); });
     return true;
   }
