@@ -327,7 +327,7 @@
       else hemi.groundColor.set(0xcfc8bb);
       renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.95) : 0.82;
       envScale(S.walk ? 0.5 : 1);
-      if (meshReady) applyCeiling();
+      if (meshReady) { applyCeiling(); queueGlassEnv(); }
       lightCeilings();
       if (bedGlow) bedGlow.opacity = S.night ? 0.85 : 0.28;
     }
@@ -1295,16 +1295,36 @@
   // Glass: nearly clear when seen straight on, more reflective toward grazing angles (Fresnel),
   // reflecting the sky environment; a faint green-blue body tint like float glass.
   var glassMat = MESH ? new THREE.MeshStandardMaterial({
-    color: 0xBFD3D6, metalness: 0.35, roughness: 0.0, transparent: true, opacity: 1, envMapIntensity: 1.6, flatShading: true,
+    color: 0x14201D, metalness: 0.0, roughness: 0.02, transparent: true, opacity: 1, envMapIntensity: 2.2, flatShading: true,
     depthWrite: false, side: THREE.DoubleSide, clippingPlanes: [cutPlane] }) : null;
   if (glassMat) {
     glassMat.onBeforeCompile = function (sh) {
       sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', [
         'float glassF = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0);',
-        'gl_FragColor = vec4( outgoingLight, mix(0.035, 0.6, glassF) );'].join('\n'));
+        // what passes through is dimmed and tinted a little; what is reflected is added on top
+        'float glassA = mix(0.12, 0.85, glassF);',
+        'gl_FragColor = vec4( min(outgoingLight / glassA, vec3(4.0)), glassA );'].join('\n'));
     };
     glassMat.customProgramCacheKey = function () { return 'fresnel-glass'; };
   }
+  // The house reflected in its own glass: a cube map captured once in the main living space (again
+  // when day turns to night), used only by the glass.
+  var glassCube = null, glassCam = null, glassTimer = null;
+  function captureGlassEnv() {
+    if (!glassMat || !MESH || !meshReady) return;
+    if (!glassCube) { glassCube = new THREE.WebGLCubeRenderTarget(256, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter }); glassCam = new THREE.CubeCamera(0.1, 120, glassCube); scene.add(glassCam); }
+    var L = D.levels[S.level] || D.levels[0], fy = L.elevation + (L._slabTop || 0), at = null;
+    var n = (L.notes || []).filter(function (q) { return /living|majlis|family/i.test(q.name || ''); })[0];
+    if (n) at = P(n.x, n.y); else { var big = L.rooms.slice().sort(function (a, b) { return b.area - a.area; })[0]; if (big) at = P(big._c[0], big._c[1]); }
+    if (!at) return;
+    glassCam.position.set(at.x, fy + 1.5, at.z);
+    var gv = glassMat.visible, mv = mirrorGroup.visible, sv = sky ? sky.visible : false;
+    glassMat.visible = false; mirrorGroup.visible = false; if (sky) sky.visible = true;
+    glassCam.update(renderer, scene);
+    glassMat.visible = gv; mirrorGroup.visible = mv; if (sky) sky.visible = sv;
+    glassMat.envMap = glassCube.texture; glassMat.needsUpdate = true;
+  }
+  function queueGlassEnv() { clearTimeout(glassTimer); glassTimer = setTimeout(captureGlassEnv, 700); }
   // Sky dome seen through the windows in walk mode (day or night), and a ground beyond the site.
   var sky = null;
   if (MESH) {
@@ -2194,7 +2214,7 @@
   function setupInterior(root) {
     root.updateMatrixWorld(true);
     splitZones();
-    setTimeout(function () { buildCeilings(); buildSkirting(); buildTrim(); applyCeiling(); dirtyShadow(); }, 80);
+    setTimeout(function () { buildCeilings(); buildSkirting(); buildTrim(); applyCeiling(); dirtyShadow(); queueGlassEnv(); }, 80);
   }
 
   /* ---------- proposed materials ----------
@@ -2345,6 +2365,7 @@
   }
   // World-space texture projection blended by the face's normal (works without UVs).
   function triplanar(mat, tex, sx, sy, bump, zones) {
+    mat.userData.triTex = tex;
     bump = 0; // relief from the texture shows as pixel blocks up close: off
     mat.onBeforeCompile = function (sh) {
       if (zones) { var Z = zoneUniforms(); Object.keys(Z).forEach(function (k) { sh.uniforms[k] = Z[k]; }); }
@@ -2419,7 +2440,8 @@
       var v = pal ? paletteFor(f.p, pal) : null;
       f.mat.color.set(v ? v.color : f.p.color);
       f.mat.roughness = v && v.rough != null ? v.rough : f.p.rough;
-      var u = f.mat.userData.triMapU; if (u) u.value = v && v.plain ? plainTex() : f.mat.userData.triTex;
+      var ud = f.mat.userData, u = ud.triMapU || (ud.triTex ? (ud.triMapU = { value: ud.triTex }) : null); // may run before the shader compiles
+      if (u) u.value = v && v.plain ? plainTex() : ud.triTex;
     });
   }
   function lookMaterial(b, smooth) {
@@ -3394,7 +3416,6 @@
     dressWetAndKitchen();
     buildFalseCeilings();
     buildKitchen();
-    buildCurtains();
     buildContactShadows();
     applyRealFurniture();
     return made;
