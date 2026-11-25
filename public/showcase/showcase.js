@@ -755,7 +755,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1664,6 +1664,58 @@
       });
     });
   }
+
+  /* Curtains: every glazed opening at least 1.5 m tall in a living room, majlis, dining room or
+     bedroom gets a pair of pleated linen drapes stacked at its sides, hung from just above the
+     glass to the floor, 20 cm in front of the glass on the room side. */
+  var curtainMat = null, pleatCache = {};
+  function pleatGeo(w, h) {
+    var key = w.toFixed(2) + '|' + h.toFixed(2); if (pleatCache[key]) return pleatCache[key];
+    var g = new THREE.PlaneGeometry(w, h, Math.max(16, Math.round(w / 0.02)), 2), p = g.attributes.position, folds = Math.max(3, Math.round(w / 0.11));
+    for (var i = 0; i < p.count; i++) { var x = p.getX(i), t = (x / w + 0.5) * folds * Math.PI * 2; p.setZ(i, 0.03 * Math.sin(t) + 0.008 * Math.sin(t * 2.3)); }
+    g.computeVertexNormals(); return (pleatCache[key] = g);
+  }
+  function buildCurtains() {
+    var ROOMS = { living: 1, majlis: 1, bedroom: 1, dining: 1 }, planes = {}, va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+    scene.traverse(function (o) {
+      if (!o.isMesh || o.material !== glassMat) return;
+      o.updateMatrixWorld(true);
+      var g = o.geometry, pos = g.attributes.position, idx = g.index ? g.index.array : null, cnt = idx ? idx.length : pos.count;
+      for (var t = 0; t < cnt; t += 3) {
+        va.fromBufferAttribute(pos, idx ? idx[t] : t).applyMatrix4(o.matrixWorld); vb.fromBufferAttribute(pos, idx ? idx[t + 1] : t + 1).applyMatrix4(o.matrixWorld); vc.fromBufferAttribute(pos, idx ? idx[t + 2] : t + 2).applyMatrix4(o.matrixWorld);
+        n.crossVectors(e1.subVectors(vb, va), e2.subVectors(vc, va)); var ar = n.length(); if (ar < 1e-6) continue; n.divideScalar(ar);
+        if (Math.abs(n.y) > 0.1) continue;
+        n.y = 0; n.normalize(); if (n.x < -1e-6 || (Math.abs(n.x) < 1e-6 && n.z < 0)) n.negate();
+        var ymin = Math.min(va.y, vb.y, vc.y), L = levelAt(ymin + 0.1), li = D.levels.indexOf(L);
+        var d = n.x * va.x + n.z * va.z, key = li + '|' + Math.round(Math.atan2(n.z, n.x) * 50) + '|' + Math.round(d * 10);
+        var pl = planes[key] || (planes[key] = { n: n.clone(), d: d, L: L, iv: [] });
+        var ts = [va, vb, vc].map(function (v) { return -pl.n.z * v.x + pl.n.x * v.z; });
+        pl.iv.push([Math.min.apply(null, ts), Math.max.apply(null, ts), ymin, Math.max(va.y, vb.y, vc.y)]);
+      }
+    });
+    var made = 0;
+    Object.keys(planes).forEach(function (k) {
+      var pl = planes[k], fy = pl.L.elevation + (pl.L._slabTop || 0), wins = [];
+      pl.iv.sort(function (a, b) { return a[0] - b[0]; }).forEach(function (q) { // panes 25 cm apart or less are one window
+        var w = wins[wins.length - 1];
+        if (w && q[0] <= w[1] + 0.25) { w[1] = Math.max(w[1], q[1]); w[2] = Math.min(w[2], q[2]); w[3] = Math.max(w[3], q[3]); } else wins.push(q.slice());
+      });
+      wins.forEach(function (w) {
+        var wd = w[1] - w[0], ht = w[3] - w[2]; if (wd < 0.5 || ht < 1.5 || w[2] - fy > 1.2) return;
+        var tm = (w[0] + w[1]) / 2, c = new THREE.Vector3(pl.n.x * pl.d - pl.n.z * tm, fy + 1, pl.n.z * pl.d + pl.n.x * tm), nrm = pl.n.clone();
+        var fr = ROOMS[roomTypeAt(c.x + nrm.x * 0.6, fy + 0.3, c.z + nrm.z * 0.6)], bk = ROOMS[roomTypeAt(c.x - nrm.x * 0.6, fy + 0.3, c.z - nrm.z * 0.6)];
+        if (!fr && !bk) return; if (!fr) nrm.negate();
+        if (!curtainMat) curtainMat = new THREE.MeshStandardMaterial({ color: 0xEDE7DD, roughness: 0.92, side: THREE.DoubleSide, clippingPlanes: [cutPlane] });
+        var top = Math.min(w[3] + 0.15, fy + 7), H = top - fy - 0.01, pw = Math.min(0.6, Math.max(0.35, wd * 0.22)), tan = new THREE.Vector3(-pl.n.z, 0, pl.n.x);
+        [[w[0], 1], [w[1], -1]].forEach(function (e) {
+          var tc = e[0] + e[1] * (0.14 - pw / 2), at = new THREE.Vector3(pl.n.x * pl.d, 0, pl.n.z * pl.d).addScaledVector(tan, tc).addScaledVector(nrm, 0.2);
+          var m = new THREE.Mesh(pleatGeo(pw, H), curtainMat); m.position.set(at.x, fy + 0.01 + H / 2, at.z); m.rotation.y = Math.atan2(nrm.x, nrm.z);
+          m.castShadow = true; m.receiveShadow = true; realGroup.add(m); made++;
+        });
+      });
+    });
+    return made;
+  }
   function greedyRects(mask, nu, nv) {
     var used = new Uint8Array(nu * nv), out = [];
     for (var i = 0; i < nu; i++) for (var j = 0; j < nv; j++) {
@@ -2171,7 +2223,7 @@
   }
   // World-space texture projection blended by the face's normal (works without UVs).
   function triplanar(mat, tex, sx, sy, bump, zones) {
-    bump = bump || 0;
+    bump = 0; // relief from the texture shows as pixel blocks up close: off
     mat.onBeforeCompile = function (sh) {
       if (zones) { var Z = zoneUniforms(); Object.keys(Z).forEach(function (k) { sh.uniforms[k] = Z[k]; }); }
       sh.uniforms.triMap = mat.userData.triMapU || (mat.userData.triMapU = { value: tex }); mat.userData.triTex = tex; sh.uniforms.triScale = { value: new THREE.Vector2(1 / sx, 1 / sy) }; sh.uniforms.triBump = { value: bump };
@@ -2474,6 +2526,25 @@
     for (var i = i0; i <= i1; i++) for (var j = j0; j <= j1; j++) { tot++; if (m.H[i * m.nv + j] > minH) ok++; }
     return tot ? ok / tot : 0;
   }
+  function pipeRect(G, mat, x, y, z, w, d) { // a 5 mm welt round a cushion's top
+    var a1 = put(G, new THREE.CylinderGeometry(0.005, 0.005, w, 8), mat, x, y, z + d / 2); a1.rotation.z = Math.PI / 2;
+    var a2 = put(G, new THREE.CylinderGeometry(0.005, 0.005, w, 8), mat, x, y, z - d / 2); a2.rotation.z = Math.PI / 2;
+    var b1 = put(G, new THREE.CylinderGeometry(0.005, 0.005, d, 8), mat, x + w / 2, y, z); b1.rotation.x = Math.PI / 2;
+    var b2 = put(G, new THREE.CylinderGeometry(0.005, 0.005, d, 8), mat, x - w / 2, y, z); b2.rotation.x = Math.PI / 2;
+  }
+  // Turned vessels (vases, bowls, candle holders) from a profile: [radius, height] pairs.
+  var latheCache = {};
+  function lathe(key, prof) {
+    if (!latheCache[key]) { var g = new THREE.LatheGeometry(prof.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 40); g.computeVertexNormals(); latheCache[key] = g; }
+    return latheCache[key];
+  }
+  var VASES = {
+    tall: [[0, 0], [0.06, 0], [0.075, 0.04], [0.085, 0.12], [0.07, 0.22], [0.035, 0.29], [0.03, 0.32], [0.036, 0.335], [0, 0.335]],
+    round: [[0, 0], [0.05, 0], [0.095, 0.05], [0.105, 0.1], [0.085, 0.16], [0.045, 0.19], [0.04, 0.2], [0, 0.2]],
+    bowl: [[0, 0], [0.05, 0], [0.11, 0.04], [0.14, 0.075], [0.135, 0.08], [0.1, 0.05], [0, 0.04]],
+    candle: [[0, 0], [0.035, 0], [0.035, 0.01], [0.012, 0.02], [0.01, 0.16], [0.025, 0.17], [0.025, 0.18], [0, 0.18]]
+  };
+  function vessel(G, kind, mat, x, y, z, sc) { var m = new THREE.Mesh(lathe(kind, VASES[kind]), mat); m.position.set(x, y, z); if (sc) m.scale.setScalar(sc); m.castShadow = m.receiveShadow = true; G.add(m); return m; }
   function seatFrame(m) {
     var r = occRect(m, function () { return true; }); if (!r) return null;
     var top = 0; cellsWhere(m, function (h) { if (h > top) top = h; return false; });
@@ -2530,8 +2601,10 @@
       put(G, puffyGeo(q.u1 - q.u0 + 0.002, baseTop - legH, q.v1 - q.v0 + 0.002, rad, 0, 0, 0), fab, (q.u0 + q.u1) / 2, legH + (baseTop - legH) / 2, (q.v0 + q.v1) / 2);
     });
     var s = innerRect(F, BK, AW);
-    seatCells(F, s, 0.95, 0.9).forEach(function (q) { // crowned seat cushions
-      put(G, puffyGeo(q.u1 - q.u0 - 0.012, 0.15, q.v1 - q.v0 - 0.012, 0.045, 0.012, 0.035, 0.012), fab, (q.u0 + q.u1) / 2, baseTop + 0.075, (q.v0 + q.v1) / 2);
+    seatCells(F, s, 0.95, 0.9).forEach(function (q) { // crowned seat cushions with a piped top edge
+      var cw = q.u1 - q.u0 - 0.012, cd = q.v1 - q.v0 - 0.012, cx = (q.u0 + q.u1) / 2, cz = (q.v0 + q.v1) / 2;
+      put(G, puffyGeo(cw, 0.15, cd, 0.045, 0.012, 0.035, 0.012), fab, cx, baseTop + 0.075, cz);
+      if (!opt.soft) pipeRect(G, opt.pipe || mt.body, cx, baseTop + 0.15 - 0.02, cz, cw - 0.03, cd - 0.03);
     });
     var backTop = Math.min(Math.max(F.top, seatH + 0.3), seatH + 0.4), armTop = seatH + 0.2;
     F.backs.forEach(function (sd) {
@@ -2652,6 +2725,68 @@
 
   /* Rugs in front of seating: sized from the seating (under the front of the seats, out over the
      open side), skipped where a rug already lies. Texture drawn per rug with real UVs. */
+
+  /* Wall art: on the longest back of a seating group, where solid wall stands behind it across
+     the whole width: one landscape canvas, or a pair for long runs. Abstract, quiet, in the
+     scheme's neutrals with a touch of gold; thin brass frame. */
+  var artWalls = null, artTex = {};
+  function artTexture(seed, w, h) {
+    var key = seed + '|' + w.toFixed(2) + '|' + h.toFixed(2); if (artTex[key]) return artTex[key];
+    var W = 512, H = Math.round(512 * h / w), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var c = cv.getContext('2d'), r = rng(101 + seed);
+    c.fillStyle = '#EFE9DF'; c.fillRect(0, 0, W, H);
+    var cols = ['rgba(176,160,138,', 'rgba(120,108,96,', 'rgba(214,204,188,', 'rgba(60,58,56,'];
+    for (var k = 0; k < 7; k++) { // broad washes
+      var x = r() * W, y = r() * H, rx = W * (0.15 + r() * 0.35), ry = H * (0.1 + r() * 0.3);
+      c.filter = 'blur(' + (6 + r() * 14) + 'px)'; c.fillStyle = cols[k % 4] + (0.25 + r() * 0.35) + ')';
+      c.beginPath(); c.ellipse(x, y, rx, ry, r() * Math.PI, 0, Math.PI * 2); c.fill();
+    }
+    c.filter = 'blur(0.6px)';
+    for (k = 0; k < 3; k++) { // a few confident brush strokes
+      c.strokeStyle = cols[3] + (0.5 + r() * 0.3) + ')'; c.lineWidth = 6 + r() * 14; c.lineCap = 'round';
+      c.beginPath(); var sx = r() * W, sy = H * (0.3 + r() * 0.5); c.moveTo(sx, sy); c.bezierCurveTo(sx + W * 0.2, sy - H * 0.3 * r(), sx + W * 0.4, sy + H * 0.2 * r(), sx + W * (0.3 + r() * 0.3), sy - H * 0.1); c.stroke();
+    }
+    c.strokeStyle = 'rgba(201,162,93,.85)'; c.lineWidth = 3; c.beginPath(); c.moveTo(W * 0.15, H * (0.2 + r() * 0.6)); c.quadraticCurveTo(W * 0.5, H * r(), W * 0.85, H * (0.2 + r() * 0.6)); c.stroke(); // gold leaf line
+    c.filter = 'none';
+    for (k = 0; k < 9000; k++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.05)'; c.fillRect(r() * W, r() * H, 1, 1); } // canvas weave
+    var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return (artTex[key] = t);
+  }
+  function placeArt(O, A, Cv, R, backs, base, seed) {
+    if (!artWalls) { scene.updateMatrixWorld(true); artWalls = []; ['wall', 'ext'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) artWalls.push(o); }); }); }
+    var sides = Object.keys(backs).map(Number).map(function (sd) { return [sd, sd < 2 ? R.v1 - R.v0 : R.u1 - R.u0]; }).sort(function (a, b) { return b[1] - a[1]; });
+    var rc = new THREE.Raycaster(), y = base + 1.62, found = null;
+    sides.some(function (sb) { // the longest back that has solid wall behind it, within 1.3 m
+      var sd = sb[0], bl = sb[1]; if (bl < 1.5) return false;
+      var out = [A.clone().negate(), A, Cv.clone().negate(), Cv][sd], tan = sd < 2 ? Cv : A;
+      var eu = sd === 0 ? R.u0 : sd === 1 ? R.u1 : (R.u0 + R.u1) / 2, ev = sd === 2 ? R.v0 : sd === 3 ? R.v1 : (R.v0 + R.v1) / 2;
+      var mid = O.clone().addScaledVector(A, eu).addScaledVector(Cv, ev), d0 = null;
+      var pair = bl >= 2.8, w = pair ? 0.75 : Math.min(1.4, bl * 0.55), h = pair ? 1.0 : w * 0.66, span = pair ? 2 * w + 0.15 : w;
+      var ok = [-span / 2, 0, span / 2].every(function (k) {
+        var o = mid.clone().addScaledVector(tan, k).addScaledVector(out, -0.05); o.y = y;
+        rc.set(o, out); rc.near = 0; rc.far = 1.35; var hit = rc.intersectObjects(artWalls, false)[0];
+        if (!hit) return false; if (d0 == null) d0 = hit.distance; return Math.abs(hit.distance - d0) < 0.06;
+      });
+      if (ok) found = { sd: sd, out: out, tan: tan, mid: mid, d0: d0, pair: pair, w: w, h: h };
+      return ok;
+    });
+    if (!found) return;
+    var artBox = new THREE.Box3().setFromCenterAndSize(found.mid.clone().addScaledVector(found.out, found.d0).setY(y), new THREE.Vector3(1, 1, 1).multiplyScalar((found.pair ? 2 * found.w + 0.15 : found.w) + 0.6));
+    if (realGroup.children.some(function (g2) { return g2.userData.kind === 'tv' && new THREE.Box3().setFromObject(g2).intersectsBox(artBox); })) return;
+    var out = found.out, tan = found.tan, mid = found.mid, d0 = found.d0, pair = found.pair, w = found.w, h = found.h;
+    var on = mid.clone().addScaledVector(out, d0 - 0.05 - 0.025); on.y = y;
+    var frameM = MX().brass, rot = Math.atan2(-out.x, -out.z);
+    (pair ? [-(w + 0.15) / 2, (w + 0.15) / 2] : [0]).forEach(function (k, ix) {
+      var G = new THREE.Group(); G.position.copy(on).addScaledVector(tan, k); G.rotation.y = rot; realGroup.add(G);
+      var cvs = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), [0, 0, 0, 0, 0, 0].map(function (_, f) {
+        return f === 4 ? new THREE.MeshStandardMaterial({ map: artTexture(seed * 3 + ix, w, h), roughness: 0.9, clippingPlanes: [cutPlane] }) : new THREE.MeshStandardMaterial({ color: 0xE8E2D8, roughness: 0.9, clippingPlanes: [cutPlane] });
+      }));
+      cvs.castShadow = true; G.add(cvs);
+      [[0, h / 2 + 0.008, w + 0.032, 0.016], [0, -h / 2 - 0.008, w + 0.032, 0.016], [w / 2 + 0.008, 0, 0.016, h], [-w / 2 - 0.008, 0, 0.016, h]].forEach(function (b) {
+        var fm = new THREE.Mesh(new THREE.BoxGeometry(b[2], b[3], 0.04), frameM); fm.position.set(b[0], b[1], 0.005); fm.castShadow = true; G.add(fm);
+      });
+    });
+  }
   /* One rug per seating group (modules that touch): sized from the group, under the front of
      the seats and out over the side the seats face; skipped where a rug already lies. */
   function groupRugs(recs, rugTaken) {
@@ -2681,6 +2816,7 @@
         var d = backs[sd] ? -(BK + 0.45) : backs[opp] && !(backs[perp[0]] && backs[perp[1]]) ? 1.7 : 0.25;
         if (sd === 0) X.u0 -= d; if (sd === 1) X.u1 += d; if (sd === 2) X.v0 -= d; if (sd === 3) X.v1 += d;
       });
+      placeArt(O, A, Cv, R, backs, r0.base, i);
       var du = Math.min(5, X.u1 - X.u0), dv = Math.min(5, X.v1 - X.v0), cu = (X.u0 + X.u1) / 2, cv = (X.v0 + X.v1) / 2;
       if (du < 1.3 || dv < 1.3 || rugTaken(O, A, Cv, cu, cv, du, dv, r0.base)) return;
       var G = new THREE.Group(); G.matrixAutoUpdate = false; G.matrix.makeBasis(A, new THREE.Vector3(0, 1, 0), Cv).setPosition(O.x, r0.base, O.z);
@@ -2756,6 +2892,9 @@
     b.pillowB = rmat('charcoal', 0.35, '#5E5852', 0.95, 'fabric', 0.14); // charcoal
     b.chairFab = rmat('fabric', 0.78, '#D3CFC8', 0.95, 'fabric', 0.14); // light grey weave
     b.pipe = rmat('accent', 0.4, '#7A5C3A', 0.9, 'fabric', 0.14); // majlis piping and cushions
+    b.stone2 = rmat('ceramic2', 0.4, '#8C8274', 0.6); // darker stoneware
+    b.candle = rmat('wax', 0.95, '#F6F2EA', 0.7);
+    b.brass = rmat('brassD', 0.5, '#B08D57', 0.35, null, 1, 0.9);
     return b;
   }
   function glowMatBed() {
@@ -2877,7 +3016,8 @@
     var ox = longU ? lo * 0.2 : 0, oz = longU ? 0 : lo * 0.2;
     put(G, rboxGeo(0.3, 0.03, 0.22, 0.004), mt.cream, cu - ox, topH + 0.015, cv - oz, 0.15);
     put(G, rboxGeo(0.26, 0.025, 0.19, 0.004), mt.pillowA, cu - ox, topH + 0.042, cv - oz, -0.1);
-    put(G, new THREE.SphereGeometry(0.1, 32, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mt.ceramic, cu + ox, topH + 0.05, cv + oz, 0, Math.PI).scale.set(1, 0.55, 1);
+    vessel(G, 'round', mt.stone2, cu + ox, topH, cv + oz, 0.9);
+    vessel(G, 'bowl', mt.ceramic, cu + ox * 0.2, topH, cv + oz * 0.2, 0.8);
   }
   function buildTable(m, G, mt) {
     var topH = 0; cellsWhere(m, function (h) { if (h > topH) topH = h; return false; });
@@ -2944,7 +3084,15 @@
       chairAt(G, mt, ccu - fu * 0.05, ccv - fv * 0.05, (horiz ? b1 - b0 + 1 : a1 - a0 + 1) * CELL, (horiz ? a1 - a0 + 1 : b1 - b0 + 1) * CELL, top, fu, fv);
     }
     // centrepiece: a stone vase with olive sprigs
-    put(G, new THREE.SphereGeometry(0.13, 24, 16), mt.ceramic, cu, topH + 0.12, cv).scale.set(1, 1.15, 1);
+    // centrepiece: a travertine tray with three vases of different heights and two brass candlesticks
+    var lu = rect.u1 - rect.u0 >= rect.v1 - rect.v0, trayL = Math.min(1.0, Math.max(rect.u1 - rect.u0, rect.v1 - rect.v0) * 0.4);
+    put(G, rboxGeo(lu ? trayL : 0.32, 0.02, lu ? 0.32 : trayL, 0.006), mt.travertine, cu, topH + 0.01, cv);
+    var at = function (k) { return lu ? [cu + k, cv] : [cu, cv + k]; };
+    var p1 = at(-trayL * 0.25), p2 = at(0.02), p3 = at(trayL * 0.28), p4 = at(-trayL * 0.62), p5 = at(trayL * 0.62);
+    vessel(G, 'tall', mt.ceramic, p1[0], topH + 0.02, p1[1]);
+    vessel(G, 'round', mt.stone2, p2[0], topH + 0.02, p2[1], 0.85);
+    vessel(G, 'bowl', mt.ceramic, p3[0], topH + 0.02, p3[1], 0.7);
+    [p4, p5].forEach(function (q) { vessel(G, 'candle', mt.brass, q[0], topH, q[1]); put(G, new THREE.CylinderGeometry(0.011, 0.011, 0.12, 12), mt.candle, q[0], topH + 0.24, q[1]); });
     return true;
   }
 
@@ -3003,14 +3151,24 @@
       tips.push(new THREE.Vector3(Math.sin(ang) * lean * len, ph + len, Math.cos(ang) * lean * len));
     }
     if (!tips.length) tips.push(new THREE.Vector3(0, crown, 0));
-    if (!leafGeo) { leafGeo = new THREE.SphereGeometry(1, 6, 4); leafGeo.scale(0.011, 0.0035, 0.042); }
-    var n = tall ? 520 : 300, leaves = new THREE.InstancedMesh(leafGeo, mt.leaf, n), M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
+    if (!leafGeo) { leafGeo = new THREE.SphereGeometry(1, 6, 4); leafGeo.scale(0.008, 0.0025, 0.032); leafGeo.translate(0, 0, 0.03); }
+    // foliage in clumps at the ends of twigs, as an olive grows: silvery grey-green, denser outside
     var spread = Math.min(Math.max(Math.min(w, d) * 0.45, 0.25), 0.55), canopyH = tall ? (H - crown) + 0.25 : (H - ph) * 0.7;
-    for (i = 0; i < n; i++) {
-      var tip = tips[i % tips.length], u = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * spread, yy = (rnd() - 0.35) * canopyH;
-      e.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28); q.setFromEuler(e);
-      M4.compose(new THREE.Vector3(tip.x + Math.cos(u) * rr, tip.y + yy, tip.z + Math.sin(u) * rr), q, new THREE.Vector3(1, 1, 1));
-      leaves.setMatrixAt(i, M4); leaves.setColorAt(i, col.setHSL(0.21 + rnd() * 0.05, 0.22 + rnd() * 0.12, 0.3 + rnd() * 0.14));
+    var nClump = tall ? 16 : 9, per = tall ? 70 : 60, n = nClump * per, leaves = new THREE.InstancedMesh(leafGeo, mt.leaf, n), M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color(), k2 = 0;
+    for (var cI = 0; cI < nClump; cI++) {
+      var tip = tips[cI % tips.length], u = rnd() * Math.PI * 2, rr = (0.35 + 0.65 * Math.sqrt(rnd())) * spread, yy = (rnd() - 0.3) * canopyH;
+      var cc = new THREE.Vector3(tip.x + Math.cos(u) * rr, tip.y + yy, tip.z + Math.sin(u) * rr);
+      var tw = new THREE.Vector3().subVectors(cc, tip), tl = tw.length(); // a twig from the trunk top to the clump
+      var twig = put(G, new THREE.CylinderGeometry(0.0025, 0.005, tl, 5), mt.trunk, (tip.x + cc.x) / 2, (tip.y + cc.y) / 2, (tip.z + cc.z) / 2);
+      twig.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tw.normalize()); twig.castShadow = false;
+      var cr = 0.08 + rnd() * 0.06;
+      for (var l = 0; l < per; l++) {
+        var a1 = rnd() * Math.PI * 2, a2 = Math.acos(2 * rnd() - 1), rad = cr * Math.cbrt(rnd());
+        var lp = new THREE.Vector3(cc.x + Math.sin(a2) * Math.cos(a1) * rad, cc.y + Math.cos(a2) * rad * 0.7, cc.z + Math.sin(a2) * Math.sin(a1) * rad);
+        e.set(-0.6 - rnd() * 0.8, a1 + (rnd() - 0.5), (rnd() - 0.5) * 0.8); q.setFromEuler(e);
+        M4.compose(lp, q, new THREE.Vector3(1, 1, 1).multiplyScalar(0.8 + rnd() * 0.5));
+        leaves.setMatrixAt(k2, M4); leaves.setColorAt(k2, col.setHSL(0.19 + rnd() * 0.06, 0.14 + rnd() * 0.12, 0.3 + rnd() * 0.16)); k2++;
+      }
     }
     leaves.castShadow = true; G.add(leaves);
     return G;
@@ -3114,6 +3272,7 @@
     dressWetAndKitchen();
     buildFalseCeilings();
     buildKitchen();
+    buildCurtains();
     applyRealFurniture();
     return made;
   }
