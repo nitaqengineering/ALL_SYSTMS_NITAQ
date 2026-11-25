@@ -939,6 +939,7 @@
     eg.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
     return eg;
   }
+  var veneerMat = null;
   function loadMesh() {
     var note = $('loading'); note.hidden = false; note.textContent = T('loading');
     fetch(MESH.file).then(function (r) {
@@ -974,6 +975,10 @@
           if (fp.top) { // kitchen worktop: white quartz with a soft vein
             var tm = new THREE.Mesh(fp.top, makeMaterial({ kind: 'quartz', color: new THREE.Color('#F1EEE8'), rough: 0.14, metal: 0, tex: 'marble', scale: 0.9 }, true));
             tm.castShadow = tm.receiveShadow = true; parent.add(tm); parent.add(new THREE.Mesh(fp.top, cap));
+          }
+          if (fp.ven) { // walnut boards on white lacquer casework
+            var vm = new THREE.Mesh(fp.ven, veneerMat || (veneerMat = makeMaterial({ kind: 'walnut', color: new THREE.Color('#FFFFFF'), rough: 0.4, metal: 0, tex: 'walnut', scale: 1.1 }, true)));
+            vm.castShadow = vm.receiveShadow = true; parent.add(vm); parent.add(new THREE.Mesh(fp.ven, cap));
           }
           if (fp.rug) {
             var rm = new THREE.Mesh(fp.rug, makeMaterial(finish('rug', new THREE.Color(b.color), {}), false));
@@ -2498,7 +2503,7 @@
     var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
     var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
     function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.055) return true; return false; } // rugs up to 5 cm thick
-    var keep = [], rug = [], wet = [], top = [], kit = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
+    var keep = [], rug = [], wet = [], top = [], kit = [], ven = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
     for (var t = 0; t < idx.length; t += 3) {
       var a = idx[t], b = idx[t + 1], c = idx[t + 2];
       if (onFloor(p[a * 3 + 1] * k + oy) && onFloor(p[b * 3 + 1] * k + oy) && onFloor(p[c * 3 + 1] * k + oy)) { rug.push(a, b, c); continue; }
@@ -2514,12 +2519,18 @@
         var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
         var fl = levelAt(cy), hy = cy - (fl.elevation + (fl._slabTop || 0));
         if (ny / nl > 0.95 && hy > 0.7 && hy < 1.0 && roomAt(cx - CX, cy, cz + CY, KITCHEN)) { top.push(a, b, c); continue; }
+        // outside kitchens and wet rooms: the boards (shelves, desk and console tops, their front
+        // edges) in walnut, the carcass and doors staying white lacquer
+        if (hy > 0.15 && !roomAt(cx - CX, cy, cz + CY, KITCHEN) && !roomAt(cx - CX, cy, cz + CY, WET)) {
+          var y0 = Math.min(p[a * 3 + 1], p[b * 3 + 1], p[c * 3 + 1]) * k, y1 = Math.max(p[a * 3 + 1], p[b * 3 + 1], p[c * 3 + 1]) * k, an = Math.abs(ny / nl);
+          if (an > 0.95 || (an < 0.2 && y1 - y0 < 0.045)) { ven.push(a, b, c); continue; }
+        }
       }
       (roomAt(cx - CX, cy, cz + CY, WET) ? wet : keep).push(a, b, c);
     }
     var rugGeo = null;
     if (rug.length >= 6) { rugGeo = new THREE.BufferGeometry(); rugGeo.setAttribute('position', g.attributes.position); rugGeo.setIndex(rug); }
-    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null, kit: kit.length ? creased(p, kit) : null };
+    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null, kit: kit.length ? creased(p, kit) : null, ven: ven.length ? creased(p, ven) : null };
   }
   function creased(p, idx) {
     var F = idx.length / 3, nv = p.length / 3, fn = new Float32Array(F * 3);
