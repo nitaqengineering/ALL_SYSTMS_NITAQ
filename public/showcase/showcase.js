@@ -3003,33 +3003,34 @@
     return true;
   }
 
+  var majSeq = 0; // cushions alternate terracotta / ivory along the whole majlis
   function seatMajlis(F, G, mt) {
     var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0, cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
     if (!F.backs.length) { var bm = -1; F.sides.forEach(function (st, s) { if (st.maxh > bm) { bm = st.maxh; F.backs = [s]; } }); }
     var BK = 0.18, plH = 0.1, seatTop = 0.38;
     (occFrac(F.m, r, 0.15) > 0.8 ? [r] : seatCells(F, r, 1.2, 0.6)).forEach(function (q) { // walnut base with a gold inlay band
       var w = q.u1 - q.u0, d = q.v1 - q.v0, x = (q.u0 + q.u1) / 2, z = (q.v0 + q.v1) / 2;
-      put(G, rboxGeo(w - 0.02 + 0.002, plH, d - 0.02 + 0.002, 0.008), mt.wood, x, plH / 2, z);
-      put(G, rboxGeo(w - 0.004, 0.012, d - 0.004, 0.002), mt.metal, x, plH - 0.03, z);
+      put(G, rboxGeo(w - 0.02 + 0.002, plH, d - 0.02 + 0.002, 0.008), mt.walnut || mt.wood, x, plH / 2, z);
+      put(G, rboxGeo(w - 0.004, 0.012, d - 0.004, 0.002), mt.brass || mt.metal, x, plH - 0.03, z);
     });
     seatCells(F, innerRect(F, BK, 0), 1.9, 0.75).forEach(function (q) { // piped seat mattresses
       var w = q.u1 - q.u0 - 0.012, d = q.v1 - q.v0 - 0.012, h = seatTop - plH, x = (q.u0 + q.u1) / 2, z = (q.v0 + q.v1) / 2;
-      put(G, puffyGeo(w, h, d, 0.035, 0.008, 0.022, 0.008), mt.cushion, x, plH + h / 2, z);
+      put(G, puffyGeo(w, h, d, 0.035, 0.008, 0.022, 0.008), mt.majSeat || mt.cushion, x, plH + h / 2, z);
       var y = seatTop - 0.018, pg = function (len) { return new THREE.CylinderGeometry(0.0065, 0.0065, len, 8); };
       [-1, 1].forEach(function (sg) {
-        var a = put(G, pg(w - 0.05), mt.pipe, x, y, z + sg * (d / 2 - 0.012)); a.rotation.z = Math.PI / 2;
-        var b = put(G, pg(d - 0.05), mt.pipe, x + sg * (w / 2 - 0.012), y, z); b.rotation.x = Math.PI / 2;
+        var a = put(G, pg(w - 0.05), mt.brass || mt.pipe, x, y, z + sg * (d / 2 - 0.012)); a.rotation.z = Math.PI / 2;
+        var b = put(G, pg(d - 0.05), mt.brass || mt.pipe, x + sg * (w / 2 - 0.012), y, z); b.rotation.x = Math.PI / 2;
       });
     });
     F.backs.forEach(function (sd) {
       var sp = backSpan(F, sd, BK), runs = runCells(F, sd, sp[0], sp[1], 0.9, 0.5);
       runs.forEach(function (rc, k) { // upright back cushions, slightly reclined
         var L2 = rc[1] - rc[0], cr = sideRect(r, sd, 0.01, 0.17, rc[0], rc[1]);
-        var bc = put(G, puffyGeo(sd < 2 ? 0.17 : L2 - 0.015, 0.52, sd < 2 ? L2 - 0.015 : 0.17, 0.035, sd < 2 ? 0.045 : 0.01, 0.015, sd < 2 ? 0.01 : 0.045), mt.body, cr.u, seatTop + 0.26, cr.v);
+        var bc = put(G, puffyGeo(sd < 2 ? 0.17 : L2 - 0.015, 0.52, sd < 2 ? L2 - 0.015 : 0.17, 0.035, sd < 2 ? 0.045 : 0.01, 0.015, sd < 2 ? 0.01 : 0.045), mt.majBack || mt.body, cr.u, seatTop + 0.26, cr.v);
         tilt(bc, sd, 0.05);
         if (k % 2) return; // a small square cushion in front of every other one
         var at = (rc[0] + rc[1]) / 2, pr = sideRect(r, sd, 0.22, 0.12, at - 0.21, at + 0.21);
-        var pl = put(G, puffyGeo(sd < 2 ? 0.12 : 0.42, 0.42, sd < 2 ? 0.42 : 0.12, 0.02, sd < 2 ? 0.05 : 0.025, 0.025, sd < 2 ? 0.025 : 0.05), mt.pipe, pr.u, seatTop + 0.2, pr.v);
+        var pl = put(G, puffyGeo(sd < 2 ? 0.12 : 0.42, 0.42, sd < 2 ? 0.42 : 0.12, 0.02, sd < 2 ? 0.05 : 0.025, 0.025, sd < 2 ? 0.025 : 0.05), (mt.pilRust ? ((majSeq++) % 2 ? mt.pilCream : mt.pilRust) : mt.pipe), pr.u, seatTop + 0.2, pr.v);
         tilt(pl, sd, 0.18);
       });
       // bolsters at the open ends of the run, gold end caps
@@ -3039,8 +3040,8 @@
       ends.forEach(function (at) {
         var br = sideRect(r, sd, BK, depth, at - 0.1, at + 0.1), bol = new THREE.Group(); bol.position.set(br.u, seatTop + 0.11, br.v);
         if (sd < 2) bol.rotation.z = Math.PI / 2; else bol.rotation.x = Math.PI / 2;
-        put(bol, new THREE.CylinderGeometry(0.11, 0.11, depth - 0.03, 32), mt.body, 0, 0, 0);
-        [-1, 1].forEach(function (sg) { put(bol, new THREE.CylinderGeometry(0.112, 0.112, 0.014, 32), mt.metal, 0, sg * (depth / 2 - 0.01), 0); });
+        put(bol, new THREE.CylinderGeometry(0.11, 0.11, depth - 0.03, 32), mt.majBack || mt.body, 0, 0, 0);
+        [-1, 1].forEach(function (sg) { put(bol, new THREE.CylinderGeometry(0.112, 0.112, 0.014, 32), mt.brass || mt.metal, 0, sg * (depth / 2 - 0.01), 0); });
         G.add(bol);
       });
     });
@@ -3264,6 +3265,9 @@
     b.bedUph = rmat('bedUph', 0.5, '#8C7A68', 0.95, 'fabric', 0.1);
     b.runR = rmat('runR', 0.3, '#7A432D', 0.95, 'fabric', 0.1); b.runO = rmat('runO', 0.3, '#565C3E', 0.95, 'fabric', 0.1); b.runN = rmat('runN', 0.2, '#242E3D', 0.95, 'fabric', 0.1);
     b.accNavy = rmat('pillowN', 0.25, '#2F3A4B', 0.95, 'fabric', 0.1);
+    // majlis: sand seats, deep navy backs and bolsters, gold piping, terracotta and ivory cushions
+    b.majSeat = rmat('majSeat', 0.7, '#C9B99E', 0.9, 'fabric', 0.09);
+    b.majBack = rmat('majBack', 0.15, '#232D45', 0.82, 'fabric', 0.09);
     return b;
   }
   function glowMatBed() {
