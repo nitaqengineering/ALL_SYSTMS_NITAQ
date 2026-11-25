@@ -35,7 +35,7 @@
 
   // Open on the lowest level that has rooms (the ground floor, not a basement).
   var firstRooms = D.levels.findIndex(function (l) { return l.rooms.length; });
-  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'white', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: false, auto: false, sel: null, hover: null };
+  var S = { lang: 'ar', night: false, level: Math.max(firstRooms, 0), full: false, furn: true, walk: false, finish: 'classic', ceil: 'spots', realFurn: true, doorWood: 'white', eye: 1.6, lens: 24, pace: 1.4, bob: true, ao: true, auto: false, sel: null, hover: null };
   var MESH = D.mesh; // real Revit geometry (see tools/revit/showcase_export_mesh.py)
   var T = function (k) { return STR[S.lang][k]; };
   var nm = function (o) { return S.lang === 'ar' ? (o.nameAr || o.name) : (o.name || o.nameAr); };
@@ -322,7 +322,7 @@
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
     if (MESH) {
       scene.environment = S.night ? ENV.night : ENV.day; paintSky();
-      hemi.intensity = S.night ? 0.08 : (S.walk ? 0.5 : 0.22); sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
+      hemi.intensity = S.night ? 0.08 : (S.walk ? 0.2 : 0.22); sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
       if (S.walk && !S.night) { hemi.color.set(0xE6ECF2); hemi.groundColor.set(0xF2EADF); } // sky above, light bouncing up from the floors
       else hemi.groundColor.set(0xcfc8bb);
       renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.95) : 0.82;
@@ -512,18 +512,43 @@
       'x = mix(x, x * x * (3.0 - 2.0 * x), 0.16); vec2 d = vUv - 0.5; x *= 1.0 - vig * dot(d, d) * 1.5;',
       'gl_FragColor = vec4(clamp(x, 0.0, 1.0), c.a); }'].join('\n')
   };
-  // Walk mode post-processing. Light (default): render, bloom at night, grade, gamma, FXAA.
-  // High quality (the AO switch): the same with screen-space ambient occlusion, much heavier.
-  var compLite = null, compAO = null;
+  // Walk mode post-processing: full-resolution render, ambient occlusion computed at HALF
+  // resolution from a normals+depth pass and multiplied over it (one extra scene draw, a quarter of
+  // the shading cost of full-resolution SSAO), bloom at night, grade, gamma, FXAA. The AO switch
+  // (on by default, turned off automatically on slow devices) removes the AO step.
+  var compLite = null, compAO = null, aoHalf = null;
+  var AO_MIX = {
+    uniforms: { tDiffuse: { value: null }, tAO: { value: null }, strength: { value: 1.0 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float strength; varying vec2 vUv;\nvoid main() { vec4 c = texture2D(tDiffuse, vUv); float ao = texture2D(tAO, vUv).r; gl_FragColor = vec4(c.rgb * mix(1.0, pow(ao, 1.5), strength), c.a); }'
+  };
+  function halfAOPass() {
+    var sa = new THREE.SSAOPass(scene, camera, 2, 2);
+    sa.kernelRadius = 0.6; sa.minDistance = 0.00003; sa.maxDistance = 0.006;
+    sa.normalMaterial.flatShading = true; sa.normalMaterial.needsUpdate = true;
+    var dt = new THREE.DepthTexture(); dt.type = THREE.UnsignedShortType;
+    sa.normalRenderTarget.depthTexture = dt; sa.ssaoMaterial.uniforms.tDepth.value = dt; // depth from the normals pass: no beauty pass
+    var mix = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(AO_MIX.uniforms), vertexShader: AO_MIX.vertexShader, fragmentShader: AO_MIX.fragmentShader });
+    var FSQ = (THREE.Pass && THREE.Pass.FullScreenQuad) || THREE.FullScreenQuad, quad = new FSQ(mix);
+    var pass = Object.assign(Object.create(THREE.Pass.prototype), { enabled: true, needsSwap: true, clear: false, renderToScreen: false });
+    pass.render = function (r, writeBuffer, readBuffer) {
+      var u = sa.ssaoMaterial.uniforms;
+      u.cameraNear.value = camera.near; u.cameraFar.value = camera.far;
+      u.cameraProjectionMatrix.value.copy(camera.projectionMatrix); u.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
+      sa.renderOverride(r, sa.normalMaterial, sa.normalRenderTarget, 0x7777ff, 1.0);
+      sa.renderPass(r, sa.ssaoMaterial, sa.ssaoRenderTarget);
+      sa.renderPass(r, sa.blurMaterial, sa.blurRenderTarget);
+      mix.uniforms.tDiffuse.value = readBuffer.texture; mix.uniforms.tAO.value = sa.blurRenderTarget.texture;
+      r.setRenderTarget(this.renderToScreen ? null : writeBuffer); quad.render(r);
+    };
+    pass.setSize = function (w, h) { sa.setSize(Math.max(2, Math.floor(w / 2)), Math.max(2, Math.floor(h / 2))); };
+    pass.sa = sa;
+    return pass;
+  }
   function buildComposer(withAO) {
     var c = new THREE.EffectComposer(renderer);
-    if (withAO) {
-      ssao = new THREE.SSAOPass(scene, camera, 2, 2);
-      ssao.kernelRadius = 0.6; ssao.minDistance = 0.00003; ssao.maxDistance = 0.006;
-      // the model carries no vertex normals (flat-shaded from faces): the AO normal pass must too
-      ssao.normalMaterial.flatShading = true; ssao.normalMaterial.needsUpdate = true;
-      c.addPass(ssao);
-    } else c.addPass(new THREE.RenderPass(scene, camera));
+    c.addPass(new THREE.RenderPass(scene, camera));
+    if (withAO && THREE.SSAOPass && THREE.Pass && ((THREE.Pass && THREE.Pass.FullScreenQuad) || THREE.FullScreenQuad)) { aoHalf = halfAOPass(); c.addPass(aoHalf); }
     var bl = THREE.UnrealBloomPass ? new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.3, 0.55, 0.88) : null;
     if (bl) c.addPass(bl);
     c.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
@@ -534,7 +559,7 @@
   }
   function useAO() {
     if (!S.walk || !MESH || !THREE.EffectComposer || !THREE.RenderPass) return false;
-    if (S.ao && THREE.SSAOPass) { if (!compAO) { compAO = buildComposer(true); composer = compAO; sizeAO(); } composer = compAO; }
+    if (S.ao) { if (!compAO) { compAO = buildComposer(true); composer = compAO; sizeAO(); } composer = compAO; }
     else { if (!compLite) { compLite = buildComposer(false); composer = compLite; sizeAO(); } composer = compLite; }
     bloom = composer._bloom; fxaa = composer._fxaa;
     if (bloom) bloom.enabled = S.night; // daytime bloom costs more than it adds
@@ -567,7 +592,8 @@
     [['bob', T('bob')], ['ao', T('ao')]].forEach(function (o) {
       var lab = document.createElement('label'), cb = document.createElement('input');
       lab.className = 'chk'; cb.type = 'checkbox'; cb.checked = S[o[0]];
-      cb.onchange = function () { S[o[0]] = cb.checked; };
+      cb.onchange = function () { S[o[0]] = cb.checked; if (o[0] === 'ao') aoAuto = false; };
+      if (o[0] === 'ao') aoBox = cb;
       lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + o[1])); box.appendChild(lab);
     });
   }
@@ -798,16 +824,20 @@
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
   var v = new THREE.Vector3();
   var clock = new THREE.Clock();
-  // Keep walking smooth: if most frames run slow over a few seconds, lower the render resolution
-  // (one step at a time, never back up within the visit, so it cannot oscillate).
-  var perfT = 0, perfF = [];
+  // Keep walking smooth and as good as the device allows. Every 3 s of walking: with frames
+  // fast (median under 12 ms) ambient occlusion is tried; if frames then run slow (over 30 ms)
+  // it is switched off for the visit; slower still lowers the render resolution one step.
+  // Touching the AO switch hands the choice to the visitor.
+  var perfT = 0, perfF = [], aoAuto = true, aoBlocked = false, aoBox = null;
   function perfWatch(dt) {
     if (!S.walk) { perfT = 0; perfF = []; return; }
     perfT += dt; perfF.push(dt);
     if (perfT < 3) return;
     perfF.sort(function (a, b) { return a - b; });
     var med = perfF[perfF.length >> 1], pr = renderer.getPixelRatio();
-    if (med > 0.045 && pr > 0.75) { renderer.setPixelRatio(Math.max(0.75, pr - 0.25)); resize(); }
+    if (aoAuto && S.ao && med > 0.03) { S.ao = false; aoBlocked = true; }
+    else if (med > 0.045 && pr > 0.75) { renderer.setPixelRatio(Math.max(0.75, pr - 0.25)); resize(); }
+    if (aoBox) aoBox.checked = S.ao;
     perfT = 0; perfF = [];
   }
   function frame() {
@@ -1004,7 +1034,7 @@
      tile and plank sizes; walls and ceilings are paint colours. */
   var FINISH_KIND = { wall: 'wall', ceil: 'ceil', floor: 'floor' };
   var finishMeshes = [], ceilMats = [];
-  function lightCeilings() { (ceilMats || []).forEach(function (m) { m.emissive.set(0xffffff); m.emissiveIntensity = S.night ? 0.03 : 0.17; }); }
+  function lightCeilings() { (ceilMats || []).forEach(function (m) { m.emissive.set(0xffffff); m.emissiveIntensity = S.night ? 0.03 : 0.24; }); }
   function addUV(g) {
     var p = g.attributes.position.array, n = p.length / 3, uv = new Float32Array(n * 2), k = MESH.step / 1000;
     for (var i = 0; i < n; i++) { uv[i * 2] = p[i * 3] * k + MESH.origin[0] / 1000; uv[i * 2 + 1] = p[i * 3 + 2] * k + MESH.origin[2] / 1000; }
@@ -1756,6 +1786,53 @@
       });
     });
     return made;
+  }
+
+  /* Contact shadows: soft dark patches on the floor under each piece of furniture (and under each
+     chair of a dining set), sized from the piece's own footprint in its own frame. They give the
+     grounding that screen-space AO gives, for one draw call and no per-frame cost. */
+  var contactTex = null;
+  function contactTexture() {
+    if (contactTex) return contactTex;
+    var n = 128, cv = document.createElement('canvas'); cv.width = cv.height = n; var c = cv.getContext('2d');
+    c.filter = 'blur(10px)'; c.fillStyle = '#000'; c.fillRect(n * 0.2, n * 0.2, n * 0.6, n * 0.6); c.filter = 'none';
+    contactTex = new THREE.CanvasTexture(cv); return contactTex;
+  }
+  function buildContactShadows() {
+    var items = [], inv = new THREE.Matrix4(), rel = new THREE.Matrix4(), box = new THREE.Box3(), tb = new THREE.Box3();
+    scene.updateMatrixWorld(true);
+    function footprint(G) { // the piece's box in its own frame, leaving out rugs, glows and wall-hung parts
+      inv.copy(G.matrixWorld).invert(); box.makeEmpty();
+      G.traverse(function (o) {
+        if (!o.isMesh || o.material.transparent || o.material.isMeshBasicMaterial) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        rel.multiplyMatrices(inv, o.matrixWorld); tb.copy(o.geometry.boundingBox).applyMatrix4(rel);
+        if (tb.max.y - tb.min.y < 0.03 && tb.min.y < 0.03) return; // a rug
+        if (tb.min.y > 0.6) return; // hanging or wall-mounted
+        box.union(tb);
+      });
+      return box.isEmpty() ? null : box.clone();
+    }
+    function add(G, k) {
+      var b = footprint(G); if (!b || b.min.y > 0.35) return;
+      var sx = (b.max.x - b.min.x) * k + 0.18, sz = (b.max.z - b.min.z) * k + 0.18;
+      if (sx > 6 || sz > 6) return;
+      var m = new THREE.Matrix4().compose(new THREE.Vector3((b.min.x + b.max.x) / 2, b.min.y + 0.017, (b.min.z + b.max.z) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), new THREE.Vector3(sx / 0.6, sz / 0.6, 1));
+      items.push(new THREE.Matrix4().multiplyMatrices(G.matrixWorld, m));
+    }
+    realGroup.children.forEach(function (G) {
+      if (!G.isGroup) return;
+      var subs = G.children.filter(function (c) { return c.isGroup; });
+      if (G.userData.kind === 'dining') subs.forEach(function (C) { add(C, 1); }); else add(G, 1.0);
+      if (G.userData.kind === 'dining') { var t = G.userData.table; if (t) {
+        items.push(new THREE.Matrix4().multiplyMatrices(G.matrixWorld, new THREE.Matrix4().compose(new THREE.Vector3((t.rect.u0 + t.rect.u1) / 2, 0.017, (t.rect.v0 + t.rect.v1) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), new THREE.Vector3((t.rect.u1 - t.rect.u0 + 0.3) / 0.6, (t.rect.v1 - t.rect.v0 + 0.3) / 0.6, 1)))); } }
+    });
+    kitchenGroup.children.forEach(function (G) { if (G.isGroup) add(G, 1.0); });
+    if (!items.length) return;
+    var mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: contactTexture(), transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, clippingPlanes: [cutPlane] });
+    var im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat, items.length);
+    items.forEach(function (m, i) { im.setMatrixAt(i, m); });
+    im.renderOrder = 1; realGroup.add(im);
   }
   function greedyRects(mask, nu, nv) {
     var used = new Uint8Array(nu * nv), out = [];
@@ -3314,6 +3391,7 @@
     buildFalseCeilings();
     buildKitchen();
     buildCurtains();
+    buildContactShadows();
     applyRealFurniture();
     return made;
   }
