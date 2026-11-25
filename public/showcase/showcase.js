@@ -1428,6 +1428,7 @@
       zg.setAttribute('position', pos); zg.setIndex(zone);
       if (f.kind === 'wall') { zg = zg.toNonIndexed(); boxUV(zg, f.m); } else zg.setAttribute('uv', g.attributes.uv);
       var zm = new THREE.Mesh(zg, f.m.material.clone());
+      zm.material.clippingPlanes = [cutPlane]; // clone() copies the plane: share the live one or the zone stays cut at load height
       zm.castShadow = zm.receiveShadow = true; f.m.parent.add(zm);
       f.m.parent.add(new THREE.Mesh(zg, f.m.parent.children.filter(function (o) { return o.material && o.material.side === THREE.BackSide; })[0].material));
       edgeQueue.push({ g: zg, grp: f.m.parent });
@@ -2143,7 +2144,7 @@
     var lip = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), shelfMat, segs.length);
     var led = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), ledMat, segs.length);
     var bandSpots = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16), ledMat, nbs), bi = 0;
-    var glowM = glowMat.clone(); glowM.map = glowTexture(); glowMat = glowM;
+    var glowM = glowMat.clone(); glowM.clippingPlanes = [cutPlane]; glowM.map = glowTexture(); glowMat = glowM;
     var glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowM, segs.length);
     var M = new THREE.Matrix4(), R = new THREE.Matrix4(), Rx = new THREE.Matrix4().makeRotationX(Math.PI / 2), Sm = new THREE.Matrix4(), q = new THREE.Vector3();
     segs.forEach(function (s, i) {
