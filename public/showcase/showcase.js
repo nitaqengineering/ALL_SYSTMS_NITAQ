@@ -986,7 +986,7 @@
           }
           if (fp.wet) {
             var wc = new THREE.Color(b.color), whsl = {}; wc.getHSL(whsl);
-            var pk = proposal(b).kind, wp = pk === 'metal' ? { kind: 'chrome', color: new THREE.Color('#E9E9EA'), rough: 0.08, metal: 1, tex: null, scale: 1 }
+            var pk = proposal(b).kind, wp = pk === 'metal' ? { kind: 'chrome', color: new THREE.Color('#B8955A'), rough: 0.3, metal: 1, tex: null, scale: 1 } // brushed brass taps and frames
               : pk === 'black' ? proposal(b) : { kind: 'china', color: new THREE.Color('#F7F6F3'), rough: 0.1, metal: 0, tex: null, scale: 1 };
             var wm = new THREE.Mesh(fp.wet, makeMaterial(wp, true));
             wm.castShadow = wm.receiveShadow = true; parent.add(wm); parent.add(new THREE.Mesh(fp.wet, cap));
@@ -2036,12 +2036,13 @@
   function buildKitchen() {
     if (!KIT.length) return;
     var lacq = new THREE.MeshStandardMaterial({ color: 0xF4F3F0, roughness: 0.16, envMapIntensity: 1, clippingPlanes: [cutPlane] });
-    var plinth = new THREE.MeshStandardMaterial({ color: 0xD6D4D0, roughness: 0.5, clippingPlanes: [cutPlane] });
+    var plinth = new THREE.MeshStandardMaterial({ color: 0x3A3633, roughness: 0.7, clippingPlanes: [cutPlane] }); // dark recessed plinth: the units float
+    var pull = new THREE.MeshStandardMaterial({ color: 0xB8955A, metalness: 0.9, roughness: 0.32, clippingPlanes: [cutPlane] }); // brushed brass pulls
     var steel = new THREE.MeshStandardMaterial({ color: 0xC9CBCD, metalness: 0.85, roughness: 0.28, clippingPlanes: [cutPlane] });
     var bar = new THREE.MeshStandardMaterial({ color: 0xD8D9DB, metalness: 1, roughness: 0.22, clippingPlanes: [cutPlane] });
     var blackGlass = new THREE.MeshStandardMaterial({ color: 0x0E0F11, metalness: 0.2, roughness: 0.05, envMapIntensity: 1.3, clippingPlanes: [cutPlane] });
     var ring = new THREE.MeshStandardMaterial({ color: 0x5A5C60, roughness: 0.4, clippingPlanes: [cutPlane] });
-    var quartz = MX().top, up = new THREE.Vector3(0, 1, 0);
+    var KX = MX(), quartz = KX.calacatta || KX.top, up = new THREE.Vector3(0, 1, 0);
     var walls = []; ['wall', 'ext'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) walls.push(o); }); });
     var ceils = []; if (meshGroups.ceil) meshGroups.ceil.traverse(function (o) { if (o.isMesh && o.material.side !== THREE.BackSide) ceils.push(o); });
     var rc = new THREE.Raycaster(), built = 0, CELLK = 0.05;
@@ -2110,7 +2111,7 @@
         }
         function group(f, h) { var G = new THREE.Group(); G.matrixAutoUpdate = false; G.matrix.makeBasis(f.X, up, f.F).setPosition(f.ctr.x, fy, f.ctr.z); kitchenGroup.add(G); G.updateMatrixWorld(true); return G; }
         function box(G, mat, w, h, d, x, y, z, r) { var m = new THREE.Mesh(r ? rboxGeo(w, h, d, r) : new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; G.add(m); return m; }
-        function handle(G, x, y, z, len, vertical) { var m = box(G, bar, vertical ? 0.012 : len, vertical ? len : 0.012, 0.014, x, y, z + 0.022, 0.004); return m; }
+        function handle(G, x, y, z, len, vertical) { var m = box(G, pull, vertical ? 0.012 : len, vertical ? len : 0.012, 0.014, x, y, z + 0.022, 0.004); return m; }
         // tall units: steel French-door fridge (or a lacquered larder when narrow)
         greedyRects(tallM, nu, nv).forEach(function (rr) {
           var f = frameOf(rr, 0.45); if (!f || f.len < 0.5) return;
@@ -2138,7 +2139,7 @@
           var top = H - 0.03, fh = top - 0.1;
           box(G, plinth, Lr, 0.1, Dd - 0.07, 0, 0.05, zb + (Dd - 0.07) / 2);
           box(G, lacq, Lr, fh, Dd - 0.02, 0, 0.1 + fh / 2, zb + (Dd - 0.02) / 2);
-          box(G, quartz, Lr, 0.03, Dd + 0.02, 0, H - 0.015, zb + (Dd + 0.02) / 2, 0.003);
+          box(G, quartz, Lr, 0.04, Dd + 0.02, 0, H - 0.02, zb + (Dd + 0.02) / 2, 0.004); // 4 cm Calacatta worktop
           // which module carries the cooker (most appliance cells), which has a window behind
           var cook = -1, cookN = 0, rr = f.rr;
           for (var m = 0; m < n; m++) {
@@ -2185,6 +2186,24 @@
               box(G, new THREE.MeshStandardMaterial({ color: 0x8E9196, metalness: 0.9, roughness: 0.25, clippingPlanes: [cutPlane] }), Math.min(0.5, wm - 0.1), 0.004, Math.min(0.4, Dd - 0.2), x, H + 0.001, zb + Dd / 2 + 0.03, 0.02);
               var tp = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.3, 16), bar); tp.position.set(x, H + 0.15, zb + 0.08); G.add(tp);
               var sp = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 10, 24, Math.PI), bar); sp.position.set(x, H + 0.3, zb + 0.08 + 0.09); sp.rotation.y = Math.PI / 2; G.add(sp);
+            }
+          }
+          // worktop styling on free modules (not hob, not sink): canisters and a walnut board, a bowl of lemons
+          if (!f.island) {
+            var free = []; for (m = 0; m < n; m++) if (m !== cook && m !== sink) free.push(m);
+            if (free.length) {
+              var xa = -Lr / 2 + (free[0] + 0.5) * wm, zr = zb + 0.13;
+              [[-0.12, 0.2, 0.06], [0.0, 0.16, 0.055], [0.11, 0.12, 0.05]].forEach(function (c2) { // three canisters, walnut lids
+                var cn = new THREE.Mesh(new THREE.CylinderGeometry(c2[2], c2[2], c2[1], 28), KX.ceramic); cn.position.set(xa + c2[0], H + c2[1] / 2, zr); cn.castShadow = cn.receiveShadow = true; G.add(cn);
+                var ld = new THREE.Mesh(new THREE.CylinderGeometry(c2[2] + 0.002, c2[2] + 0.002, 0.02, 28), KX.walnutH); ld.position.set(xa + c2[0], H + c2[1] + 0.01, zr); ld.castShadow = true; G.add(ld);
+              });
+              var bd = box(G, KX.walnutH, 0.36, 0.48, 0.022, xa + 0.05, H + 0.235, zb + 0.035, 0.008); bd.rotation.x = -0.12; // board leaning on the backsplash
+            }
+            if (free.length > 1) {
+              var xb = -Lr / 2 + (free[free.length - 1] + 0.5) * wm, zc = zb + Dd / 2;
+              var bw2 = new THREE.Mesh(lathe('bowl', VASES.bowl), KX.ceramic); bw2.position.set(xb, H, zc); bw2.scale.setScalar(1.3); bw2.castShadow = true; G.add(bw2);
+              var lg3 = new THREE.SphereGeometry(0.036, 16, 12);
+              [[0, 0], [0.06, 0.02], [-0.05, 0.04], [0.01, -0.06], [-0.03, -0.03]].forEach(function (o2, k2) { var l = new THREE.Mesh(lg3, KX.lemon); l.position.set(xb + o2[0], H + 0.085 + (k2 ? 0 : 0.03), zc + o2[1]); l.scale.set(1, 0.85, 1.15); l.castShadow = true; G.add(l); });
             }
           }
           // wall units: 60 cm modules where solid wall stands behind at 1.6 and 2.1 m; not over the hob, the sink window or a window
@@ -2639,6 +2658,7 @@
      as wool; the rest gets smooth shading with a 35-degree crease, so cushions, chairs and plants
      read as soft forms while box edges stay crisp. */
   var COS_CREASE = Math.cos(35 * Math.PI / 180), WET = { wet: 1 };
+  var COS_CHINA = Math.cos(50 * Math.PI / 180); // sanitary ware is modelled with few sides: smooth across 45-degree facets
   var KITCHEN = { kitchen: 1 }, SERVICE = { service: 1 };
   var KIT = [], kitMeshes = [];
   function furnParts(g, cabinets, kitAll) {
@@ -2673,28 +2693,35 @@
     }
     var rugGeo = null;
     if (rug.length >= 6) { rugGeo = new THREE.BufferGeometry(); rugGeo.setAttribute('position', g.attributes.position); rugGeo.setIndex(rug); }
-    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet) : null, top: top.length ? creased(p, top) : null, kit: kit.length ? creased(p, kit) : null, ven: ven.length ? creased(p, ven) : null };
+    return { main: keep.length ? creased(p, keep) : null, rug: rugGeo, wet: wet.length ? creased(p, wet, COS_CHINA) : null, top: top.length ? creased(p, top) : null, kit: kit.length ? creased(p, kit) : null, ven: ven.length ? creased(p, ven) : null };
   }
-  function creased(p, idx) {
+  function creased(p, idx, cosLim) {
+    cosLim = cosLim || COS_CREASE;
     var F = idx.length / 3, nv = p.length / 3, fn = new Float32Array(F * 3);
     for (var f = 0; f < F; f++) {
       var a = idx[f * 3] * 3, b = idx[f * 3 + 1] * 3, c = idx[f * 3 + 2] * 3;
       var ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
       fn[f * 3] = uy * vz - uz * vy; fn[f * 3 + 1] = uz * vx - ux * vz; fn[f * 3 + 2] = ux * vy - uy * vx; // area-weighted
     }
+    var Wd = idx;
+    if (cosLim !== COS_CREASE) { // weld corners within ~3 mm (families exported with split facets)
+      var rep2 = {}, wv = new Uint32Array(nv); Wd = new Uint32Array(idx.length);
+      for (var q = 0; q < nv; q++) { var key = Math.round(p[q * 3] / 3) + ',' + Math.round(p[q * 3 + 1] / 3) + ',' + Math.round(p[q * 3 + 2] / 3); wv[q] = rep2[key] != null ? rep2[key] : (rep2[key] = q); }
+      for (q = 0; q < idx.length; q++) Wd[q] = wv[idx[q]];
+    }
     var start = new Uint32Array(nv + 1), list = new Uint32Array(idx.length);
-    for (var i = 0; i < idx.length; i++) start[idx[i] + 1]++;
+    for (var i = 0; i < idx.length; i++) start[Wd[i] + 1]++;
     for (i = 0; i < nv; i++) start[i + 1] += start[i];
     var fill = start.slice(0, nv);
-    for (i = 0; i < idx.length; i++) list[fill[idx[i]]++] = (i / 3) | 0;
+    for (i = 0; i < idx.length; i++) list[fill[Wd[i]]++] = (i / 3) | 0;
     var pos = new Int16Array(idx.length * 3), nrm = new Float32Array(idx.length * 3);
     for (f = 0; f < F; f++) {
       var fx = fn[f * 3], fy = fn[f * 3 + 1], fz = fn[f * 3 + 2], fl = Math.hypot(fx, fy, fz) || 1;
       for (var corner = 0; corner < 3; corner++) {
-        var v = idx[f * 3 + corner], sx = 0, sy = 0, sz = 0;
-        for (var j = start[v]; j < start[v + 1]; j++) {
+        var v = idx[f * 3 + corner], vw = Wd[f * 3 + corner], sx = 0, sy = 0, sz = 0;
+        for (var j = start[vw]; j < start[vw + 1]; j++) {
           var g2 = list[j], gx = fn[g2 * 3], gy = fn[g2 * 3 + 1], gz = fn[g2 * 3 + 2];
-          if ((fx * gx + fy * gy + fz * gz) / (fl * (Math.hypot(gx, gy, gz) || 1)) >= COS_CREASE) { sx += gx; sy += gy; sz += gz; }
+          if ((fx * gx + fy * gy + fz * gz) / (fl * (Math.hypot(gx, gy, gz) || 1)) >= cosLim) { sx += gx; sy += gy; sz += gz; }
         }
         var sl = Math.hypot(sx, sy, sz) || 1, o = (f * 3 + corner) * 3;
         pos[o] = p[v * 3]; pos[o + 1] = p[v * 3 + 1]; pos[o + 2] = p[v * 3 + 2];
@@ -3252,7 +3279,7 @@
     b.leather = rmat('leather', 0.4, '#FFFFFF', 0.42, 'leather', 0.45);
     b.sage = rmat('ceramic3', 0.55, '#8F9C84', 0.55);
     b.ink = rmat('ceramic4', 0.2, '#2F3236', 0.4);
-    b.lemon = rmat('fruit', 0.65, '#E2BC3E', 0.5);
+    b.lemon = rmat('fruit', 0.6, '#D9A51F', 0.5);
     b.chairUph = rmat('upholstery', 0.82, '#DCD2C3', 0.97, 'fabric', 0.1); // oatmeal woven fabric
     b.oakLeg = rmat('oakLeg', 0.6, '#BE9A73', 0.55, 'woodV', 0.5); // light oak
     // living sofa: warm greige linen, cream boucle, terracotta and olive accents, charcoal knit
