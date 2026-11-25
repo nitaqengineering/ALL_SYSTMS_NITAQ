@@ -102,6 +102,11 @@
   sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = 2;
   var sc = sun.shadow.camera; sc.left = sc.bottom = -SIZE * 1.6; sc.right = sc.top = SIZE * 1.6; sc.far = SIZE * 5;
   sun.shadow.bias = -0.0005; scene.add(sun);
+  // Window light indoors: a soft directional light without shadows, from high and to one side.
+  // Indoors the sun is blocked by the roof, so without it every surface gets the same even light
+  // and furniture reads flat; with it each face of a piece is lit differently (form, depth), at no
+  // cost and with no noise. Walk mode, daytime only.
+  var keyLight = new THREE.DirectionalLight(0xFFF4E6, 0); keyLight.position.set(-0.55, 1, 0.35); scene.add(keyLight);
   var lamps = new THREE.Group(); lamps.visible = false; scene.add(lamps);
 
   var ground = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 8, SIZE * 8), new THREE.ShadowMaterial({ opacity: 0.16 }));
@@ -322,7 +327,8 @@
     hemi.color.set(S.night ? 0x7f93c9 : 0xffffff); lamps.visible = S.night && !MESH;
     if (MESH) {
       scene.environment = S.night ? ENV.night : ENV.day; paintSky();
-      hemi.intensity = S.night ? 0.08 : (S.walk ? 0.2 : 0.22); sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
+      hemi.intensity = S.night ? 0.08 : (S.walk ? 0.14 : 0.22);
+      keyLight.intensity = S.walk && !S.night ? 0.75 : 0; sun.intensity = S.night ? 0.03 : (S.walk ? 1.9 : 1.25);
       if (S.walk && !S.night) { hemi.color.set(0xE6ECF2); hemi.groundColor.set(0xF2EADF); } // sky above, light bouncing up from the floors
       else hemi.groundColor.set(0xcfc8bb);
       renderer.toneMappingExposure = S.walk ? (S.night ? 1.0 : 0.84) : 0.82;
