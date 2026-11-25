@@ -939,7 +939,7 @@
     eg.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
     return eg;
   }
-  var veneerMat = null, venMeshes = [];
+  var veneerMat = null, venMeshes = [], wetMeshes = [], wetOrig = [];
   function loadMesh() {
     var note = $('loading'); note.hidden = false; note.textContent = T('loading');
     fetch(MESH.file).then(function (r) {
@@ -988,7 +988,7 @@
             var wc = new THREE.Color(b.color), whsl = {}; wc.getHSL(whsl);
             var pk = proposal(b).kind, wp = pk === 'metal' ? { kind: 'chrome', color: new THREE.Color('#B8955A'), rough: 0.3, metal: 1, tex: null, scale: 1 } // brushed brass taps and frames
               : pk === 'black' ? proposal(b) : { kind: 'china', color: new THREE.Color('#F7F6F3'), rough: 0.1, metal: 0, tex: null, scale: 1 };
-            var wm = new THREE.Mesh(fp.wet, makeMaterial(wp, true));
+            var wm = new THREE.Mesh(fp.wet, makeMaterial(wp, true)); wetMeshes.push({ m: wm, kind: wp.kind });
             wm.castShadow = wm.receiveShadow = true; parent.add(wm); parent.add(new THREE.Mesh(fp.wet, cap));
           }
           if (!fp.main) return;
@@ -2007,6 +2007,101 @@
       var im = new THREE.InstancedMesh(rboxGeo(1, 1, 1, set[2]), mat, list.length);
       list.forEach(function (it, i) { Q.setFromAxisAngle(up, it.r); M4.compose(it.p, Q, it.s); im.setMatrixAt(i, M4); im.setColorAt(i, it.c); });
       im.castShadow = false; im.receiveShadow = true; realGroup.add(im);
+    });
+  }
+
+  /* Sanitary ware. The Revit fixtures arrive merged per bucket, so in each wet room the china is
+     cut into pieces (triangles touching within 6 cm), each piece is oriented by the wall it hangs
+     on, and classified by its size in that frame: wider than deep at counter height = a basin,
+     deeper than wide and low = a WC; bathtubs, trays and the rest stay. Basins become a floating
+     walnut vanity with a Calacatta top, an oval vessel and a brushed brass mixer (on an existing
+     counter: the vessel and mixer only); WCs become wall-hung with a brass flush plate. The
+     original triangles move to a mesh shown only when the realistic furniture is off. */
+  function replaceSanitary(mt) {
+    if (!wetMeshes.length) return;
+    scene.updateMatrixWorld(true);
+    var china = new THREE.MeshStandardMaterial({ color: 0xF8F7F4, roughness: 0.12, envMapIntensity: 1.1, clippingPlanes: [cutPlane] });
+    var brass = mt.brass, walls = [], up = new THREE.Vector3(0, 1, 0), rc = new THREE.Raycaster();
+    ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) walls.push(o); }); });
+    var T = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    wetMeshes.forEach(function (wmI, mi) {
+      var m = wmI.m, pa = m.geometry.attributes.position;
+      for (var t = 0; t < pa.count; t += 3) {
+        a.fromBufferAttribute(pa, t).applyMatrix4(m.matrixWorld); b.fromBufferAttribute(pa, t + 1).applyMatrix4(m.matrixWorld); c.fromBufferAttribute(pa, t + 2).applyMatrix4(m.matrixWorld);
+        T.push({ mi: mi, t: t, chrome: wmI.kind === 'chrome', x0: Math.min(a.x, b.x, c.x), x1: Math.max(a.x, b.x, c.x), y0: Math.min(a.y, b.y, c.y), y1: Math.max(a.y, b.y, c.y), z0: Math.min(a.z, b.z, c.z), z1: Math.max(a.z, b.z, c.z), pts: [a.clone(), b.clone(), c.clone()] });
+      }
+    });
+    // pieces: union triangles of china whose boxes touch (6 cm grid)
+    var par = T.map(function (_, i) { return i; }), cell = {}, G = 0.06;
+    function find(i) { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; }
+    T.forEach(function (t, i) {
+      if (t.chrome) return;
+      for (var x = Math.floor(t.x0 / G); x <= Math.floor(t.x1 / G); x++) for (var y = Math.floor(t.y0 / G); y <= Math.floor(t.y1 / G); y++) for (var z = Math.floor(t.z0 / G); z <= Math.floor(t.z1 / G); z++) {
+        var k = x + ',' + y + ',' + z; if (cell[k] == null) cell[k] = i; else { var r1 = find(cell[k]), r2 = find(i); if (r1 !== r2) par[r1] = r2; }
+      }
+    });
+    var pieces = {};
+    T.forEach(function (t, i) { if (t.chrome) return; var r = find(i), P = pieces[r] || (pieces[r] = { tris: [], x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 }); P.tris.push(i); P.x0 = Math.min(P.x0, t.x0); P.x1 = Math.max(P.x1, t.x1); P.y0 = Math.min(P.y0, t.y0); P.y1 = Math.max(P.y1, t.y1); P.z0 = Math.min(P.z0, t.z0); P.z1 = Math.max(P.z1, t.z1); });
+    var drop = {}, toBrass = {}; // triangles moved to the original-only mesh / turned to brass
+    Object.keys(pieces).forEach(function (r) {
+      var P = pieces[r], cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, L = levelAt(P.y0 + 0.05), fy = L.elevation + (L._slabTop || 0);
+      if (roomTypeAt(cx, P.y0 + 0.05, cz) !== 'wet') return;
+      var hy0 = P.y0 - fy, hy1 = P.y1 - fy;
+      if (Math.max(P.x1 - P.x0, P.z1 - P.z0, P.y1 - P.y0) < 0.35 && hy0 > 0.5) { P.tris.forEach(function (i) { toBrass[i] = 1; }); return; } // a small china fitting (mixer, tap): brushed brass
+      if (P.tris.length < 12 || hy1 > 1.3 || hy1 < 0.3 || Math.max(P.x1 - P.x0, P.z1 - P.z0) > 1.0) return;
+      // the wall it hangs on: nearest wall face around it at mid height
+      var best = null, o = new THREE.Vector3(cx, Math.min(fy + hy1 - 0.05, fy + 0.7), cz);
+      for (var k2 = 0; k2 < 8; k2++) {
+        var ang = k2 * Math.PI / 4, d = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)); rc.set(o, d); rc.far = 1.2;
+        var h = rc.intersectObjects(walls, false)[0]; if (h && (!best || h.distance < best.h.distance)) best = { h: h, d: d };
+      }
+      if (!best) return;
+      var n = best.h.face.normal.clone().transformDirection(best.h.object.matrixWorld); n.y = 0; if (n.lengthSq() < 0.5) return; n.normalize(); if (n.dot(best.d) > 0) n.negate();
+      var F = n, X = new THREE.Vector3().crossVectors(up, F), O = best.h.point.clone(); O.y = fy;
+      var w0 = 1e9, w1 = -1e9, d0 = 1e9, d1 = -1e9;
+      P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var lx = (q.x - O.x) * X.x + (q.z - O.z) * X.z, lz = (q.x - O.x) * F.x + (q.z - O.z) * F.z; w0 = Math.min(w0, lx); w1 = Math.max(w1, lx); d0 = Math.min(d0, lz); d1 = Math.max(d1, lz); }); });
+      var W = w1 - w0, Dp = d1 - d0, xm = (w0 + w1) / 2; if (d0 > 0.25) return; // not against a wall
+      var kind = (W >= Dp * 0.95 && W >= 0.38 && Dp >= 0.28 && hy1 > 0.7 && hy1 < 1.15 && W < 0.95 && Dp < 0.65) ? 'basin' : (Dp > W * 1.15 && hy0 < 0.45 && hy1 < 1.15 && W > 0.28 && W < 0.6 && Dp > 0.42 && Dp < 0.9) ? 'wc' : '';
+      if (!kind) return;
+      var Gp = new THREE.Group(); Gp.matrixAutoUpdate = false; Gp.matrix.makeBasis(X, up, F).setPosition(O.x + X.x * xm, fy, O.z + X.z * xm); realGroup.add(Gp);
+      function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
+      if (kind === 'basin') {
+        var counter = hy0 > 0.55 && hy0 < 0.95 && Dp < 0.3, top = counter ? hy0 : 0.84, Wv = Math.min(Math.max(W + 0.25, 0.7), 1.0);
+        if (!counter) { // floating walnut vanity with a Calacatta top
+          add(rboxGeo(Wv, 0.42, 0.47, 0.01), mt.walnut, 0, top - 0.02 - 0.21, 0.235);
+          add(rboxGeo(Wv - 0.06, 0.004, 0.01, 0.001), brass, 0, top - 0.24, 0.472); // brass reveal between the drawers
+          add(rboxGeo(Wv + 0.02, 0.02, 0.5, 0.004), mt.calacatta, 0, top - 0.01, 0.25);
+        }
+        var bz = counter ? Math.max(0.18, (d0 + d1) / 2) : 0.27;
+        add(lathe('bowl', VASES.bowl), china, 0, top, bz, 1.55, 1.7, 1.2); // oval vessel basin
+        var tz = bz - 0.2; // tall brass mixer behind it
+        add(new THREE.CylinderGeometry(0.016, 0.019, 0.3, 20), brass, 0, top + 0.15, tz);
+        var sp = add(new THREE.CylinderGeometry(0.011, 0.011, 0.15, 14), brass, 0, top + 0.29, tz + 0.07); sp.rotation.x = Math.PI / 2;
+        var lv = add(new THREE.CylinderGeometry(0.006, 0.006, 0.07, 10), brass, 0.03, top + 0.25, tz); lv.rotation.z = -1.1;
+        // brass taps of the original fittings near this basin go with it
+        T.forEach(function (t, i) { if (t.chrome && t.x1 - t.x0 < 0.25 && t.z1 - t.z0 < 0.25 && t.x1 > P.x0 - 0.15 && t.x0 < P.x1 + 0.15 && t.z1 > P.z0 - 0.15 && t.z0 < P.z1 + 0.15 && t.y0 > P.y0 - 0.05 && t.y1 < P.y1 + 0.35) drop[i] = 1; }); // its old taps (small parts only, never the mirror frame)
+      } else { // wall-hung WC, concealed cistern with a brass flush plate
+        add(rboxGeo(0.38, 0.34, 0.12, 0.03), china, 0, 0.24 + 0.17, 0.06);
+        add(new THREE.CylinderGeometry(0.175, 0.13, 0.3, 40), china, 0, 0.27, 0.33, 1, 1, 1.35);
+        add(new THREE.CylinderGeometry(0.182, 0.182, 0.025, 40), china, 0, 0.432, 0.335, 1, 1, 1.37); // seat and lid
+        add(rboxGeo(0.24, 0.16, 0.012, 0.01), brass, 0, 1.02, 0.006);
+        add(rboxGeo(0.07, 0.1, 0.004, 0.006), mt.ink || brass, -0.045, 1.02, 0.014); add(rboxGeo(0.07, 0.1, 0.004, 0.006), mt.ink || brass, 0.045, 1.02, 0.014);
+      }
+      P.tris.forEach(function (i) { drop[i] = 1; });
+    });
+    // split each wet mesh: kept triangles stay, replaced ones go to a mesh shown only without realistic furniture
+    wetMeshes.forEach(function (wmI, mi) {
+      var m = wmI.m, pa = m.geometry.attributes.position, na = m.geometry.attributes.normal, keepV = [], keepN = [], gonV = [], gonN = [], brV = [], brN = [], any = false;
+      var base = 0; for (var q = 0; q < T.length; q++) if (T[q].mi === mi) { base = q; break; }
+      for (var t = 0; t < pa.count; t += 3) {
+        var gone = drop[base + t / 3], br = !gone && toBrass[base + t / 3], V = gone ? gonV : br ? brV : keepV, N = gone ? gonN : br ? brN : keepN; if (gone || br) any = true;
+        for (var k = 0; k < 3; k++) { V.push(pa.getX(t + k), pa.getY(t + k), pa.getZ(t + k)); N.push(na.getX(t + k), na.getY(t + k), na.getZ(t + k)); }
+      }
+      if (!any) return;
+      function geo(V2, N2) { var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V2, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N2, 3)); return g; }
+      if (gonV.length) { var om = new THREE.Mesh(geo(gonV, gonN), m.material); om.visible = !S.realFurn; m.parent.add(om); wetOrig.push(om); }
+      if (brV.length) { var bm = new THREE.Mesh(geo(brV, brN), brass); bm.castShadow = true; m.parent.add(bm); }
+      m.geometry = geo(keepV, keepN);
     });
   }
   function greedyRects(mask, nu, nv) {
@@ -3752,6 +3847,7 @@
     buildFalseCeilings();
     buildKitchen();
     buildShelfDecor(mt);
+    replaceSanitary(mt);
     buildContactShadows();
     applyRealFurniture();
     return made;
@@ -3759,6 +3855,7 @@
   function applyRealFurniture() {
     dirtyShadow();
     realGroup.visible = S.realFurn && S.furn;
+    wetOrig.forEach(function (o) { o.visible = !S.realFurn; }); // the Revit fixtures that were replaced
     Object.keys(elemGroups).forEach(function (id) { var g = elemGroups[id]; g.visible = !(S.realFurn && g.userData.replaced); });
   }
 
