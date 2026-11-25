@@ -3106,6 +3106,10 @@
     b.pilRust = rmat('pillowR', 0.45, '#97593F', 0.95, 'fabric', 0.1);
     b.pilOlive = rmat('pillowO', 0.4, '#6F7352', 0.95, 'fabric', 0.1);
     b.knitDark = rmat('throwD', 0.25, '#4B4641', 0.97, 'boucle', 0.12);
+    // bedrooms: taupe upholstery, an accent per room (terracotta / olive / NITAQ navy)
+    b.bedUph = rmat('bedUph', 0.5, '#8C7A68', 0.95, 'fabric', 0.1);
+    b.runR = rmat('runR', 0.3, '#7A432D', 0.95, 'fabric', 0.1); b.runO = rmat('runO', 0.3, '#565C3E', 0.95, 'fabric', 0.1); b.runN = rmat('runN', 0.2, '#242E3D', 0.95, 'fabric', 0.1);
+    b.accNavy = rmat('pillowN', 0.25, '#2F3A4B', 0.95, 'fabric', 0.1);
     return b;
   }
   function glowMatBed() {
@@ -3122,6 +3126,7 @@
 
   // Beds (reference: low boucle bed, soft headboard with a warm LED wash behind it, floating
   // nightstands with mushroom lamps, knitted throw, carved-arc rug).
+  var bedSeq = 0; // each bedroom takes the next accent colour
   function buildBed(m, G, mt) {
     var r = occRect(m, function () { return true; }); if (!r) return false;
     var best = -1, head = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.15, 0); if (st.maxh > best) { best = st.maxh; head = s; } });
@@ -3145,24 +3150,25 @@
       return m2;
     }
     G.userData.headSide = head;
-    var baseH = 0.32, mTop = baseH + 0.2;
-    put(G, rboxGeo(wAxisU ? W - 0.1 : L - 0.2, 0.04, wAxisU ? L - 0.2 : W - 0.1, 0.01), mt.plinth, at(W / 2, L / 2)[0], 0.02, at(W / 2, L / 2)[1]);
-    bx(W + 0.16, baseH, L + 0.04, W / 2, 0.04 + baseH / 2, L / 2 + 0.06, mt.boucle, 0, 0.13); // rounded "cloud" base
+    var baseH = 0.32, mTop = baseH + 0.2, uph = mt.bedUph || mt.boucle, accI = (bedSeq++) % 3, acc = mt.pilRust ? [mt.pilRust, mt.pilOlive, mt.accNavy][accI] : mt.throwKnit, run = mt.runR ? [mt.runR, mt.runO, mt.runN][accI] : mt.throwKnit;
+    put(G, rboxGeo(wAxisU ? W - 0.1 : L - 0.2, 0.04, wAxisU ? L - 0.2 : W - 0.1, 0.01), mt.walnut || mt.plinth, at(W / 2, L / 2)[0], 0.02, at(W / 2, L / 2)[1]);
+    bx(W + 0.16, baseH, L + 0.04, W / 2, 0.04 + baseH / 2, L / 2 + 0.06, uph, 0, 0.13); // rounded upholstered base
     bx(W - 0.02, 0.2, L - 0.16, W / 2, baseH + 0.1, 0.14 + (L - 0.16) / 2, mt.linen, 0, 0.06);
     var duvL = (L - 0.16) * 0.74, dz = L - 0.02 - duvL / 2;
     bx(W + 0.06, 0.06, duvL, W / 2, mTop + 0.03, dz, mt.cushion, 0, 0.03);
     [-1, 1].forEach(function (sd) { bx(0.025, 0.24, duvL, W / 2 + sd * (W / 2 + 0.04), mTop - 0.09, dz, mt.cushion, 0, 0.012); }); // duvet drop
     bx(W + 0.07, 0.08, 0.22, W / 2, mTop + 0.06, L - 0.02 - duvL + 0.11, mt.cushion, 0, 0.04); // turned-down fold
-    bx(W + 0.2, 0.035, 0.55, W / 2, mTop + 0.08, L - 0.45, mt.throwKnit, 0, 0.017); // knitted throw
-    [-1, 1].forEach(function (sd) { bx(0.03, 0.32, 0.55, W / 2 + sd * (W / 2 + 0.11), mTop - 0.08, L - 0.45, mt.throwKnit, 0, 0.014); });
+    bx(W + 0.2, 0.035, 0.55, W / 2, mTop + 0.08, L - 0.45, run, 0, 0.017); // bed runner in the room's accent
+    [-1, 1].forEach(function (sd) { bx(0.03, 0.32, 0.55, W / 2 + sd * (W / 2 + 0.11), mTop - 0.08, L - 0.45, run, 0, 0.014); });
     var np = W > 1.3 ? 2 : 1, pw = (W - 0.1) / np;
-    for (var k = 0; k < np; k++) bx(pw - 0.05, 0.36, 0.17, 0.05 + pw * (k + 0.5), mTop + 0.17, 0.25, mt.linen, 0.28, 0.07);
-    if (W > 1.3) bx(0.55, 0.26, 0.13, W / 2, mTop + 0.14, 0.42, mt.throwKnit, 0.2, 0.06); // lumbar
+    for (var k = 0; k < np; k++) bx(pw - 0.03, 0.5, 0.16, 0.05 + pw * (k + 0.5), mTop + 0.24, 0.13, uph, 0.18, 0.07); // euro shams against the headboard
+    for (k = 0; k < np; k++) bx(pw - 0.06, 0.34, 0.16, 0.05 + pw * (k + 0.5), mTop + 0.16, 0.3, mt.linen, 0.28, 0.07); // sleeping pillows
+    if (W > 1.3) bx(0.55, 0.26, 0.13, W / 2, mTop + 0.14, 0.45, acc, 0.2, 0.06); // lumbar
     var hbTop = Math.max(best, 1.05), hbH = hbTop - 0.12;
-    bx(W + 0.12, hbH, 0.07, W / 2, 0.12 + hbH / 2, -0.015, mt.boucle, 0, 0.03); // backing panel
-    var padTop = hbTop - 0.03, pad0 = mTop + 0.02, rows = 2, cols = Math.max(2, Math.round((W + 0.1) / 0.45)), ph = (padTop - pad0) / rows, pw2 = (W + 0.1) / cols;
-    for (var rr = 0; rr < rows; rr++) for (var cc = 0; cc < cols; cc++) // padded squares
-      bx(pw2 - 0.035, ph - 0.035, 0.1, W / 2 - (W + 0.1) / 2 + pw2 * (cc + 0.5), pad0 + ph * (rr + 0.5), 0.06, mt.boucle, 0, 0.05);
+    bx(W + 0.12, hbH, 0.07, W / 2, 0.12 + hbH / 2, -0.015, uph, 0, 0.03); // backing panel
+    var padTop = hbTop - 0.03, pad0 = mTop + 0.02, cols = Math.max(6, Math.round((W + 0.1) / 0.16)), pw2 = (W + 0.1) / cols;
+    for (var cc = 0; cc < cols; cc++) // vertical channel tufting
+      bx(pw2 - 0.01, padTop - pad0, 0.09, W / 2 - (W + 0.1) / 2 + pw2 * (cc + 0.5), (padTop + pad0) / 2, 0.06, uph, 0, Math.min(0.045, pw2 / 2 - 0.006));
     var gl = at(W / 2, -0.06), glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, 0.45), glowMatBed());
     glow.position.set(gl[0], hbTop + 0.18, gl[1]); glow.rotation.y = head === 2 ? 0 : head === 3 ? Math.PI : head === 0 ? Math.PI / 2 : -Math.PI / 2;
     G.add(glow); // LED wash on the wall above the headboard
@@ -3174,10 +3180,10 @@
       if (wb < wa) return;
       var nx = (wa - runA) * CELL, nw = Math.min((wb - wa + 1) * CELL, 0.6), nd = Math.min(lb * CELL, 0.42);
       var cx = nx + (wb - wa + 1) * CELL / 2;
-      bx(nw, 0.16, nd, cx, 0.47, 0.03 + nd / 2, mt.wood, 0, 0.01);
-      bx(nw - 0.06, 0.004, 0.01, cx, 0.47, 0.03 + nd + 0.002, mt.plinth, 0, 0.001); // drawer line
+      bx(nw, 0.16, nd, cx, 0.47, 0.03 + nd / 2, mt.walnut || mt.wood, 0, 0.01);
+      bx(nw - 0.06, 0.004, 0.01, cx, 0.47, 0.03 + nd + 0.002, mt.brass || mt.plinth, 0, 0.001); // brass drawer line
       var p = at(cx, 0.03 + nd / 2);
-      put(G, new THREE.CylinderGeometry(0.035, 0.05, 0.24, 20), mt.ceramic, p[0], 0.55 + 0.12, p[1]);
+      put(G, new THREE.CylinderGeometry(0.035, 0.05, 0.24, 20), mt.ink || mt.ceramic, p[0], 0.55 + 0.12, p[1]);
       put(G, new THREE.SphereGeometry(0.15, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mt.shade, p[0], 0.77, p[1]);
     });
     if (W > 1.3) { // carved-arc rug under the lower two thirds
