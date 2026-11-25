@@ -2452,9 +2452,9 @@
      headboard and cushions stay darker than a sofa. 'revit' keeps the per-piece proposal. */
   var furnMats = [];
   var PALETTES = {
-    classic: { woodL: '#B08A64', woodD: '#5A3A26', fabL: '#EFE8DC', fabM: '#CDBFA8', fabD: '#6B5A4A', accent: '#7A5C3A', metal: '#B8955A', rug: '#E7DCC8' },
-    warm: { woodL: '#C29B72', woodD: '#7A5235', fabL: '#ECE4D6', fabM: '#C9B79C', fabD: '#7B5E4B', accent: '#B5654A', metal: '#2A2A2A', metalRough: 0.45, rug: '#D9C7AE' },
-    calm: { woodL: '#B3A898', woodD: '#4A4440', fabL: '#E9E7E3', fabM: '#B9B6B0', fabD: '#55565A', accent: '#22324A', metal: '#B8BABC', rug: '#CDCAC4' }
+    classic: { woodL: '#B08A64', woodD: '#5A3A26', fabL: '#EFE8DC', fabM: '#CDBFA8', fabD: '#6B5A4A', accent: '#7A5C3A', metal: '#B8955A', rug: '#5F5245' },
+    warm: { woodL: '#C29B72', woodD: '#7A5235', fabL: '#ECE4D6', fabM: '#C9B79C', fabD: '#7B5E4B', accent: '#B5654A', metal: '#2A2A2A', metalRough: 0.45, rug: '#5E4A38' },
+    calm: { woodL: '#B3A898', woodD: '#4A4440', fabL: '#E9E7E3', fabM: '#B9B6B0', fabD: '#55565A', accent: '#22324A', metal: '#B8BABC', rug: '#55524E' }
   };
   function paletteFor(p, pal) {
     var l = p.hsl && p.hsl.l != null ? p.hsl.l : 0.5;
@@ -2497,7 +2497,7 @@
   function furnParts(g, cabinets, kitAll) {
     var p = g.attributes.position.array, idx = g.index.array, k = MESH.step / 1000, oy = MESH.origin[1] / 1000;
     var floors = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
-    function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.04) return true; return false; }
+    function onFloor(y) { for (var i = 0; i < floors.length; i++) if (y >= floors[i] - 0.01 && y <= floors[i] + 0.055) return true; return false; } // rugs up to 5 cm thick
     var keep = [], rug = [], wet = [], top = [], kit = [], ox = MESH.origin[0] / 1000, oz = MESH.origin[2] / 1000;
     for (var t = 0; t < idx.length; t += 3) {
       var a = idx[t], b = idx[t + 1], c = idx[t + 2];
@@ -2767,6 +2767,7 @@
 
   function mergeRuns(a) { var out = []; a.forEach(function (x) { var l = out[out.length - 1]; if (l && Math.abs(l[1] - x[0]) < 1e-6) l[1] = x[1]; else out.push([x[0], x[1]]); }); return out; }
 
+  var pillowSeq = 0; // varies the pillow pattern from one sofa module to the next
   function seatLiving(F, G, mt, opt) {
     opt = opt || {};
     var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0, cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
@@ -2775,7 +2776,7 @@
     if (opt.legs) {
       var lg = new THREE.CylinderGeometry(0.018, 0.012, legH, 12);
       [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) { put(G, lg, mt.wood, cu + s[0] * (du / 2 - 0.08), legH / 2, cv + s[1] * (dv / 2 - 0.08)); });
-    } else put(G, rboxGeo(Math.max(0.1, du - 0.12), legH, Math.max(0.1, dv - 0.12), 0.01), mt.plinth, cu, legH / 2, cv);
+    } else put(G, rboxGeo(Math.max(0.1, du - 0.12), legH, Math.max(0.1, dv - 0.12), 0.01), opt.plinth || mt.plinth, cu, legH / 2, cv);
     // the upholstered base follows the footprint cells (so an L sofa is an L, not a filled square)
     (occFrac(F.m, r, 0.15) > 0.8 ? [r] : seatCells(F, r, 1.2, 0.6)).forEach(function (q) {
       put(G, puffyGeo(q.u1 - q.u0 + 0.002, baseTop - legH, q.v1 - q.v0 + 0.002, rad, 0, 0, 0), fab, (q.u0 + q.u1) / 2, legH + (baseTop - legH) / 2, (q.v0 + q.v1) / 2);
@@ -2796,13 +2797,25 @@
       var c0 = sp[0], c1 = sp[1];
       F.arms.forEach(function (o) { if ((o < 2) === (sd < 2)) return; if (o === 0) c0 = Math.max(c0, r.u0 + AW); if (o === 2) c0 = Math.max(c0, r.v0 + AW); if (o === 1) c1 = Math.min(c1, r.u1 - AW); if (o === 3) c1 = Math.min(c1, r.v1 - AW); });
       var hgt = backTop - baseTop - 0.15 + 0.06;
-      runCells(F, sd, c0, c1, 0.95, seatH + 0.12).forEach(function (rc) { // loose back cushions
+      runCells(F, sd, c0, c1, 0.95, seatH + 0.12).forEach(function (rc, k) { // loose back cushions
         var L2 = rc[1] - rc[0], cr = sideRect(r, sd, 0.11, 0.2, rc[0], rc[1]);
         var bc = put(G, puffyGeo(sd < 2 ? 0.2 : L2 - 0.01, hgt, sd < 2 ? L2 - 0.01 : 0.2, 0.05, sd < 2 ? 0.05 : 0.012, 0.02, sd < 2 ? 0.012 : 0.05), fab, cr.u, baseTop + 0.15 + hgt / 2, cr.v);
         tilt(bc, sd, 0.13);
+        if (!opt.small) return;
+        // living: pillows along the whole sectional in a repeating pattern (cream + terracotta, olive, none)
+        var at = (rc[0] + rc[1]) / 2, h = (pillowSeq++) * 5 + 1, pat = h % 3, ds = ((h >> 2) % 2) ? 1 : -1;
+        if (pat === 2) return;
+        var big = pat === 0 ? opt.pillow : opt.small[1], pa = at + ds * 0.08, pq = sideRect(r, sd, 0.3, 0.14, pa - 0.25, pa + 0.25);
+        var q1 = put(G, puffyGeo(sd < 2 ? 0.12 : 0.5, 0.48, sd < 2 ? 0.5 : 0.12, 0.02, sd < 2 ? 0.06 : 0.03, 0.03, sd < 2 ? 0.03 : 0.06), big, pq.u, baseTop + 0.15 + 0.24, pq.v);
+        tilt(q1, sd, 0.3); q1.rotation.y += ds * 0.08;
+        if (pat !== 0) return;
+        var pb = at - ds * 0.12, pq2 = sideRect(r, sd, 0.44, 0.12, pb - 0.2, pb + 0.2);
+        var q2 = put(G, puffyGeo(sd < 2 ? 0.11 : 0.4, 0.4, sd < 2 ? 0.4 : 0.11, 0.02, sd < 2 ? 0.055 : 0.025, 0.025, sd < 2 ? 0.025 : 0.055), opt.small[0], pq2.u, baseTop + 0.15 + 0.2, pq2.v);
+        tilt(q2, sd, 0.22); q2.rotation.y -= ds * 0.12;
       });
       // layered scatter pillows: a large one and a smaller darker one in front, at each end
       var ends = [];
+      if (opt.small) return; // living: pillows come with the back cushions above
       if (F.arms.indexOf(sd < 2 ? 2 : 0) >= 0) ends.push([c0 + 0.34, 1]);
       if (F.arms.indexOf(sd < 2 ? 3 : 1) >= 0) ends.push([c1 - 0.34, -1]);
       if (sd === F.backs[0]) { // a corner piece gets one in the corner
@@ -2812,10 +2825,12 @@
       ends.forEach(function (e, k) {
         var pr = sideRect(r, sd, 0.3, 0.14, e[0] - 0.25, e[0] + 0.25);
         var p1 = put(G, puffyGeo(sd < 2 ? 0.12 : 0.5, 0.48, sd < 2 ? 0.5 : 0.12, 0.02, sd < 2 ? 0.06 : 0.03, 0.03, sd < 2 ? 0.03 : 0.06), opt.pillow || mt.pillowA, pr.u, baseTop + 0.15 + 0.24, pr.v);
+        if (opt.small) k = (k + (sd % 2)) % opt.small.length;
         tilt(p1, sd, 0.3); p1.rotation.y += e[1] * 0.1;
         if (opt.soft) return;
+        var smallMat = opt.small ? opt.small[k] : mt.pillowB;
         var at = e[0] + e[1] * 0.12, pr2 = sideRect(r, sd, 0.44, 0.12, at - 0.2, at + 0.2);
-        var p2 = put(G, puffyGeo(sd < 2 ? 0.11 : 0.4, 0.4, sd < 2 ? 0.4 : 0.11, 0.02, sd < 2 ? 0.055 : 0.025, 0.025, sd < 2 ? 0.025 : 0.055), mt.pillowB, pr2.u, baseTop + 0.15 + 0.2, pr2.v);
+        var p2 = put(G, puffyGeo(sd < 2 ? 0.11 : 0.4, 0.4, sd < 2 ? 0.4 : 0.11, 0.02, sd < 2 ? 0.055 : 0.025, 0.025, sd < 2 ? 0.025 : 0.055), smallMat, pr2.u, baseTop + 0.15 + 0.2, pr2.v);
         tilt(p2, sd, 0.22); p2.rotation.y -= e[1] * 0.14;
       });
     });
@@ -2827,8 +2842,8 @@
       put(G, puffyGeo(fr.du, armTop - legH, fr.dv, opt.soft ? 0.09 : 0.03, opt.soft ? 0.02 : 0.004, 0.012, opt.soft ? 0.02 : 0.004), fab, fr.u, legH + (armTop - legH) / 2, fr.v);
       if (k || opt.noThrow) return; // a knitted throw folded over the first arm
       var mid = (a0 + a1) / 2 + 0.05, t1 = sideRect(r, sd, -0.015, AW + 0.03, mid - 0.2, mid + 0.2), t2 = sideRect(r, sd, -0.016, 0.014, mid - 0.2, mid + 0.2);
-      put(G, rboxGeo(t1.du, 0.025, t1.dv, 0.01), mt.throwKnit, t1.u, armTop + 0.012, t1.v);
-      put(G, rboxGeo(t2.du, 0.36, t2.dv, 0.006), mt.throwKnit, t2.u, armTop - 0.17, t2.v);
+      put(G, rboxGeo(t1.du, 0.025, t1.dv, 0.01), opt.throwMat || mt.throwKnit, t1.u, armTop + 0.012, t1.v);
+      put(G, rboxGeo(t2.du, 0.36, t2.dv, 0.006), opt.throwMat || mt.throwKnit, t2.u, armTop - 0.17, t2.v);
     });
     if (opt.rug !== false && F.backs.length) mt.seatInfo = { r: F.r, backs: F.backs, style: 'modern', BK: BK };
     return true;
@@ -2900,7 +2915,7 @@
     var F = seatFrame(m); if (!F) return false;
     if (mt.room === 'majlis') return seatMajlis(F, G, mt);
     if (mt.room === 'bedroom') return seatBedroom(F, G, mt);
-    return seatLiving(F, G, mt, {});
+    return seatLiving(F, G, mt, mt.sofaFab ? { fab: mt.sofaFab, pipe: mt.sofaFab, plinth: mt.walnut, pillow: mt.pilCream, small: [mt.pilRust, mt.pilOlive], throwMat: mt.knitDark } : {});
   }
 
   /* Rugs in front of seating: sized from the seating (under the front of the seats, out over the
@@ -3085,6 +3100,12 @@
     b.lemon = rmat('fruit', 0.65, '#E2BC3E', 0.5);
     b.chairUph = rmat('upholstery', 0.82, '#DCD2C3', 0.97, 'fabric', 0.1); // oatmeal woven fabric
     b.oakLeg = rmat('oakLeg', 0.6, '#BE9A73', 0.55, 'woodV', 0.5); // light oak
+    // living sofa: warm greige linen, cream boucle, terracotta and olive accents, charcoal knit
+    b.sofaFab = rmat('sofa', 0.7, '#AEA090', 0.96, 'fabric', 0.09);
+    b.pilCream = rmat('pillowC', 0.9, '#EFE9DE', 0.97, 'boucle', 0.18);
+    b.pilRust = rmat('pillowR', 0.45, '#97593F', 0.95, 'fabric', 0.1);
+    b.pilOlive = rmat('pillowO', 0.4, '#6F7352', 0.95, 'fabric', 0.1);
+    b.knitDark = rmat('throwD', 0.25, '#4B4641', 0.97, 'boucle', 0.12);
     return b;
   }
   function glowMatBed() {
@@ -3189,10 +3210,10 @@
     // coffee table: a honed travertine top on a recessed plinth (round when the piece is round or square)
     var tb = topH - 0.05;
     if (round || lo / sh < 1.15) {
-      put(G, new THREE.CylinderGeometry(sh / 2, sh / 2, 0.05, 64), mt.travertine, cu, topH - 0.025, cv);
+      put(G, new THREE.CylinderGeometry(sh / 2, sh / 2 - 0.004, 0.05, 64), mt.walnutH || mt.travertine, cu, topH - 0.025, cv);
       put(G, new THREE.CylinderGeometry(sh * 0.3, sh * 0.32, tb, 48), mt.travertine, cu, tb / 2, cv);
     } else {
-      put(G, rboxGeo(du, 0.05, dv, 0.012), mt.travertine, cu, topH - 0.025, cv);
+      put(G, rboxGeo(du, 0.05, dv, 0.012), mt.walnutH || mt.travertine, cu, topH - 0.025, cv);
       put(G, rboxGeo(Math.max(0.2, du - 0.26), tb, Math.max(0.2, dv - 0.26), 0.008), mt.travertine, cu, tb / 2, cv);
     }
     // styling: two stacked books and a low ceramic bowl
