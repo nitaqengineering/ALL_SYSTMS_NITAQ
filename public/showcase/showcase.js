@@ -520,7 +520,7 @@
   var AO_MIX = {
     uniforms: { tDiffuse: { value: null }, tAO: { value: null }, strength: { value: 1.0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float strength; varying vec2 vUv;\nvoid main() { vec4 c = texture2D(tDiffuse, vUv); float ao = texture2D(tAO, vUv).r; gl_FragColor = vec4(c.rgb * mix(1.0, pow(ao, 1.25), strength), c.a); }'
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float strength; varying vec2 vUv;\nvoid main() { vec4 c = texture2D(tDiffuse, vUv); float ao = texture2D(tAO, vUv).r; float oc = max(0.0, (1.0 - ao) - 0.12) / 0.88; gl_FragColor = vec4(c.rgb * (1.0 - oc * strength), c.a); }'
   };
   function halfAOPass() {
     var sa = new THREE.SSAOPass(scene, camera, 2, 2);
@@ -538,7 +538,11 @@
       sa.renderOverride(r, sa.normalMaterial, sa.normalRenderTarget, 0x7777ff, 1.0);
       sa.renderPass(r, sa.ssaoMaterial, sa.ssaoRenderTarget);
       sa.renderPass(r, sa.blurMaterial, sa.blurRenderTarget);
-      mix.uniforms.tDiffuse.value = readBuffer.texture; mix.uniforms.tAO.value = sa.blurRenderTarget.texture;
+      // a second blur (back into the ssao target) so the sampling noise cannot show as clouds
+      var bt = sa.blurMaterial.uniforms.tDiffuse; bt.value = sa.blurRenderTarget.texture;
+      sa.renderPass(r, sa.blurMaterial, sa.ssaoRenderTarget);
+      bt.value = sa.ssaoRenderTarget.texture;
+      mix.uniforms.tDiffuse.value = readBuffer.texture; mix.uniforms.tAO.value = sa.ssaoRenderTarget.texture;
       r.setRenderTarget(this.renderToScreen ? null : writeBuffer); quad.render(r);
     };
     pass.setSize = function (w, h) { sa.setSize(Math.max(2, Math.floor(w / 2)), Math.max(2, Math.floor(h / 2))); };
