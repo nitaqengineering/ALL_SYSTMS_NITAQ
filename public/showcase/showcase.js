@@ -3083,6 +3083,8 @@
     b.sage = rmat('ceramic3', 0.55, '#8F9C84', 0.55);
     b.ink = rmat('ceramic4', 0.2, '#2F3236', 0.4);
     b.lemon = rmat('fruit', 0.65, '#E2BC3E', 0.5);
+    b.chairUph = rmat('upholstery', 0.82, '#DCD2C3', 0.97, 'fabric', 0.1); // oatmeal woven fabric
+    b.oakLeg = rmat('oakLeg', 0.6, '#BE9A73', 0.55, 'woodV', 0.5); // light oak
     return b;
   }
   function glowMatBed() {
@@ -3261,21 +3263,56 @@
     g.rotateX(-Math.PI / 2); // arc behind the seat (−z), extruded upward
     return (shellCache[key] = g);
   }
+  /* Upholstered tub chair (reference): one continuous shell wraps the back and the sides, high at
+     the back and sweeping down to arm height at the front, with a rounded top edge; a thick seat
+     cushion inside it, four slim splayed light-oak legs. The shell is a closed profile swept
+     around the seat, so it reads as one soft padded piece. */
+  var tubCache = {};
+  function tubShellGeo(R, T, span, y0, hBack, hArm) {
+    var key = [R, T, span, y0, hBack, hArm].map(function (x) { return x.toFixed(3); }).join(); if (tubCache[key]) return tubCache[key];
+    var prof = [], k, N = 40, pos = [], idx = [];
+    prof.push([R - T, 0]); // inner bottom (y relative to the bottom; the top follows the sweep)
+    prof.push([R - T, -1]); // inner, up to the start of the rounded top (marker -1)
+    for (k = 1; k < 8; k++) { var a = Math.PI - Math.PI * k / 8; prof.push([R - T / 2 + Math.cos(a) * T / 2, -2, Math.sin(a) * T / 2]); }
+    prof.push([R, -1]); prof.push([R, 0]);
+    var P = prof.length;
+    for (var i = 0; i <= N; i++) {
+      var t = i / N, ang = -span + 2 * span * t, f = Math.abs(ang) / span;
+      var top = hArm + (hBack - hArm) * Math.pow(Math.cos(Math.min(1, f) * Math.PI / 2), 1.3);
+      var sn = Math.sin(ang), cs = -Math.cos(ang);
+      prof.forEach(function (q) {
+        var y = q[1] === 0 ? y0 : q[1] === -1 ? top - T / 2 : top - T / 2 + q[2];
+        pos.push(q[0] * sn, y, q[0] * cs);
+      });
+    }
+    for (i = 0; i < N; i++) for (k = 0; k < P; k++) {
+      var a0 = i * P + k, a1 = i * P + (k + 1) % P, b0 = a0 + P, b1 = a1 + P;
+      idx.push(a0, b0, a1, a1, b0, b1);
+    }
+    [0, N].forEach(function (e, ei) { // end caps
+      var c = pos.length / 3, sx = 0, sy = 0, sz = 0;
+      for (k = 0; k < P; k++) { sx += pos[(e * P + k) * 3]; sy += pos[(e * P + k) * 3 + 1]; sz += pos[(e * P + k) * 3 + 2]; }
+      pos.push(sx / P, sy / P, sz / P);
+      for (k = 0; k < P; k++) { var u = e * P + k, w2 = e * P + (k + 1) % P; if (ei) idx.push(c, u, w2); else idx.push(c, w2, u); }
+    });
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+    g.computeVertexNormals();
+    return (tubCache[key] = g);
+  }
   function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
     var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
-    w = Math.min(Math.max(w, 0.48), 0.56); d = Math.min(Math.max(d, 0.5), 0.56); hTop = Math.min(Math.max(hTop, 0.78), 0.84);
-    var seat = 0.47, wood = mt.walnut || mt.wood, skin = mt.leather || mt.chairFab || mt.cushion;
-    var legG = new THREE.CylinderGeometry(0.019, 0.012, seat - 0.07, 4); // square, tapering to the floor
+    w = Math.min(Math.max(w, 0.5), 0.58); hTop = Math.min(Math.max(hTop, 0.78), 0.84);
+    var uph = mt.chairUph || mt.chairFab || mt.cushion, leg = mt.oakLeg || mt.wood;
+    var R = w / 2, T = 0.065, seat = 0.48, y0 = 0.37;
+    put(C, tubShellGeo(R, T, 2.05, y0, hTop, 0.64), uph, 0, 0, 0);
+    var cush = put(C, new THREE.CylinderGeometry(R - T + 0.004, R - T - 0.006, seat - y0 + 0.005, 40, 1), uph, 0, (y0 + seat) / 2, 0.02);
+    cush.scale.set(1, 1, 1.08); // seat a little deeper than wide, its front past the shell
+    var front = put(C, rboxGeo(2 * (R - T) * 0.86, seat - y0, 0.16, 0.045), uph, 0, (y0 + seat) / 2 - 0.002, R - T - 0.02); // squared-off front edge
+    var lg = new THREE.CylinderGeometry(0.016, 0.009, y0 + 0.01, 14);
     [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s2) {
-      var lg = put(C, legG, wood, s2[0] * (w / 2 - 0.045), (seat - 0.07) / 2, s2[1] * (d / 2 - 0.045), Math.PI / 4);
-      lg.rotation.z = -s2[0] * 0.05; lg.rotation.x = s2[1] * 0.05; // slight splay
+      var l = put(C, lg, leg, s2[0] * R * 0.6, (y0 + 0.01) / 2, s2[1] * R * 0.6);
+      l.rotation.z = s2[0] * 0.14; l.rotation.x = -s2[1] * 0.14; // splayed outward
     });
-    put(C, rboxGeo(w - 0.04, 0.035, d - 0.05, 0.008), wood, 0, seat - 0.07, 0.01); // seat frame
-    put(C, rboxGeo(w, 0.075, d - 0.01, 0.03), skin, 0, seat - 0.01, 0.015); // leather cushion
-    put(C, rboxGeo(w - 0.06, 0.012, 0.004, 0.002), wood, 0, seat - 0.05, d / 2 + 0.01); // front lip
-    var R = w * 0.55, bh = hTop - seat - 0.06;
-    put(C, shellGeo(R, 1.2, bh), wood, 0, seat + 0.04, 0.03); // walnut shell
-    put(C, shellGeo(R - 0.045, 1.1, bh - 0.07), skin, 0, seat + 0.075, 0.03); // padded leather inside
     return C;
   }
   function buildChair(m, G, mt) {
