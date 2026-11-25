@@ -996,6 +996,8 @@
         }
         var m = new THREE.Mesh(g, glass ? glassMat : lookMaterial(b, smooth));
         m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
+        var lk = lookOf(b); // ceramic outside wet rooms (wash-area basins): sanitary ware too
+        if (b.grp === 'furn' && !glass && lk && (/ceramic/i.test(lk.cls || '') || /porcel|ceramic|china|sanit/i.test(lk.name || ''))) wetMeshes.push({ m: m, kind: 'china', anyRoom: true });
         if (!glass) parent.add(new THREE.Mesh(g, cap));
         if (!glass && FINISH_KIND[b.grp]) finishMeshes.push({ m: m, kind: FINISH_KIND[b.grp], color: b.color });
         if (!glass && ARCH.indexOf(b.grp) >= 0) edgeQueue.push({ g: g, grp: parent });
@@ -2023,12 +2025,22 @@
     var china = new THREE.MeshStandardMaterial({ color: 0xF8F7F4, roughness: 0.12, envMapIntensity: 1.1, clippingPlanes: [cutPlane] });
     var brass = mt.brass, walls = [], up = new THREE.Vector3(0, 1, 0), rc = new THREE.Raycaster();
     ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) walls.push(o); }); });
-    var T = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    var T = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), counterMeshes = [];
+    meshGroups.furn.traverse(function (o) { if (o.isMesh && o.visible && o.material.side !== THREE.BackSide && !wetMeshes.some(function (w2) { return w2.m === o; })) counterMeshes.push(o); });
+    // bathrooms that Revit only labels (no room polygon): within 3.5 m of a bath / WC label
+    var bathNotes = [];
+    D.levels.forEach(function (L) { var fy2 = L.elevation + (L._slabTop || 0); (L.notes || []).forEach(function (q) { if (/bath|toil|wc|powder|حمام|دورة/i.test((q.name || '') + ' ' + (q.nameAr || ''))) bathNotes.push({ x: q.x - CX, z: -(q.y - CY), fy: fy2 }); }); });
+    function noteWet(x, y, z) { return bathNotes.some(function (q) { return y > q.fy - 0.2 && y < q.fy + 3 && (q.x - x) * (q.x - x) + (q.z - z) * (q.z - z) < 12.25; }); }
+    if (bathNotes.length) counterMeshes.forEach(function (o) { // the Revit furniture there may hold a WC dressed as anything
+      if (o.geometry.index || !o.geometry.attributes.normal) return;
+      var bb = new THREE.Box3().setFromObject(o); if (bathNotes.some(function (q) { return bb.min.x < q.x + 3.5 && bb.max.x > q.x - 3.5 && bb.min.z < q.z + 3.5 && bb.max.z > q.z - 3.5 && bb.min.y < q.fy + 1.5 && bb.max.y > q.fy; })) wetMeshes.push({ m: o, kind: 'extra' });
+    });
     wetMeshes.forEach(function (wmI, mi) {
       var m = wmI.m, pa = m.geometry.attributes.position;
       for (var t = 0; t < pa.count; t += 3) {
         a.fromBufferAttribute(pa, t).applyMatrix4(m.matrixWorld); b.fromBufferAttribute(pa, t + 1).applyMatrix4(m.matrixWorld); c.fromBufferAttribute(pa, t + 2).applyMatrix4(m.matrixWorld);
-        T.push({ mi: mi, t: t, chrome: wmI.kind === 'chrome', x0: Math.min(a.x, b.x, c.x), x1: Math.max(a.x, b.x, c.x), y0: Math.min(a.y, b.y, c.y), y1: Math.max(a.y, b.y, c.y), z0: Math.min(a.z, b.z, c.z), z1: Math.max(a.z, b.z, c.z), pts: [a.clone(), b.clone(), c.clone()] });
+        if (wmI.kind === 'extra' && !noteWet((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3)) continue;
+        T.push({ mi: mi, t: t, cls: wmI.kind === 'extra' ? 'x' : 'c', chrome: wmI.kind === 'chrome', anyRoom: !!wmI.anyRoom, x0: Math.min(a.x, b.x, c.x), x1: Math.max(a.x, b.x, c.x), y0: Math.min(a.y, b.y, c.y), y1: Math.max(a.y, b.y, c.y), z0: Math.min(a.z, b.z, c.z), z1: Math.max(a.z, b.z, c.z), pts: [a.clone(), b.clone(), c.clone()] });
       }
     });
     // pieces: union triangles of china whose boxes touch (6 cm grid)
@@ -2037,17 +2049,19 @@
     T.forEach(function (t, i) {
       if (t.chrome) return;
       for (var x = Math.floor(t.x0 / G); x <= Math.floor(t.x1 / G); x++) for (var y = Math.floor(t.y0 / G); y <= Math.floor(t.y1 / G); y++) for (var z = Math.floor(t.z0 / G); z <= Math.floor(t.z1 / G); z++) {
-        var k = x + ',' + y + ',' + z; if (cell[k] == null) cell[k] = i; else { var r1 = find(cell[k]), r2 = find(i); if (r1 !== r2) par[r1] = r2; }
+        var k = t.cls + x + ',' + y + ',' + z; if (cell[k] == null) cell[k] = i; else { var r1 = find(cell[k]), r2 = find(i); if (r1 !== r2) par[r1] = r2; }
       }
     });
     var pieces = {};
-    T.forEach(function (t, i) { if (t.chrome) return; var r = find(i), P = pieces[r] || (pieces[r] = { tris: [], x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 }); P.tris.push(i); P.x0 = Math.min(P.x0, t.x0); P.x1 = Math.max(P.x1, t.x1); P.y0 = Math.min(P.y0, t.y0); P.y1 = Math.max(P.y1, t.y1); P.z0 = Math.min(P.z0, t.z0); P.z1 = Math.max(P.z1, t.z1); });
-    var drop = {}, toBrass = {}; // triangles moved to the original-only mesh / turned to brass
+    T.forEach(function (t, i) { if (t.chrome) return; var r = find(i), P = pieces[r] || (pieces[r] = { cls: t.cls, anyRoom: t.anyRoom, tris: [], x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 }); P.tris.push(i); P.x0 = Math.min(P.x0, t.x0); P.x1 = Math.max(P.x1, t.x1); P.y0 = Math.min(P.y0, t.y0); P.y1 = Math.max(P.y1, t.y1); P.z0 = Math.min(P.z0, t.z0); P.z1 = Math.max(P.z1, t.z1); });
+    var drop = {}, toBrass = {}, slabs = [], cutBoxes = []; // triangles moved to the original-only mesh / turned to brass
     Object.keys(pieces).forEach(function (r) {
       var P = pieces[r], cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, L = levelAt(P.y0 + 0.05), fy = L.elevation + (L._slabTop || 0);
-      if (roomTypeAt(cx, P.y0 + 0.05, cz) !== 'wet') return;
+      var dbg = {};
+      var inNote = noteWet(cx, P.y0 + 0.05, cz);
+      if (!P.anyRoom && !inNote && roomTypeAt(cx, P.y0 + 0.05, cz) !== 'wet') { dbg.r = 'room'; return; }
       var hy0 = P.y0 - fy, hy1 = P.y1 - fy;
-      if (Math.max(P.x1 - P.x0, P.z1 - P.z0, P.y1 - P.y0) < 0.35 && hy0 > 0.5) { P.tris.forEach(function (i) { toBrass[i] = 1; }); return; } // a small china fitting (mixer, tap): brushed brass
+      if (P.cls === 'c' && Math.max(P.x1 - P.x0, P.z1 - P.z0, P.y1 - P.y0) < 0.35 && hy0 > 0.5) { P.tris.forEach(function (i) { toBrass[i] = 1; }); return; } // a small china fitting (mixer, tap): brushed brass
       if (P.tris.length < 12 || hy1 > 1.3 || hy1 < 0.3 || Math.max(P.x1 - P.x0, P.z1 - P.z0) > 1.0) return;
       // the wall it hangs on: nearest wall face around it at mid height
       var best = null, o = new THREE.Vector3(cx, Math.min(fy + hy1 - 0.05, fy + 0.7), cz);
@@ -2055,24 +2069,54 @@
         var ang = k2 * Math.PI / 4, d = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)); rc.set(o, d); rc.far = 1.2;
         var h = rc.intersectObjects(walls, false)[0]; if (h && (!best || h.distance < best.h.distance)) best = { h: h, d: d };
       }
-      if (!best) return;
+      if (!best) { dbg.r = 'nowall'; return; }
       var n = best.h.face.normal.clone().transformDirection(best.h.object.matrixWorld); n.y = 0; if (n.lengthSq() < 0.5) return; n.normalize(); if (n.dot(best.d) > 0) n.negate();
       var F = n, X = new THREE.Vector3().crossVectors(up, F), O = best.h.point.clone(); O.y = fy;
       var w0 = 1e9, w1 = -1e9, d0 = 1e9, d1 = -1e9;
       P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var lx = (q.x - O.x) * X.x + (q.z - O.z) * X.z, lz = (q.x - O.x) * F.x + (q.z - O.z) * F.z; w0 = Math.min(w0, lx); w1 = Math.max(w1, lx); d0 = Math.min(d0, lz); d1 = Math.max(d1, lz); }); });
-      var W = w1 - w0, Dp = d1 - d0, xm = (w0 + w1) / 2; if (d0 > 0.25) return; // not against a wall
+      var W = w1 - w0, Dp = d1 - d0, xm = (w0 + w1) / 2; dbg.W = +W.toFixed(2); dbg.D = +Dp.toFixed(2); dbg.d0 = +d0.toFixed(2); dbg.h = [+hy0.toFixed(2), +hy1.toFixed(2)]; if (d0 > 0.25) { dbg.r = 'far'; return; } // not against a wall
       var kind = (W >= Dp * 0.95 && W >= 0.38 && Dp >= 0.28 && hy1 > 0.7 && hy1 < 1.15 && W < 0.95 && Dp < 0.65) ? 'basin' : (Dp > W * 1.15 && hy0 < 0.45 && hy1 < 1.15 && W > 0.28 && W < 0.6 && Dp > 0.42 && Dp < 0.9) ? 'wc' : '';
-      if (!kind) return;
+      if (P.cls === 'x' && kind !== 'wc') kind = ''; // from other furniture: only a WC is taken
+      dbg.k = kind; if (!kind) return;
       var Gp = new THREE.Group(); Gp.matrixAutoUpdate = false; Gp.matrix.makeBasis(X, up, F).setPosition(O.x + X.x * xm, fy, O.z + X.z * xm); realGroup.add(Gp);
       function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
       if (kind === 'basin') {
-        var counter = hy0 > 0.55 && hy0 < 0.95 && Dp < 0.3, top = counter ? hy0 : 0.84, Wv = Math.min(Math.max(W + 0.25, 0.7), 1.0);
+        // an existing counter around it? (a surface just below the basin's rim, beside it)
+        var cTop = null; [1, -1].forEach(function (sg) {
+          if (cTop != null) return;
+          var po = new THREE.Vector3(O.x + X.x * (xm + sg * (W / 2 + 0.08)) + F.x * (d0 + d1) / 2, P.y1 + 0.1, O.z + X.z * (xm + sg * (W / 2 + 0.08)) + F.z * (d0 + d1) / 2);
+          rc.set(po, new THREE.Vector3(0, -1, 0)); rc.far = 0.3;
+          var hh = rc.intersectObjects(meshGroups.furn.children.length ? counterMeshes : [], false)[0]; if (hh && hh.point.y > P.y1 - 0.12) cTop = hh.point.y - fy;
+        });
+        var counter = cTop != null || (hy0 > 0.55 && hy0 < 0.95 && Dp < 0.3), top = cTop != null ? cTop : counter ? hy0 : 0.84, Wv = Math.min(Math.max(W + 0.25, 0.7), 1.0);
         if (!counter) { // floating walnut vanity with a Calacatta top
           add(rboxGeo(Wv, 0.42, 0.47, 0.01), mt.walnut, 0, top - 0.02 - 0.21, 0.235);
           add(rboxGeo(Wv - 0.06, 0.004, 0.01, 0.001), brass, 0, top - 0.24, 0.472); // brass reveal between the drawers
           add(rboxGeo(Wv + 0.02, 0.02, 0.5, 0.004), mt.calacatta, 0, top - 0.01, 0.25);
         }
         var bz = counter ? Math.max(0.18, (d0 + d1) / 2) : 0.27;
+        if (cTop != null) { // on an existing counter: a Calacatta top over the whole counter, the vessel and a brass mixer on it
+          var cy0 = fy + cTop, here = Gp.matrix.clone(), inv = new THREE.Matrix4().copy(here).invert();
+          function onCounter(lx, lz) { var w3 = new THREE.Vector3(lx, cTop + 0.1, lz).applyMatrix4(here); rc.set(w3, new THREE.Vector3(0, -1, 0)); rc.far = 0.16; var hh = rc.intersectObjects(counterMeshes, false)[0]; return hh && Math.abs(hh.point.y - cy0) < 0.03; }
+          var midz = (d0 + d1) / 2, slab = slabs.filter(function (sl) { var q2 = new THREE.Vector3(0, 0, midz).applyMatrix4(here).applyMatrix4(sl.inv); return Math.abs(q2.x - sl.cx) < sl.w / 2 && q2.z > 0 && q2.z < sl.d; })[0];
+          if (!slab) {
+            var xa2 = -W / 2, xb2 = W / 2, dz2 = d1;
+            for (var st = 0; st < 40 && onCounter(xa2 - 0.05, Math.min(midz, 0.2)); st++) xa2 -= 0.05;
+            for (st = 0; st < 40 && onCounter(xb2 + 0.05, Math.min(midz, 0.2)); st++) xb2 += 0.05;
+            for (st = 0; st < 20 && onCounter(xa2 + 0.1, dz2 + 0.03); st++) dz2 += 0.03;
+            slab = { cx: (xa2 + xb2) / 2, w: xb2 - xa2 + 0.04, d: dz2 + 0.015, inv: inv };
+            slabs.push(slab);
+            add(rboxGeo(slab.w, 0.07, slab.d + 0.015, 0.004), mt.calacatta, slab.cx, cTop - 0.005, (slab.d + 0.015) / 2); // deep edge hides the old top
+            add(rboxGeo(slab.w, 0.1, 0.02, 0.003), mt.calacatta, slab.cx, cTop + 0.03 + 0.05, 0.01); // upstand
+          }
+          var vt = cTop + 0.03, vz = Math.max(0.24, midz);
+          add(lathe('bowl', VASES.bowl), china, 0, vt, vz, 1.55, 1.7, 1.2);
+          add(new THREE.CylinderGeometry(0.016, 0.019, 0.3, 20), brass, 0, vt + 0.15, vz - 0.2);
+          var sp2 = add(new THREE.CylinderGeometry(0.011, 0.011, 0.15, 14), brass, 0, vt + 0.29, vz - 0.13); sp2.rotation.x = Math.PI / 2;
+          // the old taps and basin go (only while the realistic furniture is shown)
+          cutBoxes.push(new THREE.Box3(new THREE.Vector3(P.x0 - 0.16, cy0 + 0.004, P.z0 - 0.16), new THREE.Vector3(P.x1 + 0.16, cy0 + 0.42, P.z1 + 0.16)));
+          P.tris.forEach(function (i) { drop[i] = 1; }); return;
+        }
         add(lathe('bowl', VASES.bowl), china, 0, top, bz, 1.55, 1.7, 1.2); // oval vessel basin
         var tz = bz - 0.2; // tall brass mixer behind it
         add(new THREE.CylinderGeometry(0.016, 0.019, 0.3, 20), brass, 0, top + 0.15, tz);
@@ -2089,20 +2133,58 @@
       }
       P.tris.forEach(function (i) { drop[i] = 1; });
     });
-    // split each wet mesh: kept triangles stay, replaced ones go to a mesh shown only without realistic furniture
-    wetMeshes.forEach(function (wmI, mi) {
-      var m = wmI.m, pa = m.geometry.attributes.position, na = m.geometry.attributes.normal, keepV = [], keepN = [], gonV = [], gonN = [], brV = [], brN = [], any = false;
-      var base = 0; for (var q = 0; q < T.length; q++) if (T[q].mi === mi) { base = q; break; }
+    // old taps on replaced counters: triangles wholly inside a basin's box move to the original-only mesh
+    T.forEach(function (t, i) { if (t.chrome && cutBoxes.some(function (cb) { return cb.containsPoint(new THREE.Vector3(t.x0, t.y0, t.z0)) && cb.containsPoint(new THREE.Vector3(t.x1, t.y1, t.z1)); })) drop[i] = 1; });
+    Object.keys(toBrass).forEach(function (i) { var t = T[i]; if (cutBoxes.some(function (cb) { return cb.containsPoint(new THREE.Vector3(t.x0, t.y0, t.z0)) && cb.containsPoint(new THREE.Vector3(t.x1, t.y1, t.z1)); })) { delete toBrass[i]; drop[i] = 1; } });
+    function inCut(w) { // a small triangle centred in a replaced basin's box (taps reach down through the counter)
+      var ctr = new THREE.Vector3().add(w[0]).add(w[1]).add(w[2]).divideScalar(3), bx = new THREE.Box3().setFromPoints(w), sz = bx.getSize(new THREE.Vector3());
+      return Math.max(sz.x, sz.z) < 0.25 && sz.y < 0.5 && cutBoxes.some(function (cb) { return cb.containsPoint(ctr); });
+    }
+    var cutCands = counterMeshes.slice(); Object.keys(meshGroups).filter(function (k) { return ['furn', 'floor', 'ceil', 'wall', 'pave'].indexOf(k) < 0; }).forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.visible && o.material.side !== THREE.BackSide) cutCands.push(o); }); });
+    if (cutBoxes.length) cutCands.forEach(function (m) {
+      var g = m.geometry;
+      if (g.index) { // indexed (arch, ext): cut triangles collapse in place; the original-only mesh keeps them
+        var bb0 = new THREE.Box3().setFromObject(m); if (!cutBoxes.some(function (cb) { return cb.intersectsBox(bb0); })) return;
+        var ix = g.index.array, pa0 = g.attributes.position, cutI = [], w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+        for (var t0 = 0; t0 < ix.length; t0 += 3) {
+          for (var k0 = 0; k0 < 3; k0++) w[k0].fromBufferAttribute(pa0, ix[t0 + k0]).applyMatrix4(m.matrixWorld);
+          if (inCut(w)) { cutI.push(ix[t0], ix[t0 + 1], ix[t0 + 2]); ix[t0 + 1] = ix[t0 + 2] = ix[t0]; }
+        }
+        if (cutI.length) { g.index.needsUpdate = true; var gi = new THREE.BufferGeometry(); Object.keys(g.attributes).forEach(function (an) { gi.setAttribute(an, g.attributes[an]); }); gi.setIndex(cutI); var oi = new THREE.Mesh(gi, m.material); oi.visible = !S.realFurn; m.parent.add(oi); wetOrig.push(oi); }
+        return;
+      }
+      if (!g.attributes.normal) return;
+      var bb = new THREE.Box3().setFromObject(m); if (!cutBoxes.some(function (cb) { return cb.intersectsBox(bb); })) return;
+      var pa = g.attributes.position, na = g.attributes.normal, kV = [], kN = [], cV = [], cN = [], v3 = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
       for (var t = 0; t < pa.count; t += 3) {
-        var gone = drop[base + t / 3], br = !gone && toBrass[base + t / 3], V = gone ? gonV : br ? brV : keepV, N = gone ? gonN : br ? brN : keepN; if (gone || br) any = true;
+        for (var k = 0; k < 3; k++) v3[k].fromBufferAttribute(pa, t + k).applyMatrix4(m.matrixWorld);
+        var cut = inCut(v3), V = cut ? cV : kV, N = cut ? cN : kN;
+        for (k = 0; k < 3; k++) { V.push(pa.getX(t + k), pa.getY(t + k), pa.getZ(t + k)); N.push(na.getX(t + k), na.getY(t + k), na.getZ(t + k)); }
+      }
+      if (!cV.length) return;
+      var g1 = new THREE.BufferGeometry(); g1.setAttribute('position', new THREE.Float32BufferAttribute(cV, 3)); g1.setAttribute('normal', new THREE.Float32BufferAttribute(cN, 3));
+      var om2 = new THREE.Mesh(g1, m.material); om2.visible = !S.realFurn; m.parent.add(om2); wetOrig.push(om2);
+      var g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.Float32BufferAttribute(kV, 3)); g2.setAttribute('normal', new THREE.Float32BufferAttribute(kN, 3)); swapGeo(m, g2);
+    });
+    // split each wet mesh: kept triangles stay, replaced ones go to a mesh shown only without realistic furniture
+    var dropBy = {}, brassBy = {};
+    Object.keys(drop).forEach(function (i) { var t = T[i]; (dropBy[t.mi] || (dropBy[t.mi] = {}))[t.t] = 1; });
+    Object.keys(toBrass).forEach(function (i) { var t = T[i]; (brassBy[t.mi] || (brassBy[t.mi] = {}))[t.t] = 1; });
+    wetMeshes.forEach(function (wmI, mi) {
+      var dS = dropBy[mi] || {}, bS = brassBy[mi] || {}; if (!dropBy[mi] && !brassBy[mi]) return;
+      var m = wmI.m, pa = m.geometry.attributes.position, na = m.geometry.attributes.normal, keepV = [], keepN = [], gonV = [], gonN = [], brV = [], brN = [];
+      for (var t = 0; t < pa.count; t += 3) {
+        var gone = dS[t], br = !gone && bS[t], V = gone ? gonV : br ? brV : keepV, N = gone ? gonN : br ? brN : keepN;
         for (var k = 0; k < 3; k++) { V.push(pa.getX(t + k), pa.getY(t + k), pa.getZ(t + k)); N.push(na.getX(t + k), na.getY(t + k), na.getZ(t + k)); }
       }
-      if (!any) return;
       function geo(V2, N2) { var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V2, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N2, 3)); return g; }
       if (gonV.length) { var om = new THREE.Mesh(geo(gonV, gonN), m.material); om.visible = !S.realFurn; m.parent.add(om); wetOrig.push(om); }
       if (brV.length) { var bm = new THREE.Mesh(geo(brV, brN), brass); bm.castShadow = true; m.parent.add(bm); }
-      m.geometry = geo(keepV, keepN);
+      swapGeo(m, geo(keepV, keepN));
     });
+  }
+  function swapGeo(m, g) { // the mesh and its section-cut cap share one geometry: swap both
+    var old = m.geometry; m.parent.children.forEach(function (o) { if (o.geometry === old) o.geometry = g; });
   }
   function greedyRects(mask, nu, nv) {
     var used = new Uint8Array(nu * nv), out = [];
