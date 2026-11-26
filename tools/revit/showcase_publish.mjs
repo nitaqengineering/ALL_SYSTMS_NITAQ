@@ -34,7 +34,7 @@ export function linkUrl(env, token) { return (env.SHOWCASE_SITE || SITE) + '?v='
 function api(env, fetchImpl) {
   const base = (env.SHOWCASE_URL || '').replace(/\/+$/, ''), key = env.SHOWCASE_SERVICE_KEY || '';
   if (!/^https:\/\//.test(base) || !key) throw new Error('Set SHOWCASE_URL and SHOWCASE_SERVICE_KEY in .env first.');
-  const auth = {apikey: key, Authorization: 'Bearer ' + key};
+  const auth = key.startsWith('sb_') ? {apikey: key} : {apikey: key, Authorization: 'Bearer ' + key}; // new sb_secret keys: apikey header only
   async function call(path, init = {}) {
     const res = await fetchImpl(base + path, {...init, headers: {...auth, ...(init.headers || {})}});
     const text = await res.text();

@@ -7,7 +7,7 @@ import {handle} from '../showcase-cloud/supabase/functions/showcase/handler.mjs'
 import {handlePublish, sha256hex} from '../showcase-cloud/supabase/functions/showcase-publish/handler.mjs';
 import {publish, createLink, listLinks, setActive, newToken, linkUrl, addPublisher, listPublishers, setPublisher, upload, newPublisherKey} from '../tools/revit/showcase_publish.mjs';
 
-const BASE = 'https://showcase-test.supabase.co', KEY = 'service-test-key';
+const BASE = 'https://showcase-test.supabase.co', KEY = 'service-test-key', NEWKEY = 'sb_secret_test0000';
 const SITE_ORIGIN = 'https://nitaqengineering.github.io';
 const db = {villas: new Map(), links: new Map(), publishers: new Map()}, files = new Map();
 
@@ -21,7 +21,8 @@ async function fakeSupabase(url, init = {}) {
     if (u.searchParams.get('token') !== 'up-' + path) return out(403, {error: 'token'});
     files.set(path, init.body); return out(200, {Key: path});
   }
-  if (h.apikey !== KEY || h.Authorization !== 'Bearer ' + KEY) return out(401, {error: 'auth'});
+  const legacy = h.apikey === KEY && h.Authorization === 'Bearer ' + KEY, modern = h.apikey === NEWKEY && !h.Authorization; // a new sb_ key as Bearer is refused
+  if (!legacy && !modern) return out(401, {error: 'auth'});
   const p = u.pathname, body = typeof init.body === 'string' ? JSON.parse(init.body || 'null') : init.body;
   const eq = (k) => (u.searchParams.get(k) || '').replace(/^eq\./, '');
   if (p === '/rest/v1/rpc/showcase_open') {
@@ -188,5 +189,11 @@ await assert.rejects(upload(cfg, 'villa-7001', '', villa('E3'), pubFetch), /not 
 assert.equal((await listPublishers(env, fakeSupabase))[0].active, false);
 await assert.rejects(upload({endpoint: '', key: ''}, 'villa-7001', '', villa('E3'), pubFetch), /not set up/);
 assert.equal((await handlePublish(new Request(PUB, {method: 'POST'}), {}, fakeSupabase)).status, 503);
+
+// New projects: the sb_secret key from SUPABASE_SECRET_KEYS, sent on the apikey header only.
+const modernEnv = {SUPABASE_URL: BASE, SUPABASE_SECRET_KEYS: JSON.stringify({default: NEWKEY}), SHOWCASE_ALLOWED_ORIGINS: SITE_ORIGIN};
+assert.equal((await handle(new Request(`${BASE}/functions/v1/showcase?v=${officeToken}`), modernEnv, fakeSupabase)).status, 200);
+assert.equal((await (await handlePublish(new Request(PUB, {method: 'POST', headers: {'x-nitaq-key': omar, 'Content-Type': 'application/json'}, body: JSON.stringify({op: 'links', slug: 'villa-7001'})}), modernEnv, fakeSupabase)).json()).error, 'key', 'Omar is still switched off');
+assert.equal((await listLinks({SHOWCASE_URL: BASE, SHOWCASE_SERVICE_KEY: NEWKEY}, 'villa-7001', fakeSupabase)).length, 2);
 
 console.log('PASS showcase cloud: owner links open the latest upload on the same URL; switched-off/unknown links 404 alike; links bound to one villa; opens counted; no-store; origin-restricted; engineers publish with their own revocable key (hash only stored), uploads keep the villa link, old files removed, stale/bad requests refused');

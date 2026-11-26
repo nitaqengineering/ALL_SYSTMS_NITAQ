@@ -15,6 +15,13 @@
 
 const SLUG = /^[a-z0-9-]{1,60}$/, KEY = /^nsk_[a-z0-9]{24,64}$/, FILE = /^[a-z0-9-]{1,80}\.(bin|json)$/;
 const ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
+// The project's secret key: the new sb_secret key (SUPABASE_SECRET_KEYS, default) when present, else
+// the legacy service_role JWT. New keys go on the apikey header only (as a Bearer they are refused).
+function secretKey(env) {
+  try { const k = JSON.parse(env.SUPABASE_SECRET_KEYS || '{}').default; if (k) return k; } catch { /* not set */ }
+  return env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+function authFor(key) { return key.startsWith('sb_') ? { apikey: key } : { apikey: key, Authorization: 'Bearer ' + key }; }
 export const SITE = 'https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/';
 
 export async function sha256hex(text) {
@@ -28,10 +35,10 @@ export async function handlePublish(request, env, fetchImpl = fetch) {
     status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' }
   });
   if (request.method !== 'POST') return reply(405, { error: 'method' });
-  const base = (env.SUPABASE_URL || '').replace(/\/+$/, ''), key = env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const base = (env.SUPABASE_URL || '').replace(/\/+$/, ''), key = secretKey(env);
   if (!base || !key) return reply(503, { error: 'config' });
   const site = env.SHOWCASE_SITE || SITE, linkOf = (t) => site + '?v=' + t;
-  const auth = { apikey: key, Authorization: 'Bearer ' + key };
+  const auth = authFor(key);
   const db = async (path, init = {}) => {
     const res = await fetchImpl(base + path, { ...init, headers: { ...auth, ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(init.headers || {}) } });
     const text = await res.text();

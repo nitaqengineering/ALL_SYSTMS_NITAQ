@@ -9,6 +9,14 @@
 const TOKEN = /^[a-z0-9-]{12,80}$/;
 const SIGNED_SECONDS = 15 * 60;
 
+// The project's secret key: the new sb_secret key (SUPABASE_SECRET_KEYS, default) when present, else
+// the legacy service_role JWT. New keys go on the apikey header only (as a Bearer they are refused).
+function secretKey(env) {
+  try { const k = JSON.parse(env.SUPABASE_SECRET_KEYS || '{}').default; if (k) return k; } catch { /* not set */ }
+  return env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+function authFor(key) { return key.startsWith('sb_') ? { apikey: key } : { apikey: key, Authorization: 'Bearer ' + key }; }
+
 export async function handle(request, env, fetchImpl = fetch) {
   const allowed = (env.SHOWCASE_ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
   const origin = request.headers.get('origin') || '';
@@ -26,13 +34,13 @@ export async function handle(request, env, fetchImpl = fetch) {
   if (origin && !allowed.includes(origin)) return reply(403, { error: 'origin' });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
   if (request.method !== 'GET') return reply(405, { error: 'method' });
-  const base = (env.SUPABASE_URL || '').replace(/\/+$/, ''), key = env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const base = (env.SUPABASE_URL || '').replace(/\/+$/, ''), key = secretKey(env);
   if (!base || !key) return reply(503, { error: 'config' });
 
   const token = new URL(request.url).searchParams.get('v') || '';
   if (!TOKEN.test(token)) return reply(400, { error: 'link' });
 
-  const auth = { apikey: key, Authorization: 'Bearer ' + key };
+  const auth = authFor(key);
   try {
     const open = await fetchImpl(base + '/rest/v1/rpc/showcase_open', {
       method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },

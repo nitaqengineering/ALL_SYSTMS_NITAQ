@@ -7,5 +7,6 @@ import { handlePublish } from './handler.mjs';
 Deno.serve((request) => handlePublish(request, {
   SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+  SUPABASE_SECRET_KEYS: Deno.env.get('SUPABASE_SECRET_KEYS'),
   SHOWCASE_SITE: Deno.env.get('SHOWCASE_SITE'),
 }));
