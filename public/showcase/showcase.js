@@ -3619,6 +3619,8 @@
       var nx = (wa - runA) * CELL, nw = Math.min((wb - wa + 1) * CELL, 0.6), nd = Math.min(lb * CELL, 0.42);
       var cx = nx + (wb - wa + 1) * CELL / 2, lac = mt.creamLacq || mt.ceramic, brass = mt.brass || mt.metal, Hn = 0.56, z0 = 0.03, zc = z0 + nd / 2;
       nw = Math.max(nw, 0.45);
+      // keep clear of the bed: its upholstered base and the runner hang ~13 cm past the mattress
+      if (side === 0) cx = Math.min(cx, -0.15 - nw / 2); else cx = Math.max(cx, W + 0.15 + nw / 2);
       [-1, 1].forEach(function (sg) { bx(0.032, Hn, nd, cx + sg * (nw / 2 - 0.016), Hn / 2, zc, lac, 0, 0.015); }); // waterfall sides
       bx(nw, 0.032, nd, cx, Hn - 0.016, zc, lac, 0, 0.015); // top
       bx(nw - 0.064, 0.008, nd - 0.04, cx, Hn - 0.04 - 2 * 0.2 - 0.016, zc, lac, 0, 0.003); // shelf under the drawers
