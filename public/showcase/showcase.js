@@ -2062,6 +2062,25 @@
       if (!P.anyRoom && !inNote && roomTypeAt(cx, P.y0 + 0.05, cz) !== 'wet') { dbg.r = 'room'; return; }
       var hy0 = P.y0 - fy, hy1 = P.y1 - fy;
       if (P.cls === 'c' && Math.max(P.x1 - P.x0, P.z1 - P.z0, P.y1 - P.y0) < 0.35 && hy0 > 0.5) { P.tris.forEach(function (i) { toBrass[i] = 1; }); return; } // a small china fitting (mixer, tap): brushed brass
+      if (hy0 < 0.15 && hy1 > 0.4 && hy1 < 0.8 && Math.max(P.x1 - P.x0, P.z1 - P.z0) > 1.2) { // a bathtub?
+        var sx = 0, sz = 0, nP = 0, cxx = 0, czz = 0, cxz = 0;
+        P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { sx += q.x; sz += q.z; nP++; }); }); sx /= nP; sz /= nP;
+        P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var ax = q.x - sx, az = q.z - sz; cxx += ax * ax; czz += az * az; cxz += ax * az; }); });
+        var th = 0.5 * Math.atan2(2 * cxz, cxx - czz), ux = Math.cos(th), uz = Math.sin(th), l0 = 1e9, l1 = -1e9, s0 = 1e9, s1 = -1e9;
+        P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var lu = (q.x - sx) * ux + (q.z - sz) * uz, lv = -(q.x - sx) * uz + (q.z - sz) * ux; l0 = Math.min(l0, lu); l1 = Math.max(l1, lu); s0 = Math.min(s0, lv); s1 = Math.max(s1, lv); }); });
+        var TL = l1 - l0, TW = s1 - s0;
+        if (TL > 1.3 && TL < 2.2 && TW > 0.6 && TW < 1.05) {
+          var Gt = new THREE.Group(); Gt.position.y = fy; // centred on the tub, long axis = its principal axis
+          Gt.position.x = sx + ux * (l0 + l1) / 2 - uz * (s0 + s1) / 2; Gt.position.z = sz + uz * (l0 + l1) / 2 + ux * (s0 + s1) / 2;
+          Gt.rotation.y = -th; realGroup.add(Gt);
+          var tub = new THREE.Mesh(tubGeo(), china); tub.scale.set(TL - 0.02, Math.min(Math.max(hy1, 0.55), 0.62) / 0.6, TW - 0.02); tub.castShadow = tub.receiveShadow = true; Gt.add(tub);
+          // a freestanding brass filler at one end
+          var fl = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.95, 20), brass); fl.position.set(TL / 2 + 0.16, 0.475, 0); fl.castShadow = true; Gt.add(fl);
+          var arc = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.013, 12, 28, Math.PI), brass); arc.position.set(TL / 2 + 0.05, 0.95, 0); arc.castShadow = true; Gt.add(arc);
+          var bs = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.012, 24), brass); bs.position.set(TL / 2 + 0.16, 0.006, 0); Gt.add(bs);
+          P.tris.forEach(function (i) { drop[i] = 1; }); return;
+        }
+      }
       if (P.tris.length < 12 || hy1 > 1.3 || hy1 < 0.3 || Math.max(P.x1 - P.x0, P.z1 - P.z0) > 1.0) return;
       // the wall it hangs on: nearest wall face around it at mid height
       var best = null, o = new THREE.Vector3(cx, Math.min(fy + hy1 - 0.05, fy + 0.7), cz);
@@ -2182,6 +2201,13 @@
       if (brV.length) { var bm = new THREE.Mesh(geo(brV, brN), brass); bm.castShadow = true; m.parent.add(bm); }
       swapGeo(m, geo(keepV, keepN));
     });
+  }
+  var tubG = null;
+  function tubGeo() { // a soft oval freestanding tub, unit size (1 x 0.6 x 1), scaled to the Revit tub
+    if (tubG) return tubG;
+    var prof = [[0, 0.02], [0.36, 0.02], [0.43, 0.08], [0.48, 0.3], [0.5, 0.55], [0.497, 0.595], [0.48, 0.6], [0.462, 0.585], [0.45, 0.52], [0.42, 0.28], [0.35, 0.12], [0.2, 0.095], [0, 0.09]];
+    tubG = new THREE.LatheGeometry(prof.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 72); tubG.computeVertexNormals();
+    return tubG;
   }
   function swapGeo(m, g) { // the mesh and its section-cut cap share one geometry: swap both
     var old = m.geometry; m.parent.children.forEach(function (o) { if (o.geometry === old) o.geometry = g; });
