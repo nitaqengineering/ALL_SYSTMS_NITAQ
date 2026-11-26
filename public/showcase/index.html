@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NITAQ — عرض المشروع ثلاثي الأبعاد</title>
 <link rel="icon" href="../NITAQ-Logo-gold.svg">
 <style>
@@ -90,19 +90,60 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .sw{display:flex;flex:none}
 .sw i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.25);margin-inline-end:-4px}
 .err{padding:40px;text-align:center;color:var(--steel)}
+/* phone-only controls (shown by the media query below) */
+.hud,.joy,#bMore,.grab,.scrim{display:none}
+.hud{position:absolute;top:12px;inset-inline-end:12px;flex-direction:column;gap:8px;z-index:3}
+.fab{width:40px;height:40px;border-radius:50%;background:rgba(16,23,37,.82);color:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(16,23,37,.3);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);touch-action:manipulation}
+.fab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fab.on{background:var(--gold);color:var(--navy)}
+.joy{position:absolute;left:18px;width:124px;height:124px;border-radius:50%;background:radial-gradient(circle,rgba(16,23,37,.18),rgba(16,23,37,.42));border:1.5px solid rgba(255,255,255,.45);touch-action:none;align-items:center;justify-content:center;z-index:3;-webkit-user-select:none;user-select:none}
+.joy i{width:52px;height:52px;border-radius:50%;background:var(--gold);box-shadow:0 6px 18px rgba(16,23,37,.35);pointer-events:none;transition:transform .12s}
+.joy.on i{transition:none}
 @media(max-width:860px){
-  .app{height:auto}
-  main{grid-template-columns:1fr}
-  .stage{height:68vh;min-height:420px}
-  aside{border:0;border-top:1px solid var(--line);padding:20px 16px}
-  header{padding:12px 16px}.hd-meta{display:none}
-  .title{inset-inline-start:16px;top:14px}.title h1{font-size:20px}
-  .dock{bottom:12px;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center;overflow:visible}
-  .levels{flex-basis:100%;justify-content:center;border-inline-start:0;border-top:1px solid rgba(255,255,255,.15);padding:6px 0 0}
-  .btn{padding:8px 11px;font-size:12px}
+  /* Phones: the model fills the screen like a game; details open as a sheet; one slim bar. */
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  .app{height:100vh;height:100dvh;min-height:0;grid-template-rows:auto 1fr}
+  main{grid-template-columns:1fr;min-height:0}
+  .stage{height:auto;min-height:0}
+  header{padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top))}header img{height:24px}.hd-meta{display:none}.chip{padding:5px 11px;font-size:12px}
+  .title{inset-inline-start:14px;top:12px}.title h1{font-size:16px}.title p,.title .k{display:none}
+  .hud{display:flex}
+  .dock{bottom:calc(10px + env(safe-area-inset-bottom));width:max-content;max-width:calc(100% - 20px);flex-wrap:nowrap;justify-content:center;gap:4px;padding:4px;border-radius:14px;background:rgba(16,23,37,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .dock.more{flex-wrap:wrap}
+  .btn{padding:8px 12px;font-size:12.5px}
+  #bMore{display:block;font-size:16px;line-height:1;padding:6px 12px}
+  .dock:not(.more) #bRotate,.dock:not(.more) #bWalls,.dock:not(.more) #bFurn,.dock:not(.more) #bReset{display:none}
+  .levels{position:absolute;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));flex-direction:column-reverse;gap:6px;padding:0;border:0;z-index:2}
+  .levels .btn{background:rgba(16,23,37,.82);color:#C9CED8;border-radius:10px;padding:7px 10px;font-size:11.5px;box-shadow:0 4px 14px rgba(16,23,37,.25)}
+  .levels .btn.on{background:var(--gold);color:var(--navy)}
   .hint{display:none}
-  .stage canvas.map{width:120px;height:120px;bottom:70px;right:12px}
-  .walkctl{left:12px;width:150px;padding:8px 10px;font-size:10.5px}
+  .walking .joy{display:flex;bottom:calc(76px + env(safe-area-inset-bottom))}
+  .stage canvas.map{width:150px;height:150px;top:12px;bottom:auto!important;left:auto;right:62px}
+  .walking .stage canvas.map{display:none}
+  .walking.map-open .stage canvas.map{display:block}
+  .walkctl{left:auto;right:62px;top:12px;bottom:auto!important;width:190px;padding:8px 10px;font-size:11px}
+  .walking .walkctl{display:none}
+  .walking .hud{inset-inline-start:auto;inset-inline-end:auto;right:12px} /* stick on the left, buttons on the right */
+  .walking.set-open .walkctl{display:flex}
+  .here{top:12px;font-size:12px;padding:6px 12px;max-width:calc(100% - 140px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #fMap,#fSet{display:none}
+  .walking #fMap,.walking #fSet{display:flex}
+  /* details sheet */
+  aside{position:fixed;left:0;right:0;bottom:0;max-height:78dvh;z-index:20;background:var(--navy);border:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 16px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(0,0,0,.45);transform:translateY(105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);overscroll-behavior:contain}
+  .sheet aside{transform:none}
+  .grab{display:block;width:100%;padding:6px 0 4px;position:sticky;top:-8px;background:var(--navy);z-index:1}
+  .grab i{display:block;width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.3);margin:0 auto}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:19;opacity:0;pointer-events:none;transition:opacity .3s}
+  .sheet .scrim{opacity:1;pointer-events:auto}
+}
+@media(max-width:860px) and (max-height:500px){ /* phone held sideways */
+  .hud{flex-direction:row}
+  .levels{top:60px;bottom:auto}
+  .stage canvas.map,.walkctl{top:60px;right:12px}
+  .stage canvas.map{width:130px;height:130px}
+  .joy{width:108px;height:108px}.joy i{width:46px;height:46px}
+  .walking .joy{bottom:calc(64px + env(safe-area-inset-bottom))}
+  .title{display:none}
 }
 </style>
 </head>
@@ -124,6 +165,13 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="here" id="here" hidden></div>
       <canvas class="map" id="map" aria-label="mini map"></canvas>
       <div class="walkctl" id="walkctl"></div>
+      <div class="joy" id="joy" aria-hidden="true"><i></i></div>
+      <div class="hud" id="hud">
+        <button class="fab" id="fInfo" aria-label="details"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg></button>
+        <button class="fab" id="fFull" aria-label="full screen" hidden><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button class="fab" id="fMap" aria-label="map"><svg viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg></button>
+        <button class="fab" id="fSet" aria-label="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+      </div>
       <div class="title">
         <div class="k" id="tK"></div>
         <h1 id="tName"></h1>
@@ -139,10 +187,13 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
         <button class="btn" id="bWalls"></button>
         <button class="btn" id="bFurn" hidden></button>
         <button class="btn" id="bReset"></button>
+        <button class="btn" id="bMore" aria-label="more">&#8943;</button>
         <div class="levels" id="levels"></div>
       </div>
     </section>
-    <aside>
+    <div class="scrim" id="scrim"></div>
+    <aside id="aside">
+      <button class="grab" id="grab" aria-label="close"><i></i></button>
       <div>
         <div class="sec-k" id="kFacts"></div>
         <div class="facts" id="facts"></div>

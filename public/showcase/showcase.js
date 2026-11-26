@@ -215,10 +215,14 @@
   var goal = { th: HOME.th, ph: HOME.ph, r: HOME.r, t: new THREE.Vector3() };
   function levelY() { return D.levels[S.level].elevation; }
   function home(ph) { goal.th = HOME.th; goal.ph = ph == null ? HOME.ph : ph; goal.r = HOME.r; goal.t.set(0, levelY(), 0); }
-  var ptrs = {}, pinch = 0, moved = 0;
-  var downAt = 0;
+  var ptrs = {}, pinch = 0, moved = 0, mid = null;
+  var downAt = 0, lastTap = 0;
+  // Orbit glide: a flick keeps turning and slows down, like a game camera (stopped by any press).
+  var spin = { th: 0, ph: 0, live: false };
+  var MOB = window.matchMedia ? window.matchMedia('(max-width:860px)') : { matches: false };
   canvas.addEventListener('pointerdown', function (e) {
     canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId] = [e.clientX, e.clientY]; moved = 0; downAt = Date.now();
+    spin.th = spin.ph = 0; spin.live = true; mid = null;
     if (S.walk) W.target = null; // pressing always stops a glide in progress
   });
   canvas.addEventListener('pointermove', function (e) {
@@ -226,26 +230,49 @@
     if (!p) { if (S.walk) aimRing(e); else pick(e); return; }
     var dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs[e.pointerId] = [e.clientX, e.clientY];
     var ids = Object.keys(ptrs);
-    if (ids.length === 2) {
+    if (ids.length === 2) { // two fingers: pinch to zoom and move together to slide the view
       var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      if (pinch && !S.walk) goal.r = clampR(goal.r * pinch / d); pinch = d; return;
+      var m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      moved += 10; spin.live = false;
+      if (!S.walk) {
+        if (pinch) goal.r = clampR(goal.r * pinch / d);
+        if (mid) pan(m[0] - mid[0], m[1] - mid[1]);
+      }
+      pinch = d; mid = m; return;
     }
     moved += Math.abs(dx) + Math.abs(dy);
-    if (S.walk) { W.yaw -= dx * 0.003; W.pitch = Math.max(-1.2, Math.min(1.2, W.pitch - dy * 0.003)); return; } // eased in stepWalk
-    if (e.shiftKey || e.buttons === 2) {
-      var k = cam.r * 0.0012, right = new THREE.Vector3(Math.cos(cam.th), 0, -Math.sin(cam.th)), fwd = new THREE.Vector3(Math.sin(cam.th), 0, Math.cos(cam.th));
-      goal.t.addScaledVector(right, -dx * k).addScaledVector(fwd, -dy * k);
-    } else {
-      goal.th -= dx * 0.006; goal.ph = Math.min(1.45, Math.max(0.02, goal.ph - dy * 0.005));
+    var touch = e.pointerType === 'touch';
+    if (S.walk) { var ls = touch ? 0.0048 : 0.003; W.yaw -= dx * ls; W.pitch = Math.max(-1.2, Math.min(1.2, W.pitch - dy * ls)); return; } // eased in stepWalk
+    if (e.shiftKey || e.buttons === 2) pan(dx, dy);
+    else {
+      var dth = -dx * 0.006, dph = -dy * 0.005;
+      goal.th += dth; goal.ph = Math.min(1.45, Math.max(0.02, goal.ph + dph));
+      spin.th = spin.th * 0.5 + dth * 0.5; spin.ph = spin.ph * 0.5 + dph * 0.5;
       S.auto = false; syncDock();
     }
   });
+  // Slide the view; the centre never leaves the house, so nobody gets lost off the edge.
+  function pan(dx, dy) {
+    var k = cam.r * 0.0012, right = new THREE.Vector3(Math.cos(cam.th), 0, -Math.sin(cam.th)), fwd = new THREE.Vector3(Math.sin(cam.th), 0, Math.cos(cam.th));
+    goal.t.addScaledVector(right, -dx * k).addScaledVector(fwd, -dy * k);
+    var lim = SIZE * 0.75;
+    goal.t.x = Math.max(-lim, Math.min(lim, goal.t.x)); goal.t.z = Math.max(-lim, Math.min(lim, goal.t.z));
+  }
   function up(e) {
-    delete ptrs[e.pointerId]; pinch = 0;
+    delete ptrs[e.pointerId]; pinch = 0; mid = null;
+    if (Object.keys(ptrs).length) { spin.live = false; return; }
+    // a flick glides on; a drag that stopped before release does not
+    if (!spin.live || Date.now() - lastMove > 80) spin.th = spin.ph = 0;
+    spin.live = false;
     if (moved >= 5 || e.type !== 'pointerup') return;
     if (S.walk) { if (Date.now() - downAt < 350) walkTo(e); return; } // a press held to look is not a click
+    var now = Date.now();
+    if (now - lastTap < 320) { lastTap = 0; S.sel = null; paint(); home(goal.ph); return; } // double tap: back to the whole house
+    lastTap = now;
     pick(e); select(S.hover, true);
   }
+  var lastMove = 0;
+  canvas.addEventListener('pointermove', function () { lastMove = Date.now(); });
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('pointerleave', function () { setHover(null); });
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -615,7 +642,7 @@
       var p = startPoint(); placeWalker(p.x, p.z);
       W.yaw = -cam.th; W.pitch = 0.05; W.keys = {}; W.vy = W.yaw; W.vp = W.pitch; W.vel.set(0, 0, 0);
     } else {
-      ring.visible = false;
+      ring.visible = false; W.joy = [0, 0];
     }
     syncDock();
   }
@@ -815,7 +842,58 @@
     if (/^arrow/.test(k)) e.preventDefault();
   });
   window.addEventListener('keyup', function (e) { W.keys[e.key.toLowerCase()] = false; W.keys.shift = e.shiftKey; });
-  window.addEventListener('blur', function () { W.keys = {}; });
+  window.addEventListener('blur', function () { W.keys = {}; W.joy = [0, 0]; });
+
+  /* ---------- phone controls ----------
+     Joystick (left thumb) walks and side-steps, analog: a small push creeps, a full push walks
+     at the set pace. The other thumb drags anywhere to look. Round buttons top right: details,
+     full screen and, while walking, the key plan and the walk settings. Floors stand on the
+     right edge. Nothing here runs per frame. */
+  (function () {
+    var pad = $('joy'), knob = pad.firstElementChild, id = null, app = $('app');
+    function set(e) {
+      var b = pad.getBoundingClientRect(), r = b.width / 2;
+      var x = (e.clientX - b.left - r) / r, y = (e.clientY - b.top - r) / r, d = Math.hypot(x, y);
+      if (d > 1) { x /= d; y /= d; d = 1; }
+      knob.style.transform = 'translate(' + (x * r * 0.62) + 'px,' + (y * r * 0.62) + 'px)';
+      var g = d < 0.12 ? 0 : (d - 0.12) / 0.88; // dead zone, then a soft curve for fine steps
+      g = g * g * (3 - 2 * g);
+      W.joy = d ? [x / d * g, -y / d * g] : [0, 0];
+    }
+    pad.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); e.stopPropagation(); id = e.pointerId; W.target = null;
+      try { pad.setPointerCapture(id); } catch (err) { /* synthetic pointer */ }
+      pad.classList.add('on'); set(e);
+    });
+    pad.addEventListener('pointermove', function (e) { if (e.pointerId === id) set(e); });
+    function end(e) { if (e.pointerId !== id) return; id = null; W.joy = [0, 0]; knob.style.transform = ''; pad.classList.remove('on'); }
+    pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end); pad.addEventListener('lostpointercapture', end);
+    pad.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    function toggle(cls, btn, on) { on = app.classList.toggle(cls, on); if (btn) btn.classList.toggle('on', on); return on; }
+    function sheet(on) { toggle('sheet', $('fInfo'), on); }
+    $('fInfo').onclick = function () { sheet(); };
+    $('scrim').onclick = $('grab').onclick = function () { sheet(false); };
+    // picking a space, a view or a finish in the sheet shows it: close the sheet on phones
+    $('aside').addEventListener('click', function (e) { if (MOB.matches && e.target.closest('li')) sheet(false); });
+    // the key plan and the settings share the top corner: one at a time
+    $('fMap').onclick = function () { if (toggle('map-open', $('fMap'))) toggle('set-open', $('fSet'), false); drawMap(); };
+    $('fSet').onclick = function () { if (toggle('set-open', $('fSet'))) toggle('map-open', $('fMap'), false); };
+    $('bMore').onclick = function () { var d = document.querySelector('.dock'); $('bMore').classList.toggle('on', d.classList.toggle('more')); };
+    var root = document.documentElement, fs = root.requestFullscreen || root.webkitRequestFullscreen;
+    if (fs && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
+      $('fFull').hidden = false;
+      $('fFull').onclick = function () {
+        if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        else fs.call(root, { navigationUI: 'hide' });
+      };
+    }
+    // floors: in the bar on wide screens, a stack on the right edge on phones
+    var levels = $('levels'), dock = document.querySelector('.dock');
+    function place() { var host = MOB.matches ? stage : dock; if (levels.parentNode !== host) host.appendChild(levels); }
+    place();
+    if (MOB.addEventListener) MOB.addEventListener('change', place); else if (MOB.addListener) MOB.addListener(place);
+  })();
 
   /* ---------- loop ---------- */
   function resize() {
@@ -856,7 +934,12 @@
       camera.rotation.set(-W.vp, -W.vy, 0, 'YXZ');
     } else {
       if (S.auto) goal.th += 0.0035;
-      var k = 0.12;
+      if (!spin.live && (spin.th || spin.ph)) {
+        goal.th += spin.th; goal.ph = Math.min(1.45, Math.max(0.02, goal.ph + spin.ph));
+        var fade = Math.exp(-dt * 4); spin.th *= fade; spin.ph *= fade;
+        if (Math.abs(spin.th) + Math.abs(spin.ph) < 1e-4) spin.th = spin.ph = 0;
+      }
+      var k = 1 - Math.exp(-dt * 8); // same feel at any frame rate
       cam.th += (goal.th - cam.th) * k; cam.ph += (goal.ph - cam.ph) * k; cam.r += (goal.r - cam.r) * k; cam.t.lerp(goal.t, k);
       var sp = Math.sin(cam.ph);
       camera.position.set(cam.t.x + cam.r * sp * Math.sin(cam.th), cam.t.y + cam.r * Math.cos(cam.ph), cam.t.z + cam.r * sp * Math.cos(cam.th));
@@ -884,7 +967,7 @@
       v.copy(P(r._c[0], r._c[1], L.elevation + 0.1)).project(camera);
       var ok = v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
       // Small rooms (baths, stores) only label on hover/selection so names don't pile up.
-      var show = r.area >= 7 || r === S.sel || r === S.hover;
+      var show = r.area >= (MOB.matches ? 14 : 7) || r === S.sel || r === S.hover;
       r._lbl.style.opacity = ok && show ? 1 : 0;
       r._lbl.style.left = ((v.x + 1) / 2 * w) + 'px'; r._lbl.style.top = ((1 - v.y) / 2 * h) + 'px';
     });
