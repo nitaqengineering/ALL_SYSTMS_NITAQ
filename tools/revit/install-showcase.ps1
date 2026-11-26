@@ -34,8 +34,11 @@ $cfg = $null
 if (Test-Path $cfgPath) { try { $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json } catch { $cfg = $null } }
 if (-not $endpoint) { $endpoint = if ($cfg) { $cfg.endpoint } else { Read-Host 'عنوان السحابة (https://....supabase.co/functions/v1/showcase-publish)' } }
 $key = if ($cfg -and $cfg.key) { $cfg.key } else { '' }
+$preset = '__KEY__' # an engineer's own package carries their key: nothing to type
+if ($preset -match '^nsk_[a-z0-9]{24,64}$') { $key = $preset; $answer = '' } else {
 $answer = Read-Host ('مفتاح المهندس (يبدأ بـ nsk_)' + $(if ($key) { ' - اضغط Enter للإبقاء على المفتاح الحالي' } else { '' }))
 if ($answer) { $key = $answer.Trim() }
+}
 if ($key -notmatch '^nsk_[a-z0-9]{24,64}$') { Write-Host 'المفتاح غير صحيح. اطلبه من المسؤول.' -ForegroundColor Red; Read-Host 'Enter'; exit 1 }
 [System.IO.File]::WriteAllText($cfgPath, (@{ endpoint = $endpoint; key = $key } | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
 
