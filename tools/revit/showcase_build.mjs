@@ -1,5 +1,6 @@
 // Turn a showcase_export.py result (JSON) into public/showcase/data/<slug>.js.
-// Usage: node tools/revit/showcase_build.mjs export.json <slug> [config.json] [mesh.json]
+// Usage: node tools/revit/showcase_build.mjs export.json <slug> [config.json|-] [mesh.json] [outDir]
+// outDir defaults to public/showcase/data (the Revit button on an engineer's PC passes its own folder).
 // mesh.json (from showcase_export_mesh.py) adds the real Revit geometry as
 // public/showcase/data/<slug>.bin; the viewer then draws that instead of rebuilding walls.
 // config.json (optional): { main: ["GR","1ST"], site: ["0"], levelNames: {GR:["Ground Floor","الطابق الأرضي"]},
@@ -7,7 +8,9 @@
 import {readFile, writeFile, copyFile, mkdir, rm} from 'node:fs/promises';
 import {extname} from 'node:path';
 
-const [src, slug, cfgPath, meshPath] = process.argv.slice(2);
+const [src, slug, cfgPath, meshPath, outArg] = process.argv.slice(2);
+const OUT = (outArg || 'public/showcase/data').replace(/[\\/]+$/, '');
+await mkdir(OUT, {recursive: true});
 if (!src || !/^[a-z0-9-]{1,60}$/.test(slug || '')) {
   console.error('usage: node tools/revit/showcase_build.mjs export.json <slug> [config.json]');
   process.exit(1);
@@ -76,7 +79,7 @@ for (const L of ex.levels) {
   }
 }
 if (meshPath) {
-  out.mesh = await packMesh(JSON.parse(await readFile(meshPath, 'utf8')), `public/showcase/data/${slug}.bin`);
+  out.mesh = await packMesh(JSON.parse(await readFile(meshPath, 'utf8')), `${OUT}/${slug}.bin`);
   out.mesh.file = `data/${slug}.bin`;
   // The real geometry replaces the rebuilt walls and site; rooms and slabs stay for labels and bounds.
   out.levels.forEach((L) => { delete L.walls; });
@@ -163,5 +166,6 @@ const body = `/* NITAQ Showcase — ${out.project.name} (${out.project.ref || sl
    Generated from Revit by tools/revit/showcase_export.py + showcase_build.mjs. Do not edit by hand. */
 window.NITAQ_SHOWCASE = ${JSON.stringify(out)};
 `;
-await writeFile(`public/showcase/data/${slug}.js`, body);
-console.log(`wrote public/showcase/data/${slug}.js — levels: ${out.levels.map((l) => `${l.name} (${l.rooms.length} rooms)`).join(', ')}; site: ${out.site ? out.site.length : "replaced by mesh"}`);
+await mkdir(OUT, {recursive: true});
+await writeFile(`${OUT}/${slug}.js`, body);
+console.log(`wrote ${OUT}/${slug}.js — levels: ${out.levels.map((l) => `${l.name} (${l.rooms.length} rooms)`).join(', ')}; site: ${out.site ? out.site.length : "replaced by mesh"}`);

@@ -1,0 +1,6 @@
+title: تحديث العرض
+tooltip: يسحب الموديل المفتوح (بدون أي تعديل عليه) ويرفع عرض الفيلا ثلاثي الأبعاد على السحابة، ثم يفتح رابطها وينسخه.
+author: NITAQ
+context: doc-project
+engine:
+  clean: true

@@ -42,17 +42,18 @@ export async function handle(request, env, fetchImpl = fetch) {
     const villa = (await open.json())[0];
     if (!villa) return reply(404, { error: 'link' }); // unknown or switched off: same answer
 
-    const file = await fetchImpl(base + '/storage/v1/object/villas/' + villa.slug + '/data.json', { headers: auth });
+    const file = await fetchImpl(base + '/storage/v1/object/villas/' + villa.slug + '/' + (villa.data_file || 'data.json'), { headers: auth });
     if (!file.ok) return reply(503, { error: 'storage' });
     const data = await file.json();
 
-    const sign = await fetchImpl(base + '/storage/v1/object/sign/villas/' + villa.slug + '/' + villa.model_file, {
-      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expiresIn: SIGNED_SECONDS })
-    });
-    if (!sign.ok) return reply(503, { error: 'storage' });
-    const signed = (await sign.json()).signedURL;
-    if (data.mesh) data.mesh.file = base + '/storage/v1' + signed;
+    if (data.mesh) { // the model through a short-lived signed URL
+      const sign = await fetchImpl(base + '/storage/v1/object/sign/villas/' + villa.slug + '/' + villa.model_file, {
+        method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: SIGNED_SECONDS })
+      });
+      if (!sign.ok) return reply(503, { error: 'storage' });
+      data.mesh.file = base + '/storage/v1' + (await sign.json()).signedURL;
+    }
     data.version = villa.version;
     return reply(200, { data });
   } catch (err) {

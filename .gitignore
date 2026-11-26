@@ -15,3 +15,6 @@ supabase/.branches/
 # Client villa models are private: publish them to the showcase storage, never to this public repo.
 public/showcase/data/*
 !public/showcase/data/sample-villa.js
+
+# Packed Revit showcase button for engineers (built by tools/revit/pack-showcase-extension.mjs)
+dist/NITAQ-Showcase/

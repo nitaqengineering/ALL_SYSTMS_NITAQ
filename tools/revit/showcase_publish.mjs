@@ -4,11 +4,20 @@
 //   node tools/revit/showcase_publish.mjs link <slug> [label]      new owner link for that villa
 //   node tools/revit/showcase_publish.mjs links [slug]             list links (opens, last opened, on/off)
 //   node tools/revit/showcase_publish.mjs disable|enable <token>   switch a link off / back on
+//   node tools/revit/showcase_publish.mjs publisher add <name>      new engineer key (shown once)
+//   node tools/revit/showcase_publish.mjs publishers                list engineer keys
+//   node tools/revit/showcase_publish.mjs publisher off|on <name>   stop / allow an engineer key
+//
+// Engineers (the Revit button) never hold the service key. They run
+//   node showcase_publish.mjs upload <slug> <dataDir> [title]
+// with %APPDATA%/NITAQ/showcase.json = { "endpoint": ".../functions/v1/showcase-publish", "key": "nsk_..." }
+// and the "showcase-publish" edge function does the privileged work. Its last output line is JSON.
 //
 // Reads from .env (never committed): SHOWCASE_URL (project URL), SHOWCASE_SERVICE_KEY,
 // optional SHOWCASE_SITE (viewer page URL that links point to).
 // Re-publishing a villa keeps every link: owners see the update on the same link.
 import {readFile} from 'node:fs/promises';
+import {join} from 'node:path';
 import vm from 'node:vm';
 
 export const SITE = 'https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/';
@@ -67,7 +76,7 @@ export async function publish(env, slug, title, villa, fetchImpl = fetch) {
     method: 'POST', body: JSON.stringify(data), headers: {'Content-Type': 'application/json', 'x-upsert': 'true'}
   });
   await call('/rest/v1/showcase_villas?on_conflict=slug', json('POST', {
-    slug, title: title || (data.project && data.project.name) || slug, model_file: modelFile, version, updated_at: new Date().toISOString()
+    slug, title: title || (data.project && data.project.name) || slug, model_file: modelFile, data_file: 'data.json', version, updated_at: new Date().toISOString()
   }, 'resolution=merge-duplicates'));
   if (old && old.model_file !== modelFile) { // the row now points at the new file; drop the old one
     await call('/storage/v1/object/villas', json('DELETE', {prefixes: [`${slug}/${old.model_file}`]})).catch(() => {});
@@ -96,6 +105,55 @@ export async function setActive(env, token, active, fetchImpl = fetch) {
   return rows[0];
 }
 
+// ---- engineer keys (admin, service key) ----
+export function newPublisherKey(random = crypto.getRandomValues.bind(crypto)) {
+  return 'nsk_' + Array.from(random(new Uint8Array(32)), (b) => ALPHABET[b % 32]).join('');
+}
+async function sha256hex(text) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+export async function addPublisher(env, name, fetchImpl = fetch) {
+  const {call, json} = api(env, fetchImpl), key = newPublisherKey();
+  await call('/rest/v1/showcase_publishers', json('POST', {name, key_hash: await sha256hex(key)}));
+  return key;
+}
+export async function listPublishers(env, fetchImpl = fetch) {
+  const {call} = api(env, fetchImpl);
+  return call('/rest/v1/showcase_publishers?select=name,active,created_at,last_used_at&order=name');
+}
+export async function setPublisher(env, name, active, fetchImpl = fetch) {
+  const {call, json} = api(env, fetchImpl);
+  const rows = await call(`/rest/v1/showcase_publishers?name=eq.${encodeURIComponent(name)}`, json('PATCH', {active}, 'return=representation'));
+  if (!rows.length) throw new Error('No such engineer: ' + name);
+  return rows[0];
+}
+
+// ---- engineer upload (the Revit button): through the showcase-publish function ----
+export function configPath(env = process.env) {
+  return env.NITAQ_SHOWCASE_CONFIG || join(env.APPDATA || '.', 'NITAQ', 'showcase.json');
+}
+export async function upload(cfg, slug, title, villa, fetchImpl = fetch) {
+  if (!cfg || !/^https:\/\//.test(cfg.endpoint || '') || !/^nsk_/.test(cfg.key || '')) throw new Error('This PC is not set up for publishing: run the NITAQ showcase installer.');
+  const op = async (name, body) => {
+    const res = await fetchImpl(cfg.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'x-nitaq-key': cfg.key}, body: JSON.stringify({op: name, slug, ...body})});
+    const out = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error('The engineer key on this PC is not accepted (wrong or switched off).');
+    if (!res.ok) throw new Error(`${name}: ${res.status} ${out.error || ''}`);
+    return out;
+  };
+  const put = async (url, body, type) => {
+    const res = await fetchImpl(url, {method: 'PUT', headers: {'Content-Type': type, 'x-upsert': 'true'}, body});
+    if (!res.ok) throw new Error('upload: ' + res.status);
+  };
+  const t = title || (villa.data.project && villa.data.project.name) || slug;
+  const b = await op('begin', {title: t, model: !!villa.bin});
+  const data = villa.data;
+  if (villa.bin) { await put(b.upload.model, villa.bin, 'application/octet-stream'); data.mesh = {...data.mesh, file: b.modelFile}; }
+  await put(b.upload.data, JSON.stringify(data), 'application/json');
+  return op('commit', {title: t, version: b.version, modelFile: villa.bin ? b.modelFile : 'none.bin', dataFile: b.dataFile});
+}
+
 async function loadEnv(path = '.env') {
   const env = {...process.env};
   try {
@@ -122,15 +180,28 @@ if (import.meta.main) {
       for (const l of await listLinks(env, a)) {
         console.log(`${l.active ? 'on ' : 'OFF'}  ${l.villa_slug}  ${l.label || '-'}  opens ${l.opens}  last ${l.last_opened_at || 'never'}  ${linkUrl(env, l.token)}`);
       }
+    } else if (cmd === 'upload' && a && b) {
+      const cfg = JSON.parse(await readFile(configPath(env), 'utf8').catch(() => '{}'));
+      const r = await upload(cfg, a, process.argv[6], await readVilla(a, b));
+      console.log(JSON.stringify({ok: true, version: r.version, link: r.link}));
+    } else if (cmd === 'publisher' && a === 'add' && b) {
+      const key = await addPublisher(env, b);
+      console.log(`Key for ${b} (shown once, give it to the engineer for the installer):\n${key}`);
+    } else if (cmd === 'publishers') {
+      for (const p of await listPublishers(env)) console.log(`${p.active ? 'on ' : 'OFF'}  ${p.name}  last used ${p.last_used_at || 'never'}`);
+    } else if (cmd === 'publisher' && (a === 'off' || a === 'on') && b) {
+      const r = await setPublisher(env, b, a === 'on');
+      console.log(`${r.name} is now ${r.active ? 'allowed' : 'stopped'}.`);
     } else if ((cmd === 'disable' || cmd === 'enable') && a) {
       const r = await setActive(env, a, cmd === 'enable');
       console.log(`${r.token} is now ${r.active ? 'on' : 'off'}.`);
     } else {
-      console.log('usage: publish <slug> [title] | link <slug> [label] | links [slug] | disable <token> | enable <token>');
+      console.log('usage: publish <slug> [title] | link <slug> [label] | links [slug] | disable|enable <token> | publisher add|off|on <name> | publishers | upload <slug> <dataDir> [title]');
       process.exitCode = 2;
     }
   } catch (err) {
     console.error(err.message);
+    if (cmd === 'upload') console.log(JSON.stringify({ok: false, error: err.message}));
     process.exitCode = 1;
   }
 }

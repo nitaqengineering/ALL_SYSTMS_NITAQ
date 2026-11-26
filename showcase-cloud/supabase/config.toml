@@ -4,3 +4,6 @@ project_id = "nitaq-showcase"
 
 [functions.showcase]
 verify_jwt = false
+
+[functions.showcase-publish]
+verify_jwt = false
