@@ -3543,6 +3543,7 @@
     b.runR = rmat('runR', 0.3, '#7A432D', 0.95, 'fabric', 0.1); b.runO = rmat('runO', 0.3, '#565C3E', 0.95, 'fabric', 0.1); b.runN = rmat('runN', 0.2, '#242E3D', 0.95, 'fabric', 0.1);
     b.accNavy = rmat('pillowN', 0.25, '#2F3A4B', 0.95, 'fabric', 0.1);
     // majlis: sand seats, deep navy backs and bolsters, gold piping, terracotta and ivory cushions
+    b.creamLacq = rmat('creamL', 0.9, '#EFE9DE', 0.16); // cream gloss lacquer
     b.majSeat = rmat('majSeat', 0.7, '#C9B99E', 0.9, 'fabric', 0.09);
     b.majBack = rmat('majBack', 0.15, '#232D45', 0.82, 'fabric', 0.09);
     return b;
@@ -3561,7 +3562,7 @@
 
   // Beds (reference: low boucle bed, soft headboard with a warm LED wash behind it, floating
   // nightstands with mushroom lamps, knitted throw, carved-arc rug).
-  var bedSeq = 0; // each bedroom takes the next accent colour
+  var bedSeq = 0, bedStands = []; // each bedroom takes the next accent colour; nightstands built
   function buildBed(m, G, mt) {
     var r = occRect(m, function () { return true; }); if (!r) return false;
     var best = -1, head = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.15, 0); if (st.maxh > best) { best = st.maxh; head = s; } });
@@ -3607,19 +3608,34 @@
     var gl = at(W / 2, -0.06), glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, 0.45), glowMatBed());
     glow.position.set(gl[0], hbTop + 0.18, gl[1]); glow.rotation.y = head === 2 ? 0 : head === 3 ? Math.PI : head === 0 ? Math.PI / 2 : -Math.PI / 2;
     G.add(glow); // LED wash on the wall above the headboard
-    // floating nightstands with mushroom lamps where Revit has them beside the head
-    [[0, runA - 1], [runB + 1, nW - 1]].forEach(function (rg) {
+    // nightstands where Revit has them beside the head (reference): cream gloss lacquer with soft
+    // waterfall sides, two rounded drawers with brass teardrop pulls, an open base; a travertine
+    // lamp on a brass ring with a linen drum shade, and a small stoneware vase
+    [[0, runA - 1], [runB + 1, nW - 1]].forEach(function (rg, side) {
       if (rg[1] - rg[0] < 6) return;
       var wa = Infinity, wb = -1, lb = 0;
       for (w = rg[0]; w <= rg[1]; w++) for (l = 0; l < Math.min(nL, Math.round(0.8 / CELL)); l++) { h = cell(w, l); if (h > 0.25 && h < 0.85) { wa = Math.min(wa, w); wb = Math.max(wb, w); lb = Math.max(lb, l + 1); } }
       if (wb < wa) return;
       var nx = (wa - runA) * CELL, nw = Math.min((wb - wa + 1) * CELL, 0.6), nd = Math.min(lb * CELL, 0.42);
-      var cx = nx + (wb - wa + 1) * CELL / 2;
-      bx(nw, 0.16, nd, cx, 0.47, 0.03 + nd / 2, mt.walnut || mt.wood, 0, 0.01);
-      bx(nw - 0.06, 0.004, 0.01, cx, 0.47, 0.03 + nd + 0.002, mt.brass || mt.plinth, 0, 0.001); // brass drawer line
-      var p = at(cx, 0.03 + nd / 2);
-      put(G, new THREE.CylinderGeometry(0.035, 0.05, 0.24, 20), mt.ink || mt.ceramic, p[0], 0.55 + 0.12, p[1]);
-      put(G, new THREE.SphereGeometry(0.15, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mt.shade, p[0], 0.77, p[1]);
+      var cx = nx + (wb - wa + 1) * CELL / 2, lac = mt.creamLacq || mt.ceramic, brass = mt.brass || mt.metal, Hn = 0.56, z0 = 0.03, zc = z0 + nd / 2;
+      nw = Math.max(nw, 0.45);
+      [-1, 1].forEach(function (sg) { bx(0.032, Hn, nd, cx + sg * (nw / 2 - 0.016), Hn / 2, zc, lac, 0, 0.015); }); // waterfall sides
+      bx(nw, 0.032, nd, cx, Hn - 0.016, zc, lac, 0, 0.015); // top
+      bx(nw - 0.064, 0.008, nd - 0.04, cx, Hn - 0.04 - 2 * 0.2 - 0.016, zc, lac, 0, 0.003); // shelf under the drawers
+      [0, 1].forEach(function (k) {
+        var yC = Hn - 0.034 - 0.1 - k * 0.205;
+        bx(nw - 0.068, 0.194, nd - 0.03, cx, yC, zc - 0.01, lac, 0, 0.035); // rounded drawer front, set back between the sides
+        var pp = at(cx, z0 + nd - 0.021);
+        put(G, new THREE.CylinderGeometry(0.008, 0.003, 0.075, 14), brass, pp[0], yC, pp[1]); // teardrop pull
+      });
+      var away = side === 0 ? -1 : 1; // the lamp keeps away from the bed, the vase near it
+      var pl = at(cx + away * 0.07, zc), pv = at(cx - away * 0.14, zc + 0.04);
+      put(G, new THREE.CylinderGeometry(0.062, 0.062, 0.012, 28), brass, pl[0], Hn + 0.006, pl[1]);
+      put(G, new THREE.CylinderGeometry(0.052, 0.052, 0.25, 28), mt.travertine || mt.ceramic, pl[0], Hn + 0.012 + 0.125, pl[1]);
+      put(G, new THREE.CylinderGeometry(0.009, 0.009, 0.06, 10), brass, pl[0], Hn + 0.29, pl[1]);
+      put(G, new THREE.CylinderGeometry(0.145, 0.16, 0.2, 36), mt.shade, pl[0], Hn + 0.4, pl[1]);
+      vessel(G, 'round', mt.ceramic, pv[0], Hn, pv[1], 0.6);
+      bedStands.push({ G: G, p: at(cx, zc) });
     });
     if (W > 1.3) { // carved-arc rug under the lower two thirds
       var rp = at(W / 2, L * 0.62);
@@ -3995,6 +4011,14 @@
           wb: [Math.min.apply(null, cs.map(function (c) { return c.x; })), Math.min.apply(null, cs.map(function (c) { return c.z; })), Math.max.apply(null, cs.map(function (c) { return c.x; })), Math.max.apply(null, cs.map(function (c) { return c.z; }))] });
       }
       if (elemGroups[f.id]) elemGroups[f.id].userData.replaced = true;
+    });
+    // a Revit side table standing where a nightstand now is: the nightstand replaces it
+    scene.updateMatrixWorld(true);
+    var standsW = bedStands.map(function (st) { return new THREE.Vector3(st.p[0], 0, st.p[1]).applyMatrix4(st.G.matrixWorld); });
+    realGroup.children.forEach(function (G2) {
+      if (G2.userData.kind !== 'table' || !G2.userData.table) return; var rr = G2.userData.table.rect; if (Math.max(rr.u1 - rr.u0, rr.v1 - rr.v0) > 0.7) return;
+      var c3 = new THREE.Box3().setFromObject(G2).getCenter(new THREE.Vector3());
+      if (standsW.some(function (q) { return Math.hypot(q.x - c3.x, q.z - c3.z) < 0.5 && Math.abs(q.y - c3.y) < 1.5; })) G2.visible = false;
     });
     groupRugs(seatRecs, rugTaken);
     buildChandeliers();
