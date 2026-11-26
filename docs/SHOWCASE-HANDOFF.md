@@ -1,0 +1,95 @@
+# تسليم — العرض ثلاثي الأبعاد للفلل (NITAQ Showcase) · 2026‑11‑26
+
+> For the next AI assistant (Claude, ChatGPT/Codex or any other): read this whole file before changing
+> anything. The user writes in Egyptian Arabic; answer in the same language and keep it simple.
+
+## 1. الحالة الآن
+
+- الفرع `feat/showcase-walk`. اتدمج في `main` واتنشر على GitHub Pages عند commit `8adb55b`.
+- بعدها فيه commit محلي واحد ما اترفعش (`6e0c6c2`، باكدج المهندسين). الرفع مش لازم عشان يشتغل.
+- **السحابة شغّالة**: مشروع Supabase اسمه `NITAQ_SHOWCASE` (ref `auusafbkxyntnfbyqfyp`، منطقة Tokyo).
+  - المشروع على حساب Supabase **منفصل** عن حساب المكتب، والمستخدم عمله مخصوص لروابط الملاك.
+  - **مفيش MCP لحساب ده.** الشغل عليه من الداشبورد في المتصفح، والمستخدم مسجّل دخول هناك.
+- فيلا 4067 مرفوعة (version 1)، ورابط المالك شغّال على الموقع العام:
+  `https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/?v=villa-4067-42ah9arrc54f`
+- **مفاتيح النشر المسجّلة:**
+  - `Office admin PC`: جهاز المستخدم، والزرار عنده متثبّت.
+  - `OMAR` و `MARWA`: ملفات التثبيت بتاعتهم في `dist/engineers/*.zip`، ولسه ما ثبّتوش.
+
+## 2. إزاي بيشتغل
+
+```
+Revit (زرار pyRevit «تحديث العرض»)
+  → tools/revit/showcase_export.py + showcase_export_mesh.py   (قراءة فقط من الموديل)
+  → tools/revit/showcase_build.mjs                               (يجهّز <slug>.js + <slug>.bin)
+  → tools/revit/showcase_publish.mjs upload                      (بمفتاح المهندس nsk_…)
+  → Edge function showcase-publish  (يتحقق من بصمة المفتاح، يدّي روابط رفع موقّعة، يسجّل النسخة)
+  → Storage bucket "villas" (خاص) + جداول showcase_villas / showcase_links / showcase_publishers
+المالك يفتح  public/showcase/?v=<token>
+  → Edge function showcase  (يرجّع بيانات الفيلا + رابط موقّع للموديل لمدة 15 دقيقة)
+```
+
+- **العارض:** كله في `public/showcase/showcase.js` (Three.js r128، حوالي 4200 سطر).
+  - عنوان السحابة في `public/showcase/config.js`.
+  - للتجربة محليًا: `http://localhost:4173/showcase/?p=villa-4067&debug`.
+  - `window.__walk.frame(eye, at)` بيصوّر لقطة من مكان معيّن.
+- **رابط الفيلا:**
+  - اسم الفيلا (slug) بيتاخد من أول رقم في اسم ملف الريفت، والزرار بيسأل المستخدم يأكده.
+  - نفس الاسم بيحدّث نفس الرابط. لو الاسم اختلف، بتتعمل فيلا جديدة برابط جديد.
+- **الدوال:**
+  - الكود في `showcase-cloud/supabase/functions/*/handler.mjs`، وده بيتختبر بـ `node scripts/check-showcase-cloud.mjs`.
+  - النشر حصل كملف واحد من محرر الداشبورد (handler + index مدموجين)، ومعاه **Verify JWT = OFF**.
+- **الـ migrations:** موجودة في `showcase-cloud/supabase/migrations/` (3 ملفات، واتطبّقوا كلهم).
+  - التالت بيدّي `service_role` صلاحيات على الجداول، لأن مشاريع Supabase الجديدة ما بتديهاش تلقائي.
+- **مفاتيح السحابة:**
+  - الدوال بتقرا `SUPABASE_SECRET_KEYS` (مفاتيح `sb_secret_…` الجديدة، وبتتبعت في header اسمه `apikey` بس) أو المفتاح القديم.
+  - فيه secret اسمه `SHOWCASE_ALLOWED_ORIGINS` = `https://nitaqengineering.github.io,http://localhost:4173`.
+
+## 3. شغل يومي (المستخدم ممكن يطلبه)
+
+| المطلوب | إزاي |
+|---|---|
+| مهندس جديد | `node tools/revit/pack-showcase-extension.mjs --engineer "NAME"`، وبعدها شغّل محتوى `dist/engineers/NAME.sql` في SQL Editor بتاع مشروع NITAQ_SHOWCASE، واتأكد إن المفتاح شغّال (op `links` يرجّع 200)، وسلّم الـ zip للمستخدم. |
+| إيقاف مهندس | في SQL Editor: `update public.showcase_publishers set active = false where name = 'NAME';` |
+| رابط تاني لفيلا (لمالك تاني مثلًا) | من SQL Editor: `insert into public.showcase_links (token, villa_slug, label) values ('villa-XXXX-<12 حرف عشوائي من a-z و2-9>', 'villa-XXXX', 'owner');` والرابط بيبقى `https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/?v=<token>` |
+| قفل رابط | `update public.showcase_links set active = false where token = '...';` |
+| عدد مرات فتح الروابط | `select villa_slug, label, opens, last_opened_at, active from public.showcase_links;` |
+| رفع فيلا من الجهاز يدويًا | `node tools/revit/showcase_publish.mjs upload <slug> public/showcase/data "Title"` (بيستخدم `%APPDATA%\NITAQ\showcase.json`) |
+| إعادة تجهيز فولدر التثبيت العام | `node tools/revit/pack-showcase-extension.mjs` (بيطلع في `dist/NITAQ-Showcase`) |
+| قبل أي commit | `node scripts/update-manifest.mjs` وبعده `npm run check` (لازم كله PASS) |
+
+ملاحظات:
+- أوامر الأدمن في `showcase_publish.mjs` (`publisher add`، `link`، `links`…) محتاجة `SHOWCASE_SERVICE_KEY` في `.env`، وده **مش موجود**. استخدم طريقة SQL Editor اللي فوق.
+- الـ SQL Editor بيطلب تأكيد «Potential issue detected» قبل أي `delete`. ده طبيعي.
+
+## 4. قواعد لازم تتمشي عليها (المستخدم طلبها)
+
+1. **بيانات الفلل ما تتعملهاش commit أبدًا** (`public/showcase/data/*`، ما عدا `sample-villa.js`).
+   - الريبو عام، و GitHub Pages بينشر كل اللي في `public/`.
+   - حصل قبل كده إن فيلا 4067 اتسرّبت مرة.
+2. **ما ترفعش على GitHub ولا تدمج في `main` غير بموافقة صريحة من المستخدم.** ودايمًا افحص الرفع إن مفيهوش مفاتيح ولا بيانات فلل.
+3. **تشغيل الريفت قراءة فقط.** ما تعدّلش موديل المستخدم.
+   - تعديل في العارض بس مش محتاج تصدير جديد من الريفت.
+4. **الأسرار:**
+   - ما تكتبش ولا تنسخ مفتاح `service_role` أو `sb_secret`، ولا تعرض مفتاح مهندس (`nsk_…`) في الشات.
+   - المستخدم هو اللي يحط الأسرار بنفسه في `.env`.
+   - ممنوع تسجيل دخول أو خروج، ومتكتبش باسوورد.
+   - ممنوع تضغط على Upgrade أو أي حاجة فيها دفع.
+5. **ستايل العارض** (المستخدم اختاره وبيرفض غيره):
+   - **الأولوية:** واقعية ونعومة في الحركة. قيس زمن الفريم في وضع التجوّل قبل ما تضيف أي حاجة تقيلة.
+   - **التشطيبات:** حيطان أوف‑وايت وأسقف بيضا، والأبواب والدواليب لاكيه أبيض. ممنوع كرانيش وبراويز، وممنوع خشب مرسوم بيبان مزيّف.
+   - **الفرش:** ألوان دافية ليها روح (جوز Walnut، كالاكاتا، نحاس، قماش أوتميل). وأي قطعة بديلة لازم تحترم المسافات، زي الكومودينو بعيد 15 سم عن السرير.
+   - المستخدم بيبعت صور مرجعية، ونفّذ عليها بالظبط.
+
+## 5. أفكار لسه ما اتعملتش (ما تبدأش فيها غير لو المستخدم طلب)
+
+- بوابة أدمن صغيرة (صفحة) لإدارة المهندسين والروابط بدل SQL Editor.
+- مشروع Supabase المجاني بيقف لو فضل 7 أيام من غير استخدام. لو حصل، يتعمله Restore من الداشبورد.
+- العارض ما بيستخدمش صور الخامات اللي جاية من الريفت (`<slug>.tex/`)، ومش بتترفع للسحابة.
+
+## 6. لو المساعد الجديد على نفس الجهاز
+
+- **Claude Code** (حتى لو بحساب تاني على نفس مستخدم الويندوز) بيقرا تلقائي:
+  - تعليمات المستخدم في `C:\Users\younes\.claude\CLAUDE.md`.
+  - الذاكرة في `C:\Users\younes\.claude\projects\C--Users-younes-Documents-Codex-2026-11-05-new-chat-2-NITAQ-GITHUB-READY\memory\`، وفيها `showcase-3d-viewer.md`.
+- **ChatGPT/Codex** ما بيشوفش الحاجات دي. اديله الملف ده، و `AGENTS.md` في جذر المشروع بيشاور عليه.
