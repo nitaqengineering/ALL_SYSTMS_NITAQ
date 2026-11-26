@@ -1704,6 +1704,23 @@
      mode. Kitchens: the worktop surfaces of the cabinets become white quartz (furnParts). */
   var mirrorGroup = new THREE.Group(), kitchenGroup = new THREE.Group();
   scene.add(mirrorGroup, kitchenGroup);
+  /* Where a mirror belongs: a wet room, near a bath / WC label, or within ~1.5 m of sanitary
+     ceramic (wash areas that Revit does not mark as wet rooms). */
+  var washCells = null;
+  function washLike(x, y, z) {
+    if (roomTypeAt(x, y, z) === 'wet') return true;
+    if (!washCells) {
+      washCells = {}; scene.updateMatrixWorld(true);
+      var v = new THREE.Vector3();
+      wetMeshes.forEach(function (w) {
+        if (w.kind !== 'china') return; var pa = w.m.geometry.attributes.position;
+        for (var i = 0; i < pa.count; i += 3) { v.fromBufferAttribute(pa, i).applyMatrix4(w.m.matrixWorld); washCells[Math.floor(v.x) + ',' + Math.floor(v.y / 3) + ',' + Math.floor(v.z)] = 1; }
+      });
+      D.levels.forEach(function (L) { var fy = L.elevation + (L._slabTop || 0); (L.notes || []).forEach(function (q) { if (/bath|toil|wc|powder|حمام|دورة/i.test((q.name || '') + ' ' + (q.nameAr || ''))) for (var dx = -2; dx <= 2; dx++) for (var dz = -2; dz <= 2; dz++) washCells[Math.floor(q.x - CX + dx) + ',' + Math.floor((fy + 1) / 3) + ',' + Math.floor(-(q.y - CY) + dz)] = 1; }); });
+    }
+    for (var dx = -1; dx <= 1; dx++) for (var dz = -1; dz <= 1; dz++) if (washCells[Math.floor(x + dx) + ',' + Math.floor(y / 3) + ',' + Math.floor(z + dz)]) return true;
+    return false;
+  }
   function dressWetAndKitchen() { // mirrors: wall-hung glass in wet rooms (above 0.8 m) becomes a reflector
     if (!THREE.Reflector) return;
     var mWalls = []; ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) mWalls.push(o); }); });
@@ -1727,14 +1744,14 @@
     Object.keys(planes).forEach(function (k) {
       var pl = planes[k], w = pl.t1 - pl.t0, h = pl.y1 - pl.y0; if (w < 0.25 || h < 0.3 || w > 3 || h > 2) return;
       var tm = (pl.t0 + pl.t1) / 2, c = new THREE.Vector3(pl.n.x * pl.d - pl.n.z * tm, (pl.y0 + pl.y1) / 2, pl.n.z * pl.d + pl.n.x * tm), nrm = pl.n.clone();
-      var front = roomTypeAt(c.x + nrm.x * 0.4, pl.y0, c.z + nrm.z * 0.4) === 'wet', back = roomTypeAt(c.x - nrm.x * 0.4, pl.y0, c.z - nrm.z * 0.4) === 'wet';
+      var front = washLike(c.x + nrm.x * 0.4, pl.y0, c.z + nrm.z * 0.4), back = washLike(c.x - nrm.x * 0.4, pl.y0, c.z - nrm.z * 0.4);
       if (!front && !back) return;
       if (!front) nrm.negate();
       // a mirror hangs on solid wall; a window's glass has the opening behind it
       var behind = new THREE.Raycaster(c.clone().addScaledVector(nrm, 0.02), nrm.clone().negate(), 0, 0.15);
       if (!behind.intersectObjects(mWalls, false).length) return;
       var pr = Math.min(1, 2 / Math.max(w, h));
-      var mir = new THREE.Reflector(new THREE.PlaneGeometry(w - 0.01, h - 0.01), { color: 0xC9CBCC, clipBias: 0.003, textureWidth: Math.round(512 * w * pr), textureHeight: Math.round(512 * h * pr) });
+      var mir = new THREE.Reflector(new THREE.PlaneGeometry(w - 0.01, h - 0.01), { color: 0x76787A, clipBias: 0.003, textureWidth: Math.round(512 * w * pr), textureHeight: Math.round(512 * h * pr) });
       mir.position.copy(c).addScaledVector(nrm, 0.006); mir.lookAt(mir.position.clone().add(nrm));
       var ob = mir.onBeforeRender; mir.onBeforeRender = function (r, sc2) { if (sc2.overrideMaterial) return; ob.apply(this, arguments); };
       mirrorGroup.add(mir);
@@ -2025,7 +2042,8 @@
     var china = new THREE.MeshStandardMaterial({ color: 0xF8F7F4, roughness: 0.12, envMapIntensity: 1.1, clippingPlanes: [cutPlane] });
     var brass = mt.brass, walls = [], up = new THREE.Vector3(0, 1, 0), rc = new THREE.Raycaster();
     ['wall', 'ext', 'arch'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.material !== glassMat && o.material.side !== THREE.BackSide) walls.push(o); }); });
-    var T = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), counterMeshes = [];
+    var T = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), counterMeshes = [], mirrorHosts = [];
+    ['wall', 'ext', 'arch', 'furn'].forEach(function (k) { if (meshGroups[k]) meshGroups[k].traverse(function (o) { if (o.isMesh && o.visible && o.material !== glassMat && o.material.side !== THREE.BackSide) mirrorHosts.push(o); }); });
     meshGroups.furn.traverse(function (o) { if (o.isMesh && o.visible && o.material.side !== THREE.BackSide && !wetMeshes.some(function (w2) { return w2.m === o; })) counterMeshes.push(o); });
     // bathrooms that Revit only labels (no room polygon): within 3.5 m of a bath / WC label
     var bathNotes = [];
@@ -2098,6 +2116,33 @@
       if (P.cls === 'x' && kind !== 'wc') kind = ''; // from other furniture: only a WC is taken
       dbg.k = kind; if (!kind) return;
       var Gp = new THREE.Group(); Gp.matrixAutoUpdate = false; Gp.matrix.makeBasis(X, up, F).setPosition(O.x + X.x * xm, fy, O.z + X.z * xm); realGroup.add(Gp);
+      function mirrorOver(lx, w, y0, h, framed) { // a real mirror on the face standing on the wall above the basin
+        if (!THREE.Reflector) return;
+        var ctrW = new THREE.Vector3(lx, y0 + h / 2, 0).applyMatrix4(Gp.matrix);
+        if (mirrorGroup.children.some(function (mm) { return mm.position.distanceTo(ctrW) < 1.0; })) return; // one is there already
+        var back = F.clone().negate();
+        function depthAt(x, y) { rc.set(new THREE.Vector3(x, y, 0.7).applyMatrix4(Gp.matrix), back); rc.far = 1.2; var hh = rc.intersectObjects(mirrorHosts, false)[0]; return hh ? hh : null; }
+        var c0 = depthAt(lx, y0 + h / 2); if (!c0) return;
+        // a panel modelled where the mirror goes: follow its face to its edges
+        var x0 = lx, x1 = lx, ya = y0 + h / 2, yb = ya, d0 = c0.distance, st;
+        function same(hh) { return hh && Math.abs(hh.distance - d0) < 0.008; }
+        for (st = 0; st < 60 && same(depthAt(x0 - 0.04, ya)); st++) x0 -= 0.04;
+        for (st = 0; st < 60 && same(depthAt(x1 + 0.04, ya)); st++) x1 += 0.04;
+        for (st = 0; st < 40 && same(depthAt((x0 + x1) / 2, ya - 0.04)); st++) ya -= 0.04;
+        for (st = 0; st < 40 && same(depthAt((x0 + x1) / 2, yb + 0.04)); st++) yb += 0.04;
+        var panel = x1 - x0 > 0.4 && yb - ya > 0.4 && x1 - x0 < 3.5;
+        if (panel) { lx = (x0 + x1) / 2; w = x1 - x0 - 0.01; y0 = ya; h = yb - ya - 0.01; framed = false; }
+        var pr = Math.min(1, 2 / Math.max(w, h));
+        var mir = new THREE.Reflector(new THREE.PlaneGeometry(w, h), { color: 0x76787A, clipBias: 0.003, textureWidth: Math.round(512 * w * pr), textureHeight: Math.round(512 * h * pr) });
+        var pW = new THREE.Vector3(lx, y0 + h / 2, 0).applyMatrix4(Gp.matrix);
+                mir.position.set(pW.x, fy + y0 + h / 2, pW.z); var dd = (c0.point.x - pW.x) * F.x + (c0.point.z - pW.z) * F.z; mir.position.addScaledVector(F, dd + 0.006);
+        mir.lookAt(mir.position.clone().add(F));
+        var ob = mir.onBeforeRender; mir.onBeforeRender = function (r, sc2) { if (sc2.overrideMaterial) return; ob.apply(this, arguments); };
+        mirrorGroup.add(mir);
+        if (framed) [[0, h / 2 + 0.008, w + 0.032, 0.016], [0, -h / 2 - 0.008, w + 0.032, 0.016], [-w / 2 - 0.008, 0, 0.016, h], [w / 2 + 0.008, 0, 0.016, h]].forEach(function (q) { // thin brass frame
+          var fb = new THREE.Mesh(new THREE.BoxGeometry(q[2], q[3], 0.014), brass); fb.position.copy(mir.position); fb.quaternion.copy(mir.quaternion); fb.translateX(q[0]); fb.translateY(q[1]); realGroup.add(fb);
+        });
+      }
       function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
       if (kind === 'basin') {
         // an existing counter around it? (a surface just below the basin's rim, beside it)
@@ -2108,6 +2153,7 @@
           var hh = rc.intersectObjects(meshGroups.furn.children.length ? counterMeshes : [], false)[0]; if (hh && hh.point.y > P.y1 - 0.12) cTop = hh.point.y - fy;
         });
         var counter = cTop != null || (hy0 > 0.55 && hy0 < 0.95 && Dp < 0.3), top = cTop != null ? cTop : counter ? hy0 : 0.84, Wv = Math.min(Math.max(W + 0.25, 0.7), 1.0);
+        if (!counter) mirrorOver(0, Wv - 0.05, top + 0.4, 0.8, true);
         if (!counter) { // floating walnut vanity with a Calacatta top
           add(rboxGeo(Wv, 0.42, 0.47, 0.01), mt.walnut, 0, top - 0.02 - 0.21, 0.235);
           add(rboxGeo(Wv - 0.06, 0.004, 0.01, 0.001), brass, 0, top - 0.24, 0.472); // brass reveal between the drawers
@@ -2127,6 +2173,7 @@
             slabs.push(slab);
             add(rboxGeo(slab.w, 0.07, slab.d + 0.015, 0.004), mt.calacatta, slab.cx, cTop - 0.005, (slab.d + 0.015) / 2); // deep edge hides the old top
             add(rboxGeo(slab.w, 0.1, 0.02, 0.003), mt.calacatta, slab.cx, cTop + 0.03 + 0.05, 0.01); // upstand
+            mirrorOver(0, Math.max(0.6, slab.w - 0.12), cTop + 0.42, 0.85, true);
           }
           var vt = cTop + 0.03, vz = Math.max(0.24, midz);
           add(lathe('bowl', VASES.bowl), china, 0, vt, vz, 1.55, 1.7, 1.2);
