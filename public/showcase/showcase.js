@@ -923,7 +923,10 @@
      - sanitary: wet rooms / bath labels with basins but no WC, or more basins than their size
        allows (a WC read as a basin: guest toilet, 2026-11-27);
      - walking: open floor of each level where a step is refused (stair gap, 2026-11-27);
-     - stairs: a Revit "stair" material present but no marble / railing dressing applied. */
+     - stairs: a Revit "stair" material present but no marble / railing dressing applied;
+     - chairs: a dining family's chairs fewer or more than its name says, a dining chair not
+       facing its table, a single chair not facing Revit's way (8-chair table showed 4; two bar
+       chairs turned round, 2026-11-27). */
   function audit() {
     scene.updateMatrixWorld(true);
     var walls = [], out = { tiles: { checked: 0, tiled: 0, bad: [] }, sanitary: { pieces: sanitaryLog.length, bad: [] }, walking: { checked: 0, bad: [] }, stairs: {} };
@@ -979,10 +982,26 @@
     W.floor = keepF;
     var stairLook = (MESH.looks || []).some(function (l) { return /stair/i.test(l.name || ''); });
     out.stairs = { revitStair: stairLook, dressed: stairSwaps.length, bad: stairLook && !stairSwaps.length ? ['stair material found but not dressed'] : [] };
-    out.ok = !out.tiles.bad.length && !out.sanitary.bad.length && !out.walking.bad.length && !out.stairs.bad.length;
+    // chairs
+    out.chairs = { placed: chairLog.length, bad: [] };
+    var byG = new Map(); chairLog.forEach(function (c) { if (!byG.has(c.G)) byG.set(c.G, []); byG.get(c.G).push(c); });
+    D.furniture.forEach(function (f) {
+      var kind = redressKind(f.name); if (kind !== 'dining' && kind !== 'chair') return;
+      var G = null; byG.forEach(function (list, g) { if (g.userData.elem === f.id) G = g; });
+      if (!G) { if (kind === 'chair') out.chairs.bad.push(f.id + ' ' + f.name.slice(0, 30) + ': not placed'); return; }
+      var list = byG.get(G);
+      if (kind === 'dining') {
+        var cm = /\((\d+)\s*chairs?\)/i.exec(f.name); if (cm && +cm[1] !== list.length) out.chairs.bad.push(f.id + ': ' + list.length + ' chairs, Revit ' + cm[1]);
+        var tr = G.userData.table && G.userData.table.rect;
+        if (tr) list.forEach(function (c) { var tu = Math.max(tr.u0, Math.min(tr.u1, c.u)) - c.u, tv = Math.max(tr.v0, Math.min(tr.v1, c.v)) - c.v, L = Math.hypot(tu, tv) || 1; if ((tu * c.fu + tv * c.fv) / L < 0.7) out.chairs.bad.push(f.id + ': a chair not facing the table'); });
+      } else {
+        var c = list[0]; if (c.fu < 0.95) out.chairs.bad.push(f.id + ' ' + f.name.slice(0, 30) + ': not facing the Revit direction');
+      }
+    });
+    out.ok = !out.tiles.bad.length && !out.sanitary.bad.length && !out.walking.bad.length && !out.stairs.bad.length && !out.chairs.bad.length;
     return out;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { audit: audit, W: W, mask: function (x, z, li) { var Z = zoneUniforms(), cv = Z.zoneMask.value.image, N = cv.height, px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N); var d = cv.getContext('2d').getImageData(px, pz, 1, 1).data; return [d[0], d[1], d[2]]; }, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { audit: audit, dining: function () { return diningDbg; }, chairs: function () { return chairLog.map(function (c) { var e = c.G.matrix.elements, p = new THREE.Vector3(c.u, 0, c.v).applyMatrix4(c.G.matrix), d = new THREE.Vector3(c.fu, 0, c.fv).transformDirection(c.G.matrix); return { elem: c.G.userData.elem, kind: c.G.userData.kind, x: +p.x.toFixed(2), z: +p.z.toFixed(2), fx: +d.x.toFixed(2), fz: +d.z.toFixed(2) }; }); }, W: W, mask: function (x, z, li) { var Z = zoneUniforms(), cv = Z.zoneMask.value.image, N = cv.height, px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N); var d = cv.getContext('2d').getImageData(px, pz, 1, 1).data; return [d[0], d[1], d[2]]; }, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -4129,7 +4148,9 @@
     g.computeVertexNormals();
     return (tubCache[key] = g);
   }
+  var chairLog = [], diningDbg = []; // every chair placed: its group, local spot and facing (the self-check reads it)
   function chairAt(G, mt, cu, cv, w, d, hTop, fu, fv) {
+    chairLog.push({ G: G, u: cu, v: cv, fu: fu, fv: fv });
     var C = new THREE.Group(); C.position.set(cu, 0, cv); C.rotation.y = Math.atan2(fu, fv); G.add(C);
     w = Math.min(Math.max(w, 0.5), 0.58); hTop = Math.min(Math.max(hTop, 0.78), 0.84);
     var uph = mt.chairUph || mt.chairFab || mt.cushion, leg = mt.oakLeg || mt.wood;
@@ -4145,21 +4166,32 @@
     });
     return C;
   }
+  // A single chair faces the way Revit says (its facing orientation is this frame's +u axis):
+  // guessing the back from the tallest side turned some bar chairs round.
   function buildChair(m, G, mt) {
     var r = occRect(m, function () { return true; }); if (!r) return false;
-    var best = -1, bs = 2; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.1, 0); if (st.maxh > best) { best = st.maxh; bs = s; } });
-    var f = [[1, 0], [-1, 0], [0, 1], [0, -1]][bs];
-    chairAt(G, mt, (r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2, bs < 2 ? r.v1 - r.v0 : r.u1 - r.u0, bs < 2 ? r.u1 - r.u0 : r.v1 - r.v0, best, f[0], f[1]);
+    var best = -1; [0, 1, 2, 3].forEach(function (s) { var st = stripStats(m, s, 0.1, 0); if (st.maxh > best) best = st.maxh; });
+    chairAt(G, mt, (r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2, r.v1 - r.v0, r.u1 - r.u0, best, 1, 0);
     return true;
   }
-  function buildDiningSet(m, G, mt) {
+  function buildDiningSet(m, G, mt, count, dims) {
     var hs = cellsWhere(m, function (h) { return h > 0.65 && h < 0.82; }).map(function (c) { return Math.round(c[2] * 50) / 50; });
     if (!hs.length) return false;
     var cnt = {}, topH = 0.75, bc = 0; hs.forEach(function (h) { cnt[h] = (cnt[h] || 0) + 1; if (cnt[h] > bc) { bc = cnt[h]; topH = h; } });
     var rect = occRect(m, function (h) { return Math.abs(h - topH) < 0.03; }); if (!rect) return false;
+    /* Chairs tucked under the edge hide under the top in a height map, so the top looked larger
+       (villa 4067: 3.08 x 1.48 m for a 2800 x 1200 mm table) and those chairs vanished. When the
+       family name gives the size, the top is cut to it: of the two ways to cut each axis, the one
+       centred nearer the family origin (a dining table's insertion point is its centre). */
+    if (dims) {
+      var lu = rect.u1 - rect.u0 >= rect.v1 - rect.v0, Lu = lu ? dims[0] : dims[1], Lv = lu ? dims[1] : dims[0];
+      var cut = function (a0, a1, L) { if (a1 - a0 <= L + 0.04) return [a0, a1]; return Math.abs(a0 + L / 2) <= Math.abs(a1 - L / 2) ? [a0, a0 + L] : [a1 - L, a1]; };
+      var cu2 = cut(rect.u0, rect.u1, Lu), cv2 = cut(rect.v0, rect.v1, Lv);
+      rect = { u0: cu2[0], u1: cu2[1], v0: cv2[0], v1: cv2[1] };
+    }
     var cu = (rect.u0 + rect.u1) / 2, cv = (rect.v0 + rect.v1) / 2, inTable = function (u, v) { return u > rect.u0 - 0.05 && u < rect.u1 + 0.05 && v > rect.v0 - 0.05 && v < rect.v1 + 0.05; };
     tableAt(G, mt, rect, topH, false, true);
-    var seen = new Uint8Array(m.nu * m.nv);
+    var seen = new Uint8Array(m.nu * m.nv), comps = [];
     for (var i = 0; i < m.nu; i++) for (var j = 0; j < m.nv; j++) {
       var idx = i * m.nv + j, u = m.u0 + (i + 0.5) * CELL, v = m.v0 + (j + 0.5) * CELL;
       if (seen[idx] || m.H[idx] <= 0.05 || inTable(u, v)) continue;
@@ -4174,11 +4206,35 @@
         });
       }
       if (comp.length * CELL * CELL < 0.06) continue;
-      var a0 = Infinity, a1 = -1, b0 = Infinity, b1 = -1; comp.forEach(function (c) { a0 = Math.min(a0, c[0]); a1 = Math.max(a1, c[0]); b0 = Math.min(b0, c[1]); b1 = Math.max(b1, c[1]); });
-      var ccu = m.u0 + (a0 + a1 + 1) / 2 * CELL, ccv = m.v0 + (b0 + b1 + 1) / 2 * CELL, fu = cu - ccu, fv = cv - ccv;
-      var horiz = Math.abs(fu) > Math.abs(fv); fu = horiz ? Math.sign(fu) : 0; fv = horiz ? 0 : Math.sign(fv);
-      chairAt(G, mt, ccu - fu * 0.05, ccv - fv * 0.05, (horiz ? b1 - b0 + 1 : a1 - a0 + 1) * CELL, (horiz ? a1 - a0 + 1 : b1 - b0 + 1) * CELL, top, fu, fv);
+      comps.push({ cells: comp, top: top });
     }
+    /* Chairs of a dining family. Neighbouring chairs merge into one patch of the height map, so
+       each patch is split into its share of chairs: the family name gives the total ("8 Chairs"),
+       else one chair per ~0.6 m along the table. A patch's side is the table edge it lies
+       beyond; its chairs are spread along that edge and face it squarely, like at a real table
+       (facing the table centre turned the chairs near the ends sideways). */
+    var sides = comps.map(function (cp) {
+      var su = 0, sv = 0; cp.cells.forEach(function (c) { su += m.u0 + (c[0] + 0.5) * CELL; sv += m.v0 + (c[1] + 0.5) * CELL; });
+      su /= cp.cells.length; sv /= cp.cells.length;
+      var out = [rect.u0 - su, su - rect.u1, rect.v0 - sv, sv - rect.v1], sd = out.indexOf(Math.max.apply(null, out)); // 0: -u, 1: +u, 2: -v, 3: +v
+      var al = sd < 2 ? function (c) { return m.v0 + (c[1] + 0.5) * CELL; } : function (c) { return m.u0 + (c[0] + 0.5) * CELL; };
+      var ac = sd < 2 ? function (c) { return m.u0 + (c[0] + 0.5) * CELL; } : function (c) { return m.v0 + (c[1] + 0.5) * CELL; };
+      var lo = Infinity, hi = -Infinity, cross = 0; cp.cells.forEach(function (c) { lo = Math.min(lo, al(c)); hi = Math.max(hi, al(c)); cross += ac(c); });
+      return { cp: cp, sd: sd, lo: lo - CELL / 2, hi: hi + CELL / 2, cross: cross / cp.cells.length, len: hi - lo + CELL, n: 0 };
+    });
+    diningDbg.push({ rect: rect, m: { u0: m.u0, v0: m.v0, nu: m.nu, nv: m.nv }, sides: sides.map(function (sp) { return { sd: sp.sd, lo: +sp.lo.toFixed(2), hi: +sp.hi.toFixed(2), cross: +sp.cross.toFixed(2), cells: sp.cp.cells.length }; }) });
+    var want = count || sides.reduce(function (t, sp) { return t + Math.max(1, Math.round(sp.len / 0.6)); }, 0);
+    sides.forEach(function (sp) { sp.n = 1; }); // every patch holds at least one chair
+    for (var extra = want - sides.length; extra > 0; extra--) { // the rest go where a chair has the most room
+      var pick = null; sides.forEach(function (sp) { if (!pick || sp.len / (sp.n + 1) > pick.len / (pick.n + 1)) pick = sp; }); if (!pick) break; pick.n++;
+    }
+    sides.forEach(function (sp) {
+      var fu = [1, -1, 0, 0][sp.sd], fv = [0, 0, 1, -1][sp.sd], step = sp.len / sp.n;
+      for (var k = 0; k < sp.n; k++) {
+        var a = sp.lo + step * (k + 0.5), u = sp.sd < 2 ? sp.cross : a, v = sp.sd < 2 ? a : sp.cross;
+        chairAt(G, mt, u - fu * 0.05, v - fv * 0.05, Math.min(step, 0.58), 0.55, sp.cp.top, fu, fv);
+      }
+    });
     // centrepiece: a stone vase with olive sprigs
     // centrepiece: a travertine tray with three vases of different heights and two brass candlesticks
     var lu = rect.u1 - rect.u0 >= rect.v1 - rect.v0, trayL = Math.min(1.0, Math.max(rect.u1 - rect.u0, rect.v1 - rect.v0) * 0.4);
@@ -4342,7 +4398,7 @@
         G.userData.wall = back >= 0; if (back >= 0) G.userData.front = [A, A, Cv, Cv][back].clone().multiplyScalar(back % 2 ? -1 : 1); // faces into the room
         if (back < 0) back = 2;
       }
-      var ok = kind === 'tv' ? buildTV(m, G, mt, back) : ({ seat: buildSeat, bed: buildBed, table: buildTable, chair: buildChair, dining: buildDiningSet })[kind](m, G, mt);
+      var ok = kind === 'tv' ? buildTV(m, G, mt, back) : ({ seat: buildSeat, bed: buildBed, table: buildTable, chair: buildChair, dining: function (m2, G2, mt2) { var cm = /\((\d+)\s*chairs?\)/i.exec(f.name), dm = /(\d{3,4})\s*[x×]\s*(\d{3,4})\s*mm/i.exec(f.name); return buildDiningSet(m2, G2, mt2, cm ? +cm[1] : 0, dm ? [Math.max(+dm[1], +dm[2]) / 1000, Math.min(+dm[1], +dm[2]) / 1000] : null); } })[kind](m, G, mt);
       if (!ok) return;
       if (G.userData.headSide != null) G.userData.front = [A, A, Cv, Cv][G.userData.headSide].clone().multiplyScalar(G.userData.headSide % 2 ? -1 : 1);
       G.matrixAutoUpdate = false; G.matrix.makeBasis(A, up, Cv).setPosition(O.x, m.base, O.z);
