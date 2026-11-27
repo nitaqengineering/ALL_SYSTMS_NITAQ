@@ -17,7 +17,7 @@
       built: 'المساحة المبنية م²', plot: 'مساحة الأرض م²', beds: 'غرف نوم', baths: 'حمامات',
       floors: 'طوابق', ft: 'قدم²', m: 'م²', cta: 'تواصل مع نطاق',
       hint: 'اسحب للدوران · العجلة للتقريب · اضغط على فراغ للتركيز',
-      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في', eyeH: 'ارتفاع النظر', lens: 'العدسة', pace: 'سرعة المشي', bob: 'حركة طبيعية للرأس', ao: 'ظلال واقعية (جودة عالية)', mUnit: 'م', mm: 'مم', ms: 'م/ث',
+      walkHint: 'اسحب للنظر حولك · اضغط على الحلقة الذهبية في الأرض للانتقال إليها', inRoom: 'أنت في', share: 'مشاركة', hintT: 'اسحب للدوران · صباعين للتقريب والتحريك · اضغط مرتين للرجوع', walkHintT: 'الدائرة للمشي · اسحب للنظر حولك · صباعين للتقريب', blocked: 'الطريق مقفول من هنا', farTap: 'اقترب أكثر واضغط على الأرض', eyeH: 'ارتفاع النظر', lens: 'العدسة', pace: 'سرعة المشي', bob: 'حركة طبيعية للرأس', ao: 'ظلال واقعية (جودة عالية)', mUnit: 'م', mm: 'مم', ms: 'م/ث',
       foot: 'المجسّم للتوضيح فقط. المساحات والأبعاد المعتمدة هي الواردة في المخططات الموقّعة.' },
     en: { k: 'Interactive viewing', sample: 'Sample model', night: 'Night', day: 'Day', lang: 'ع',
       rotate: 'Rotate', walk: 'Walk', doll: 'Dollhouse', plan: 'Floor plan', walls: 'Full walls', reset: 'Reset', furn: 'Furniture',
@@ -26,7 +26,7 @@
       built: 'Built-up m²', plot: 'Plot m²', beds: 'Bedrooms', baths: 'Bathrooms',
       floors: 'Floors', ft: 'ft²', m: 'm²', cta: 'Contact NITAQ',
       hint: 'Drag to rotate · scroll to zoom · click a space to focus',
-      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in', eyeH: 'Eye height', lens: 'Lens', pace: 'Walking speed', bob: 'Natural head motion', ao: 'Realistic shadows (high quality)', mUnit: 'm', mm: 'mm', ms: 'm/s',
+      walkHint: 'Drag to look around · click the gold ring on the floor to go there', inRoom: 'You are in', share: 'Share', hintT: 'Drag to rotate · two fingers to zoom and move · double tap to reset', walkHintT: 'Circle to walk · drag to look · pinch to zoom', blocked: 'The way is blocked here', farTap: 'Move closer and tap the floor', eyeH: 'Eye height', lens: 'Lens', pace: 'Walking speed', bob: 'Natural head motion', ao: 'Realistic shadows (high quality)', mUnit: 'm', mm: 'mm', ms: 'm/s',
       foot: 'Model is illustrative. Approved areas and dimensions are those on the signed drawings.' }
   };
   var FLOOR = { living: 0xC8A57A, dining: 0xC8A57A, majlis: 0xB9905F, bedroom: 0xD2B48C,
@@ -218,11 +218,13 @@
   var ptrs = {}, pinch = 0, moved = 0, mid = null;
   var downAt = 0, lastTap = 0;
   // Orbit glide: a flick keeps turning and slows down, like a game camera (stopped by any press).
-  var spin = { th: 0, ph: 0, live: false };
+  var spin = { th: 0, ph: 0, live: false }, firstSpin = true;
   var MOB = window.matchMedia ? window.matchMedia('(max-width:860px)') : { matches: false };
   canvas.addEventListener('pointerdown', function (e) {
     canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId] = [e.clientX, e.clientY]; moved = 0; downAt = Date.now();
     spin.th = spin.ph = 0; spin.live = true; mid = null;
+    $('hint').classList.remove('coach');
+    if (S.auto && firstSpin) { firstSpin = false; S.auto = false; syncDock(); } // the opening turn stops at first touch
     if (S.walk) W.target = null; // pressing always stops a glide in progress
   });
   canvas.addEventListener('pointermove', function (e) {
@@ -237,7 +239,7 @@
       if (!S.walk) {
         if (pinch) goal.r = clampR(goal.r * pinch / d);
         if (mid) pan(m[0] - mid[0], m[1] - mid[1]);
-      }
+      } else if (pinch) zoomLens(d / pinch); // walking: pinch is the lens (14-50 mm)
       pinch = d; mid = m; return;
     }
     moved += Math.abs(dx) + Math.abs(dy);
@@ -277,7 +279,12 @@
   canvas.addEventListener('pointerleave', function () { setHover(null); });
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   function clampR(r) { return Math.min(SIZE * 7, Math.max(SIZE * 0.5, r)); }
-  canvas.addEventListener('wheel', function (e) { e.preventDefault(); if (S.walk) return; goal.r = clampR(goal.r * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
+  canvas.addEventListener('wheel', function (e) { e.preventDefault(); if (S.walk) { zoomLens(e.deltaY > 0 ? 0.93 : 1.07); return; } goal.r = clampR(goal.r * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
+  var lensSync = 0;
+  function zoomLens(f) {
+    S.lens = Math.max(14, Math.min(50, S.lens * f)); applyLens();
+    clearTimeout(lensSync); lensSync = setTimeout(renderWalkCtl, 250); // the slider catches up
+  }
 
   /* ---------- picking / selection ---------- */
   var ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -311,12 +318,21 @@
   }
 
   /* ---------- UI ---------- */
+  // On touch screens the gesture hint shows once per mode for a few seconds, gone at first touch.
+  var coached = {}, coachT = 0;
+  function coach(k) {
+    if (coached[k]) return; coached[k] = 1;
+    var el = $('hint'); el.classList.add('coach'); clearTimeout(coachT);
+    coachT = setTimeout(function () { el.classList.remove('coach'); }, 6000);
+  }
   function syncDock() {
     $('bRotate').classList.toggle('on', S.auto);
     $('bWalls').classList.toggle('on', S.full);
     $('bWalk').classList.toggle('on', S.walk);
     $('app').classList.toggle('walking', S.walk);
-    $('hint').textContent = S.walk ? T('walkHint') : T('hint');
+    var touch = MOB.matches || matchMedia('(pointer:coarse)').matches;
+    $('hint').textContent = S.walk ? T(touch ? 'walkHintT' : 'walkHint') : T(touch ? 'hintT' : 'hint');
+    if (touch) coach(S.walk ? 'walk' : 'orbit');
     $('bFurn').classList.toggle('on', S.furn); $('bFurn').hidden = !MESH;
   }
   function applyLevel() {
@@ -372,7 +388,7 @@
     $('tK').textContent = T('k'); $('tName').textContent = nm(p);
     $('tLoc').textContent = S.lang === 'ar' ? (p.locationAr || p.location || '') : (p.location || '');
     $('tSample').hidden = !D.sample; $('tSample').textContent = T('sample');
-    $('btnNight').textContent = S.night ? T('day') : T('night'); $('btnLang').textContent = T('lang');
+    $('btnNight').textContent = S.night ? T('day') : T('night'); $('btnLang').textContent = T('lang'); $('btnShare').textContent = T('share');
     ['Rotate', 'Walk', 'Doll', 'Plan', 'Walls', 'Furn', 'Reset'].forEach(function (k) { $('b' + k).textContent = T(k.toLowerCase()); });
     $('kFacts').textContent = T('facts'); $('kRooms').textContent = T('rooms');
     $('cta').textContent = T('cta'); $('foot').textContent = T('foot'); $('totalK').textContent = T('total');
@@ -445,6 +461,12 @@
   $('bWalk').onclick = function () { if (S.walk) mode(false); else setWalk(true); };
   $('bWalls').onclick = function () { S.full = !S.full; applyLevel(); syncDock(); };
   $('bFurn').onclick = function () { S.furn = !S.furn; applyLevel(); syncDock(); };
+  // Share this villa's link: the phone's own share sheet, else WhatsApp.
+  $('btnShare').onclick = function () {
+    var url = location.href.replace(/[?&]debug/, ''), title = nm(D.project) + ' · NITAQ';
+    if (navigator.share) navigator.share({ title: title, url: url }).catch(function () { /* closed */ });
+    else window.open('https://wa.me/?text=' + encodeURIComponent(title + ' ' + url), '_blank', 'noopener');
+  };
   $('btnNight').onclick = function () { S.night = !S.night; applyNight(); renderUI(); };
   $('btnLang').onclick = function () { S.lang = S.lang === 'ar' ? 'en' : 'ar'; renderUI(); };
 
@@ -495,6 +517,22 @@
     var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object) && h.face && h.face.normal.y > 0; })[0];
     return f ? f.point.y : null;
   }
+  /* What a step to (x, z) meets, looking down from just above head height (2 m):
+     a tread or a threshold up to MAX_STEP higher is climbed; anything higher and lower than the
+     head (a flight seen from beside or below, a sill, a bed of the stairwell) blocks; a drop of
+     more than 0.4 m (the stairwell, a balcony edge) blocks too: the walker never falls a level.
+     Stairs down are a run of small drops, so they still work. Outside the model: keep height. */
+  var HEAD = 2.0, MAX_DROP = 0.4;
+  function stepAt(x, z) {
+    var top = W.floor + HEAD;
+    hit.set(org.set(x, top, z), down); hit.near = 0; hit.far = 7;
+    var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object) && h.face && h.face.normal.y > 0.3; })[0];
+    if (!f) return { ok: true, f: null };
+    var h = f.point.y;
+    if (h - W.floor > MAX_STEP) return { ok: false };
+    if (W.floor - h > MAX_DROP) return { ok: false };
+    return { ok: true, f: h };
+  }
   function levelFloor() { var L = D.levels[S.level]; return L.elevation + (L._slabTop || 0); }
   // Inside a wall or column: looking out, a back face (the navy copy) comes before any front face.
   var AXES = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return new THREE.Vector3(d[0], 0, d[1]); });
@@ -522,6 +560,17 @@
       }
     }
     return false; // nowhere free nearby: stay where we are
+  }
+  // The direction with the longest clear view from the walker (24 rays at chest height): walk
+  // mode opens looking into the room, not at the nearest wall.
+  function openView() {
+    var best = -1, yaw = -cam.th;
+    for (var i = 0; i < 24; i++) {
+      var a = i / 24 * Math.PI * 2, d = blockedAt(org.set(W.pos.x, W.floor + CHEST, W.pos.z), tmp.set(Math.sin(a), 0, -Math.cos(a)), 25);
+      d = Math.min(d, 25);
+      if (d > best + 0.3) { best = d; yaw = a; }
+    }
+    return yaw;
   }
   function startPoint() {
     var L = D.levels[S.level];
@@ -640,7 +689,7 @@
       $('bDoll').classList.remove('on'); $('bPlan').classList.remove('on');
       colliders();
       var p = startPoint(); placeWalker(p.x, p.z);
-      W.yaw = -cam.th; W.pitch = 0.05; W.keys = {}; W.vy = W.yaw; W.vp = W.pitch; W.vel.set(0, 0, 0);
+      W.yaw = openView(); W.pitch = 0.05; W.keys = {}; W.vy = W.yaw; W.vp = W.pitch; W.vel.set(0, 0, 0);
     } else {
       ring.visible = false; W.joy = [0, 0];
     }
@@ -687,15 +736,19 @@
     hit.setFromCamera(ndc, camera); hit.near = 0; hit.far = 60;
     return hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object); })[0];
   }
+  function reachable(f) { return f.face.normal.y > 0.6 && f.point.y < W.floor + 5 && f.point.y > W.floor - 5; }
   function aimRing(e) {
     var f = floorHit(e);
-    ring.visible = !!(f && f.face && f.face.normal.y > 0.6 && f.point.y < W.floor + 1.2);
-    if (ring.visible) ring.position.set(f.point.x, f.point.y + 0.02, f.point.z);
+    ring.visible = !!(f && f.face && reachable(f));
+    if (ring.visible) { ring.position.set(f.point.x, f.point.y + 0.02, f.point.z); ring.material.color.setHex(0xC9A25D); }
   }
   function walkTo(e) {
     var f = floorHit(e);
-    if (!f || !f.face) return;
-    if (f.face.normal.y > 0.6 && f.point.y < W.floor + 1.2) W.target = f.point.clone();
+    if (!f || !f.face) { say(T('farTap')); return; }
+    if (reachable(f)) {
+      W.target = f.point.clone();
+      ring.position.set(f.point.x, f.point.y + 0.02, f.point.z); ring.material.color.setHex(0xC9A25D); ring.visible = true;
+    }
     else { // tapped a wall: walk up to just in front of it
       tmp.copy(f.point).sub(W.pos); tmp.y = 0;
       var d = tmp.length(); if (d < 0.6) return;
@@ -703,7 +756,13 @@
     }
     if (W.target) { tmp.copy(W.target).sub(W.pos); tmp.y = 0; W.glide = tmp.length() / 2.2; } // far spots: there in ~2 s
   }
-  var move = new THREE.Vector3(), dir = new THREE.Vector3();
+  var move = new THREE.Vector3(), dir = new THREE.Vector3(), levelChanged = false;
+  // Short notes over the view (blocked path, unreachable tap); they fade by themselves.
+  var sayT = 0;
+  function say(msg) {
+    var el = $('toast'); el.textContent = msg; el.hidden = false; el.classList.add('on');
+    clearTimeout(sayT); sayT = setTimeout(function () { el.classList.remove('on'); }, 1800);
+  }
   function stepWalk(dt) {
     var fwd = (W.keys.w || W.keys.arrowup ? 1 : 0) - (W.keys.s || W.keys.arrowdown ? 1 : 0) + W.joy[1];
     var side = (W.keys.d ? 1 : 0) - (W.keys.a ? 1 : 0) + W.joy[0];
@@ -731,13 +790,13 @@
       var wall = blockedAt(org.set(W.pos.x, W.floor + CHEST, W.pos.z), dir, len + RADIUS);
       if (wall < len + RADIUS) { len = Math.max(0, wall - RADIUS); W.target = null; W.vel.set(0, 0, 0); }
       var nx = W.pos.x + dir.x * len, nz = W.pos.z + dir.z * len;
-      var f = floorAt(nx, nz, W.floor + MAX_STEP + 0.05);
-      if (f == null || f - W.floor <= MAX_STEP) { // no step too high; a drop or a gap is fine
-        W.pos.x = nx; W.pos.z = nz;
-        if (f != null && W.floor - f < 1.5) W.floor = f;
-      } else W.target = null;
+      var st = stepAt(nx, nz);
+      if (st.ok) { W.pos.x = nx; W.pos.z = nz; if (st.f != null) W.floor = st.f; }
+      else { W.vel.set(0, 0, 0); if (W.target) { W.target = null; say(T('blocked')); } }
     }
     W.pos.y = W.floor;
+    var lv = 0; D.levels.forEach(function (L, i) { if (L.elevation - 0.6 <= W.floor) lv = i; });
+    if (lv !== S.level && D.levels[lv].rooms.length + (D.levels[lv].notes || []).length) { S.level = lv; S.sel = null; lastRoom = null; levelChanged = true; }
     // Head: one bob per step and a slight sway every two, scaled by speed and faded in/out.
     var speed = W.vel.length();
     W.amp += ((S.bob ? Math.min(1, speed / 1.4) : 0) - W.amp) * Math.min(1, dt * 5);
@@ -747,7 +806,15 @@
     // Look: the head turns toward where the pointer drags it, eased.
     var k = 1 - Math.exp(-dt * 14);
     W.vy += (W.yaw - W.vy) * k; W.vp += (W.pitch - W.vp) * k;
-    showRoom(); drawMap();
+  }
+  // Walking is real-time at any frame rate: a long frame is split into short physics steps, so
+  // a slow phone neither walks in slow motion nor skips treads.
+  function walkFrame(dt) {
+    var n = Math.min(12, Math.ceil(dt / 0.034));
+    for (var i = 0; i < n; i++) stepWalk(dt / n);
+    if (levelChanged) { levelChanged = false; renderUI(); }
+    showRoom();
+    if (map.offsetParent) drawMap(); // the key plan costs nothing while it is hidden
   }
 
   /* Mini-map: the level's slab outlines and rooms, north up, with the walker and its view.
@@ -833,7 +900,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -926,10 +993,10 @@
     perfT = 0; perfF = [];
   }
   function frame() {
-    var dt = Math.min(clock.getDelta(), 0.1);
+    var real = Math.min(clock.getDelta(), 0.4), dt = Math.min(real, 0.1);
     swingDoors(dt); nightLights(performance.now());
     if (S.walk) {
-      stepWalk(dt);
+      walkFrame(real);
       camera.position.set(W.eye.x + Math.cos(W.vy) * W.bobX, W.eye.y + W.bobY, W.eye.z + Math.sin(W.vy) * W.bobX);
       camera.rotation.set(-W.vp, -W.vy, 0, 'YXZ');
     } else {
@@ -961,23 +1028,36 @@
     perfWatch(dt);
     if (useAO()) { if (bloom) bloom.strength = 0.75; composer.render(); } else renderer.render(scene, camera);
     $('labels').style.visibility = S.walk ? 'hidden' : '';
-    var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level];
+    if (!S.walk) placeLabels();
+    requestAnimationFrame(frame);
+  }
+  /* Room and note labels never overlap: the selected or hovered space first, then the biggest
+     spaces, then plan notes; a label whose box would cover one already placed stays hidden.
+     Small rooms (baths, stores) only label on hover/selection. Sizes are measured once. */
+  function placeLabels() {
+    var w = stage.clientWidth, h = stage.clientHeight, L = D.levels[S.level], list = [], boxes = [];
     L.rooms.forEach(function (r) {
       if (!r._lbl) return;
       v.copy(P(r._c[0], r._c[1], L.elevation + 0.1)).project(camera);
-      var ok = v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
-      // Small rooms (baths, stores) only label on hover/selection so names don't pile up.
-      var show = r.area >= (MOB.matches ? 14 : 7) || r === S.sel || r === S.hover;
-      r._lbl.style.opacity = ok && show ? 1 : 0;
-      r._lbl.style.left = ((v.x + 1) / 2 * w) + 'px'; r._lbl.style.top = ((1 - v.y) / 2 * h) + 'px';
+      var on = r === S.sel || r === S.hover, big = r.area >= (MOB.matches ? 12 : 7);
+      list.push({ el: r._lbl, ok: v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && (on || big), x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, pri: on ? 1e6 : r.area });
     });
     noteLbls.forEach(function (n) {
       v.copy(P(n.x, n.y, L.elevation + (L._slabTop || 0) + 0.1)).project(camera);
-      var ok = v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
-      n.el.style.opacity = ok ? 1 : 0;
-      n.el.style.left = ((v.x + 1) / 2 * w) + 'px'; n.el.style.top = ((1 - v.y) / 2 * h) + 'px';
+      list.push({ el: n.el, ok: v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1, x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, pri: 5 });
     });
-    requestAnimationFrame(frame);
+    list.sort(function (a, b) { return b.pri - a.pri; });
+    list.forEach(function (o) {
+      var el = o.el, show = o.ok;
+      if (show) {
+        if (!el._w) { el._w = el.offsetWidth + 6; el._h = el.offsetHeight + 4; }
+        var b = [o.x - el._w / 2, o.y - el._h / 2, o.x + el._w / 2, o.y + el._h / 2];
+        show = !boxes.some(function (c) { return b[0] < c[2] && b[2] > c[0] && b[1] < c[3] && b[3] > c[1]; });
+        if (show) boxes.push(b);
+      }
+      el.style.opacity = show ? 1 : 0;
+      el.style.left = o.x + 'px'; el.style.top = o.y + 'px';
+    });
   }
   /* ---------- real Revit geometry ---------- */
   // Each bucket is one material colour: Int16 positions (quantised, see showcase_build.mjs)
@@ -1023,10 +1103,57 @@
     return eg;
   }
   var veneerMat = null, venMeshes = [], wetMeshes = [], wetOrig = [];
+  /* Model download with a progress bar; a "dsg1" model (tools/revit/showcase_publish.mjs,
+     packModel) arrives ~70% smaller and is unpacked here: gunzip, put the low and high bytes of
+     each 16-bit word back together, then add the per-bucket differences back up. */
+  function fetchModel(url, progress) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      var total = +r.headers.get('content-length') || 0;
+      if (!r.body || !r.body.getReader) return r.arrayBuffer();
+      var reader = r.body.getReader(), parts = [], got = 0;
+      return (function pump() {
+        return reader.read().then(function (c) {
+          if (c.done) {
+            var all = new Uint8Array(got), at = 0;
+            parts.forEach(function (p) { all.set(p, at); at += p.length; });
+            return all.buffer;
+          }
+          parts.push(c.value); got += c.value.length;
+          progress(total ? Math.min(0.99, got / total) : 0, got);
+          return pump();
+        });
+      })();
+    }).then(function (buf) { return MESH.enc === 'dsg1' ? unpackModel(buf) : buf; });
+  }
+  function gunzip(buf) {
+    if (window.DecompressionStream) return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    return new Promise(function (ok, no) { // older browsers: a small inflater from the CDN, only then
+      var sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js';
+      sc.onload = function () { ok(window.fflate.gunzipSync(new Uint8Array(buf)).buffer); }; sc.onerror = no; document.head.appendChild(sc);
+    });
+  }
+  function unpackModel(buf) {
+    return gunzip(buf).then(function (zb) {
+      var sh = new Uint8Array(zb), len = sh.length, n = len >> 1, out = new Uint8Array(len);
+      for (var i = 0; i < n; i++) { out[2 * i] = sh[i]; out[2 * i + 1] = sh[n + i]; }
+      if (len & 1) out[len - 1] = sh[len - 1];
+      MESH.buckets.forEach(function (b) {
+        var p = new Int16Array(out.buffer, b.pos, b.verts * 3);
+        for (var a = 0; a < 3; a++) { var prev = 0; for (var v = a; v < p.length; v += 3) { prev = (prev + p[v]) << 16 >> 16; p[v] = prev; } }
+        var q = b.wide ? new Int32Array(out.buffer, b.idx, b.count) : new Uint16Array(out.buffer, b.idx, b.count), pv = 0, k;
+        if (b.wide) for (k = 0; k < q.length; k++) { pv = (pv + q[k]) | 0; q[k] = pv; }
+        else for (k = 0; k < q.length; k++) { pv = (pv + q[k]) & 0xFFFF; q[k] = pv; }
+      });
+      return out.buffer;
+    });
+  }
   function loadMesh() {
     var note = $('loading'); note.hidden = false; note.textContent = T('loading');
-    fetch(MESH.file).then(function (r) {
-      if (!r.ok) throw new Error(r.status); return r.arrayBuffer();
+    var MB = S.lang === 'ar' ? ' م.ب' : ' MB';
+    fetchModel(MESH.file, function (p, got) {
+      note.textContent = T('loading') + ' ' + (p ? Math.round(p * 100) + '%' : (got / 1048576).toFixed(1) + MB);
+      note.style.backgroundImage = p ? 'linear-gradient(90deg,rgba(201,162,93,.55) ' + (p * 100) + '%,transparent ' + (p * 100) + '%)' : '';
     }).then(function (buf) {
       var root = new THREE.Group(), s = MESH.step / 1000, o = MESH.origin;
       root.scale.set(s, s, s); root.position.set(o[0] / 1000 - CX, o[1] / 1000, o[2] / 1000 + CY);
@@ -1090,6 +1217,7 @@
       buildRealFurniture();
       dressDoors();
       meshReady = true; mapLevel = -1; renderUI(); applyFinish(); dirtyShadow();
+      if (firstSpin && !S.walk) { S.auto = true; syncDock(); } // a slow turn on first open
       [meshGroups.leaf, doorDetail].forEach(function (g) { if (g) g.traverse(function (o) { if (o.isMesh) o.castShadow = false; }); }); // doors swing: no shadows to redraw
       // Outline edges (like Revit's "shaded with edges"), built after the first frame is on screen.
       var edgeMat = new THREE.LineBasicMaterial({ color: 0x101725, transparent: true, opacity: 0.45, clippingPlanes: [cutPlane] });

@@ -19,6 +19,7 @@
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import vm from 'node:vm';
+import {gzipSync} from 'node:zlib';
 
 export const SITE = 'https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/';
 const SLUG = /^[a-z0-9-]{1,60}$/;
@@ -55,8 +56,34 @@ export async function readVilla(slug, dir = 'public/showcase/data') {
   vm.runInNewContext(await readFile(`${dir}/${slug}.js`, 'utf8'), sandbox, {timeout: 2000});
   const data = sandbox.window.NITAQ_SHOWCASE;
   if (!data || !Array.isArray(data.levels)) throw new Error(`${dir}/${slug}.js is not showcase data.`);
-  const bin = data.mesh ? await readFile(`${dir}/${slug}.bin`) : null;
-  return {data: JSON.parse(JSON.stringify(data)), bin};
+  const raw = data.mesh ? await readFile(`${dir}/${slug}.bin`) : null;
+  const out = JSON.parse(JSON.stringify(data));
+  return {data: out, bin: raw ? packModel(raw, out.mesh) : null};
+}
+
+/* The model travels about 70% smaller ("dsg1"): within each bucket, positions (per axis) and
+   indices are stored as differences from the previous value, then the low bytes of every 16-bit
+   word are written before the high bytes, then gzip. Neighbouring vertices are close, so most
+   differences are tiny and compress well. The viewer undoes it (showcase.js, unpackModel).
+   mesh.enc and mesh.raw tell it so; an older viewer-less upload simply has no enc. */
+export function packModel(raw, mesh) {
+  const c = Buffer.from(raw), dv = new DataView(c.buffer, c.byteOffset, c.byteLength);
+  for (const b of mesh.buckets) {
+    for (let a = 0; a < 3; a++) {
+      let prev = 0;
+      for (let v = 0; v < b.verts; v++) { const o = b.pos + (v * 3 + a) * 2, x = dv.getInt16(o, true); dv.setInt16(o, (x - prev) << 16 >> 16, true); prev = x; }
+    }
+    let prev = 0;
+    for (let i = 0; i < b.count; i++) {
+      if (b.wide) { const o = b.idx + i * 4, x = dv.getUint32(o, true); dv.setInt32(o, x - prev | 0, true); prev = x; }
+      else { const o = b.idx + i * 2, x = dv.getUint16(o, true); dv.setInt16(o, (x - prev) << 16 >> 16, true); prev = x; }
+    }
+  }
+  const n = c.length >> 1, s = Buffer.alloc(c.length);
+  for (let i = 0; i < n; i++) { s[i] = c[2 * i]; s[n + i] = c[2 * i + 1]; }
+  if (c.length & 1) s[c.length - 1] = c[c.length - 1];
+  mesh.enc = 'dsg1'; mesh.raw = raw.length;
+  return gzipSync(s, {level: 9});
 }
 
 export async function publish(env, slug, title, villa, fetchImpl = fetch) {

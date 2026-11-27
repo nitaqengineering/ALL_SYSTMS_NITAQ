@@ -5,7 +5,9 @@
 import assert from 'node:assert/strict';
 import {handle} from '../showcase-cloud/supabase/functions/showcase/handler.mjs';
 import {handlePublish, sha256hex} from '../showcase-cloud/supabase/functions/showcase-publish/handler.mjs';
-import {publish, createLink, listLinks, setActive, newToken, linkUrl, addPublisher, listPublishers, setPublisher, upload, newPublisherKey} from '../tools/revit/showcase_publish.mjs';
+import {publish, createLink, listLinks, setActive, newToken, linkUrl, addPublisher, listPublishers, setPublisher, upload, newPublisherKey, packModel} from '../tools/revit/showcase_publish.mjs';
+import {gunzipSync} from 'node:zlib';
+import {readFileSync} from 'node:fs';
 
 const BASE = 'https://showcase-test.supabase.co', KEY = 'service-test-key', NEWKEY = 'sb_secret_test0000';
 const SITE_ORIGIN = 'https://nitaqengineering.github.io';
@@ -196,4 +198,29 @@ assert.equal((await handle(new Request(`${BASE}/functions/v1/showcase?v=${office
 assert.equal((await (await handlePublish(new Request(PUB, {method: 'POST', headers: {'x-nitaq-key': omar, 'Content-Type': 'application/json'}, body: JSON.stringify({op: 'links', slug: 'villa-7001'})}), modernEnv, fakeSupabase)).json()).error, 'key', 'Omar is still switched off');
 assert.equal((await listLinks({SHOWCASE_URL: BASE, SHOWCASE_SERVICE_KEY: NEWKEY}, 'villa-7001', fakeSupabase)).length, 2);
 
-console.log('PASS showcase cloud: owner links open the latest upload on the same URL; switched-off/unknown links 404 alike; links bound to one villa; opens counted; no-store; origin-restricted; engineers publish with their own revocable key (hash only stored), uploads keep the villa link, old files removed, stale/bad requests refused');
+// ---- The model travels packed ("dsg1") and the viewer's own unpacker restores it exactly ----
+{
+  const mesh = {buckets: [], raw: 0};
+  const parts = [], rnd = (n) => Math.floor(Math.random() * n);
+  let off = 0;
+  for (const wide of [false, true]) { // positions near each other (as in a real model), indices up to 70000
+    const verts = 500, count = 900, pos = new Int16Array(verts * 3);
+    let x = rnd(60000) - 30000;
+    for (let i = 0; i < pos.length; i++) { x = Math.max(-32768, Math.min(32767, x + rnd(400) - 200)); pos[i] = i % 7 ? x : -32768 + rnd(65535); }
+    const idx = wide ? Uint32Array.from({length: count}, () => rnd(70000)) : Uint16Array.from({length: count}, () => rnd(65536));
+    const pb = Buffer.from(pos.buffer), ib = Buffer.from(idx.buffer);
+    mesh.buckets.push({pos: off, verts, idx: off + pb.length, count, wide});
+    parts.push(pb, ib); off += pb.length + ib.length;
+  }
+  parts.push(Buffer.from([7])); // odd length: the last byte stays put
+  const raw = Buffer.concat(parts), packed = packModel(raw, mesh);
+  assert.equal(mesh.enc, 'dsg1'); assert.equal(mesh.raw, raw.length);
+  const src = readFileSync('public/showcase/showcase.js', 'utf8');
+  const fn = src.slice(src.indexOf('  function unpackModel(buf) {'), src.indexOf('  function loadMesh() {'));
+  assert.ok(fn.length > 100, 'viewer unpacker found');
+  const unpack = new Function('gunzip', 'MESH', fn + '\nreturn unpackModel;')((b) => { const z = gunzipSync(Buffer.from(b)); return Promise.resolve(z.buffer.slice(z.byteOffset, z.byteOffset + z.length)); }, mesh);
+  const out = Buffer.from(await unpack(packed.buffer.slice(packed.byteOffset, packed.byteOffset + packed.length)));
+  assert.ok(out.equals(raw), 'unpacked model is byte-identical');
+}
+
+console.log('PASS showcase cloud: models travel packed and unpack byte-identical; owner links open the latest upload on the same URL; switched-off/unknown links 404 alike; links bound to one villa; opens counted; no-store; origin-restricted; engineers publish with their own revocable key (hash only stored), uploads keep the villa link, old files removed, stale/bad requests refused');

@@ -4,6 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NITAQ — عرض المشروع ثلاثي الأبعاد</title>
+<meta name="description" content="جولة ثلاثية الأبعاد داخل فيلتك من نطاق للاستشارات الهندسية: تجوّل في المخطط قبل التنفيذ.">
+<!-- link preview (WhatsApp and others): absolute URLs, a 1200x630 card -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NITAQ">
+<meta property="og:locale" content="ar_AE">
+<meta property="og:title" content="جولة ثلاثية الأبعاد داخل فيلتك | نطاق">
+<meta property="og:description" content="تجوّل في المخطط قبل التنفيذ: الغرف والفرش والخامات بمقاييسها.">
+<meta property="og:image" content="https://nitaqengineering.github.io/ALL_SYSTMS_NITAQ/showcase/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="فيلا حديثة وقت الغروب مع شعار نطاق">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#101725">
 <link rel="icon" href="../NITAQ-Logo-gold.svg">
 <style>
 @font-face{font-family:Tajawal;font-weight:300;src:url(../studio/assets/fonts/tajawal-arabic-300-normal.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
@@ -90,6 +104,11 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 .sw{display:flex;flex:none}
 .sw i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.25);margin-inline-end:-4px}
 .err{padding:40px;text-align:center;color:var(--steel)}
+.toast{position:absolute;top:58px;left:50%;transform:translateX(-50%);background:rgba(16,23,37,.88);color:#fff;padding:8px 16px;border-radius:999px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:4;white-space:nowrap}
+.toast.on{opacity:1}
+.hint.coach{display:block!important;left:50%;inset-inline-start:auto;right:auto;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom));background:rgba(16,23,37,.85);color:#fff;padding:8px 14px;border-radius:999px;font-size:12px;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;z-index:4;animation:coach 6s ease forwards;pointer-events:none}
+@keyframes coach{0%{opacity:0}8%,85%{opacity:1}100%{opacity:0}}
+.walking .hint.coach{bottom:calc(210px + env(safe-area-inset-bottom))}
 /* phone-only controls (shown by the media query below) */
 .hud,.joy,#bMore,.grab,.scrim{display:none}
 .hud{position:absolute;top:12px;inset-inline-end:12px;flex-direction:column;gap:8px;z-index:3}
@@ -106,6 +125,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
   main{grid-template-columns:1fr;min-height:0}
   .stage{height:auto;min-height:0}
   header{padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top))}header img{height:24px}.hd-meta{display:none}.chip{padding:5px 11px;font-size:12px}
+
   .title{inset-inline-start:14px;top:12px}.title h1{font-size:16px}.title p,.title .k{display:none}
   .hud{display:flex}
   .dock{bottom:calc(10px + env(safe-area-inset-bottom));width:max-content;max-width:calc(100% - 20px);flex-wrap:nowrap;justify-content:center;gap:4px;padding:4px;border-radius:14px;background:rgba(16,23,37,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -151,8 +171,9 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
 <div class="app" id="app">
   <header>
     <img src="../NITAQ-Logo-gold.svg" alt="NITAQ">
-    <div class="hd-meta" id="hdMeta"></div>
+    <div class="hd-meta" id="hdMeta" dir="ltr"></div>
     <div class="hd-actions">
+      <button class="chip" id="btnShare"></button>
       <button class="chip" id="btnNight"></button>
       <button class="chip" id="btnLang"></button>
     </div>
@@ -163,6 +184,7 @@ aside{overflow:auto;border-inline-start:1px solid var(--line);padding:24px;displ
       <div class="labels" id="labels"></div>
       <div class="loading" id="loading" hidden></div>
       <div class="here" id="here" hidden></div>
+      <div class="toast" id="toast" hidden></div>
       <canvas class="map" id="map" aria-label="mini map"></canvas>
       <div class="walkctl" id="walkctl"></div>
       <div class="joy" id="joy" aria-hidden="true"><i></i></div>
