@@ -916,7 +916,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1221,7 +1221,7 @@
           g = fp.main; smooth = true;
         }
         var m = new THREE.Mesh(g, glass ? glassMat : lookMaterial(b, smooth));
-        m.castShadow = !glass; m.receiveShadow = !glass; parent.add(m);
+        m.castShadow = !glass; m.receiveShadow = !glass; m.userData.bk = b; parent.add(m);
         var lk = lookOf(b); // ceramic outside wet rooms (wash-area basins): sanitary ware too
         if (b.grp === 'furn' && !glass && lk && (/ceramic/i.test(lk.cls || '') || /porcel|ceramic|china|sanit/i.test(lk.name || ''))) wetMeshes.push({ m: m, kind: 'china', anyRoom: true });
         if (!glass) parent.add(new THREE.Mesh(g, cap));
@@ -1231,6 +1231,7 @@
       scene.add(root); applyLevel(); note.hidden = true;
       setupInterior(root);
       buildRealFurniture();
+      dressStairs();
       dressDoors();
       meshReady = true; mapLevel = -1; renderUI(); applyFinish(); dirtyShadow();
       if (firstSpin && !S.walk) { S.auto = true; syncDock(); } // a slow turn on first open
@@ -1312,7 +1313,7 @@
     c.fillStyle = '#F3F1EC'; c.fillRect(0, 0, n, n);
     var cl = c.createRadialGradient(n * 0.3, n * 0.4, 0, n * 0.3, n * 0.4, n * 0.8); cl.addColorStop(0, 'rgba(255,255,255,.35)'); cl.addColorStop(1, 'rgba(225,222,215,.25)');
     c.fillStyle = cl; c.fillRect(0, 0, n, n); // soft cloudiness
-    veins(c, n, r, 16, '110,110,118');
+    veins(c, n, r, 16, '104,104,112', 1.5);
     c.strokeStyle = 'rgba(140,135,130,.8)'; c.lineWidth = 2.5;
     for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
   }
@@ -1411,6 +1412,7 @@
             '    vec2 zp = vExtPos.xz + zn.xz * 0.3, zq = vExtPos.xz + zn.xz * 0.15;',
             '    vec4 zm = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li) * 0.25, (zp.y - zoneB.y) / zoneB.z));',
             '    vec4 zr = texture2D(zoneMask, vec2(((zq.x - zoneB.x) / zoneB.z + li) * 0.25, (zq.y - zoneB.y) / zoneB.z));',
+            '    if (li > 0.5 && zm.b < 0.5) zm.b = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li - 1.0) * 0.25, (zp.y - zoneB.y) / zoneB.z)).b; // a double-height void: the room below',
             '    extIn = step(0.5, zm.b); float hy = vExtPos.y - fy;',
             '    extTile = extIn * max(step(0.5, zr.r), step(0.5, zr.g) * step(0.9, hy) * step(hy, 1.55));',
             '    vec3 tn = pow(abs(zn), vec3(4.0)); tn /= (tn.x + tn.y + tn.z);',
@@ -1428,7 +1430,7 @@
   }
   var SCHEMES = [
     { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
-    { id: 'classic', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#E8E0D2', ceil: '#FFFFFF', sw: ['#F3F1EC', '#E8E0D2', '#C9A25D'],
+    { id: 'classic', tint: '#EAE6DF', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#E8E0D2', ceil: '#FFFFFF', sw: ['#F3F1EC', '#E8E0D2', '#C9A25D'],
       arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان أوف وايت دافئ مطفي · أسقف جبس بيضاء · الحمامات والمطبخ: بورسلين 60×60 وسيراميك جدران 30×60', enD: 'Polished white veined marble 120×120 · warm ivory paint · white gypsum ceilings · wet areas and kitchen: porcelain 60×60, ceramic wall tiles 30×60' },
     { id: 'warm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.45 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DDD5C8', ceil: '#FFFFFF', sw: ['#C9A57A', '#DDD5C8', '#FFFFFF'],
       arD: 'باركيه بلوط فاتح 20×120 · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Light oak planks 20×120 · greige paint · off-white ceilings' },
@@ -1468,7 +1470,7 @@
       else {
         var key = v[0].name + v[1];
         texCache[key] = texCache[key] || texture(v[0], v[1]);
-        mat.color.set('#ffffff'); mat.map = texCache[key];
+        mat.color.set(sc.tint || '#F4F2EE'); mat.map = texCache[key]; // real white stone is ~85-90% white: light and veins stay visible
       }
       mat.roughness = v ? ((sc.rough || {})[f.kind] || ROUGH[f.kind] || 0.85) : 0.85;
       mat.needsUpdate = true;
@@ -1477,6 +1479,7 @@
     [].forEach.call(fins.children, function (b) { b.classList.toggle('on', b.dataset.id === sc.id); });
     $('finNote').textContent = S.lang === 'ar' ? sc.arD : sc.enD;
     dressFurniture(sc.id);
+    if (stairSwaps.length) setStairs(sc.id !== 'revit');
     applyTrim(sc); lightCeilings();
     if (MESH) { zoneUniforms().zoneTile.value = wallTile(sc.id); if (typeof sc.wall === 'string') zoneUniforms().zonePaint.value.set(sc.wall).convertSRGBToLinear(); extInterior(); }
   }
@@ -4319,6 +4322,87 @@
       box.appendChild(b);
     });
     applyDoorWood();
+  }
+  /* Staircase and bare structure, after a study of the whole palette:
+     - Treads, risers and the stone cladding along the flights (Revit "...stair..." material and
+       any stone material that lies in the staircase volume) become polished Calacatta, the same
+       marble family as the dining tables and vanities.
+     - The railing (any other material that lies only in that volume) splits in two: its top band
+       is the handrail, in walnut like the coffee tables; the balusters below are satin bronze,
+       which ties in with the brushed brass of the bathrooms and lamps.
+     - Bare concrete as modelled (the soffit under the flights, beams, slab edges) is plastered
+       off-white: a finished villa shows no grey structure.
+     "As modelled" puts the Revit materials back. */
+  var stairSwaps = [];
+  function dressStairs() {
+    var arch = meshGroups.arch; if (!arch) return;
+    arch.updateMatrixWorld(true);
+    var meshes = []; arch.traverse(function (o) { if (o.isMesh && o.userData.bk && o.material !== glassMat && o.material.side !== THREE.BackSide) meshes.push(o); });
+    var v = new THREE.Vector3(), zone = new THREE.Box3();
+    function each(o, fn) { var p = o.geometry.attributes.position; for (var i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); fn(v, i); } }
+    meshes.forEach(function (o) { var l = lookOf(o.userData.bk); if (l && /stair/i.test(l.name || '')) each(o, function (q) { zone.expandByPoint(q); }); });
+    var hasStair = !zone.isEmpty(); if (hasStair) zone.expandByScalar(0.35);
+    var mats = {};
+    function mat(k) {
+      if (mats[k]) return mats[k];
+      var P = { marble: { kind: 'calacatta', color: new THREE.Color('#EFEBE4'), rough: 0.12, metal: 0, tex: 'calacatta', scale: 1.3 },
+        walnut: { kind: 'walnut', color: new THREE.Color('#FFFFFF'), rough: 0.35, metal: 0, tex: 'walnut', scale: 1.1 },
+        bronze: { kind: 'bronze', color: new THREE.Color('#8E6F48'), rough: 0.32, metal: 0.9, tex: null, scale: 1 },
+        plaster: { kind: 'plaster', color: new THREE.Color('#ECE8E2'), rough: 0.92, metal: 0, tex: 'gypsum', scale: 1.6 } }[k];
+      return (mats[k] = makeMaterial(P, k === 'walnut' || k === 'bronze'));
+    }
+    meshes.forEach(function (o) {
+      var l = lookOf(o.userData.bk), name = (l && l.name) || '', kind = nameKind(l);
+      if (/concrete|beton/i.test(name)) { swap(o, mat('plaster')); return; }
+      if (!hasStair) return;
+      var n = 0, inside = 0; each(o, function (q) { n++; if (zone.containsPoint(q)) inside++; });
+      if (!n || inside / n < 0.6) return;
+      if (/stair/i.test(name) || kind === 'stone') { swap(o, mat('marble')); return; }
+      if (inside / n < 0.9 || o.userData.bk.opacity < 1) return;
+      railing(o);
+    });
+    function swap(o, m) { var rec = { o: o, orig: o.material, m: m }; stairSwaps.push(rec); }
+    // Railing parts: triangles joined through shared corners (1 mm) form pieces; a piece much
+    // taller than it is wide is a baluster (bronze), the long pieces are rails (walnut).
+    function railing(o) {
+      var g = o.geometry, p = g.attributes.position, idx = g.index; if (!idx) return;
+      var xs = new Float32Array(p.count), ys = new Float32Array(p.count), zs = new Float32Array(p.count);
+      each(o, function (q, i) { xs[i] = q.x; ys[i] = q.y; zs[i] = q.z; });
+      var par = new Int32Array(p.count), key = new Map();
+      for (var i = 0; i < p.count; i++) {
+        var k = Math.round(xs[i] * 1000) + ',' + Math.round(ys[i] * 1000) + ',' + Math.round(zs[i] * 1000);
+        par[i] = key.has(k) ? key.get(k) : i; if (!key.has(k)) key.set(k, i);
+      }
+      function root(i) { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; }
+      var ix = idx.array, t;
+      for (t = 0; t < ix.length; t += 3) { var r0 = root(ix[t]), r1 = root(ix[t + 1]), r2 = root(ix[t + 2]); par[r1] = r0; par[root(r2)] = r0; }
+      var box = new Map();
+      for (i = 0; i < p.count; i++) {
+        var r = root(i), b = box.get(r) || [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
+        b[0] = Math.min(b[0], xs[i]); b[1] = Math.min(b[1], ys[i]); b[2] = Math.min(b[2], zs[i]); b[3] = Math.max(b[3], xs[i]); b[4] = Math.max(b[4], ys[i]); b[5] = Math.max(b[5], zs[i]);
+        box.set(r, b);
+      }
+      var hand = [], bal = [];
+      for (t = 0; t < ix.length; t += 3) {
+        var bb = box.get(root(ix[t])), wide = Math.max(bb[3] - bb[0], bb[5] - bb[2]), tall = bb[4] - bb[1];
+        (tall > 0.3 && tall > wide * 3 ? bal : hand).push(ix[t], ix[t + 1], ix[t + 2]);
+      }
+      if (!hand.length || !bal.length) { swap(o, mat('bronze')); return; }
+      [[hand, 'walnut'], [bal, 'bronze']].forEach(function (part) {
+        var pg = new THREE.BufferGeometry(); pg.setAttribute('position', p); if (g.attributes.normal) pg.setAttribute('normal', g.attributes.normal);
+        pg.setIndex(part[0]); if (!g.attributes.normal) pg.computeVertexNormals();
+        var pm = new THREE.Mesh(pg, mat(part[1])); pm.castShadow = pm.receiveShadow = true; pm.visible = false; o.parent.add(pm);
+        stairSwaps.push({ o: o, part: pm });
+      });
+    }
+    setStairs(S.finish !== 'revit');
+  }
+  function setStairs(on) { // on: the dressed finish; off: the Revit materials
+    stairSwaps.forEach(function (r) {
+      if (r.part) { r.part.visible = on; r.o.visible = !on; } // the railing as two parts, or whole
+      else r.o.material = on ? r.m : r.orig;
+    });
+    dirtyShadow();
   }
   function dressDoors() {
     if (!leafPivots.length) return;
