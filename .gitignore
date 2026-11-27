@@ -19,3 +19,4 @@ public/showcase/data/*
 # Packed Revit showcase button for engineers (built by tools/revit/pack-showcase-extension.mjs)
 dist/NITAQ-Showcase/
 dist/engineers/
+dist/material-study/
