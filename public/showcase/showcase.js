@@ -916,7 +916,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1231,6 +1231,7 @@
       scene.add(root); applyLevel(); note.hidden = true;
       setupInterior(root);
       buildRealFurniture();
+      maskWashAreas();
       dressStairs();
       dressDoors();
       meshReady = true; mapLevel = -1; renderUI(); applyFinish(); dirtyShadow();
@@ -1338,8 +1339,8 @@
     for (var g = 0; g <= n; g += n / 2) { c.beginPath(); c.moveTo(g, 0); c.lineTo(g, n); c.moveTo(0, g); c.lineTo(n, g); c.stroke(); }
   }
 
-  /* Wet rooms and kitchens on the walls: a plan mask per level (red = wet room, tiled full
-     height; green = kitchen, a backsplash band 0.9-1.55 m) read by the wall shader 15 cm in
+  /* Wet rooms, wash areas and kitchens on the walls: a plan mask per level (red = wet room or
+     the 0.9 m around a basin outside one; green = kitchen; both tiled full height) read by the wall shader 15 cm in
      front of each wall pixel, so a wall face shared by a bathroom and a bedroom is tiled only on
      the bathroom's stretch. Tiles: 60 x 120 slabs per scheme. */
   var zoneU = null, wallTiles = {};
@@ -1365,6 +1366,21 @@
     var t = new THREE.CanvasTexture(cv); t.flipY = false; t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false;
     zoneU = { zoneMask: { value: t }, zoneTile: { value: wallTile(S.finish) }, zonePaint: { value: new THREE.Color('#E8E0D2').convertSRGBToLinear() }, extPl: { value: procFor('plaster') }, zoneLv: { value: new THREE.Vector4(lv[0], lv[1], lv[2], lv[3]) }, zoneB: { value: new THREE.Vector4(x0, z0, span, 0) } };
     return zoneU;
+  }
+  // Basins outside wet rooms (wash areas by the dining room, guest wash niches): the plan within
+  // 0.9 m of each basin found by replaceSanitary joins the wet-room mask, so the wall behind it
+  // is tiled like a bathroom. Ceramic vases and lamps are not basins and stay out.
+  var washSpots = [];
+  function maskWashAreas() {
+    if (!washSpots.length) return;
+    var Z = zoneUniforms(), cv = Z.zoneMask.value.image, c = cv.getContext('2d'), N = cv.height;
+    var x0 = Z.zoneB.value.x, z0 = Z.zoneB.value.y, span = Z.zoneB.value.z;
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = '#ff0000';
+    washSpots.forEach(function (w) {
+      var li = D.levels.indexOf(levelAt(w.y + 0.5)); if (li < 0 || li > 3) return;
+      c.beginPath(); c.arc((w.x - x0) / span * N + li * N, (w.z - z0) / span * N, 0.9 / span * N, 0, Math.PI * 2); c.fill();
+    });
+    Z.zoneMask.value.needsUpdate = true;
   }
   function wallTile(id) {
     var style = id === 'warm' ? 'warm' : id === 'calm' ? 'calm' : 'classic';
@@ -1414,7 +1430,7 @@
             '    vec4 zr = texture2D(zoneMask, vec2(((zq.x - zoneB.x) / zoneB.z + li) * 0.25, (zq.y - zoneB.y) / zoneB.z));',
             '    if (li > 0.5 && zm.b < 0.5) zm.b = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li - 1.0) * 0.25, (zp.y - zoneB.y) / zoneB.z)).b; // a double-height void: the room below',
             '    extIn = step(0.5, zm.b); float hy = vExtPos.y - fy;',
-            '    extTile = extIn * max(step(0.5, zr.r), step(0.5, zr.g) * step(0.9, hy) * step(hy, 1.55));',
+            '    extTile = extIn * max(step(0.5, zr.r), step(0.5, zr.g));',
             '    vec3 tn = pow(abs(zn), vec3(4.0)); tn /= (tn.x + tn.y + tn.z);',
             '    vec4 pl = texture2D(extPl, vExtPos.zy / 1.6) * tn.x + texture2D(extPl, vExtPos.xz / 1.6) * tn.y + texture2D(extPl, vExtPos.xy / 1.6) * tn.z;',
             '    vec4 zt = texture2D(zoneTile, vExtPos.zy / 2.4) * tn.x + texture2D(zoneTile, vExtPos.xz / 2.4) * tn.y + texture2D(zoneTile, vExtPos.xy / 2.4) * tn.z;',
@@ -1432,10 +1448,10 @@
     { id: 'revit', ar: 'كما في الموديل', en: 'As modelled', arD: 'خامات Revit الحالية', enD: 'The current Revit materials' },
     { id: 'classic', tint: '#EAE6DF', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'كلاسيك فاخر', en: 'Classic luxury', floor: [marble, 2.4], wall: '#E8E0D2', ceil: '#FFFFFF', sw: ['#F3F1EC', '#E8E0D2', '#C9A25D'],
       arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان أوف وايت دافئ مطفي · أسقف جبس بيضاء · الحمامات والمطبخ: بورسلين 60×60 وسيراميك جدران 30×60', enD: 'Polished white veined marble 120×120 · warm ivory paint · white gypsum ceilings · wet areas and kitchen: porcelain 60×60, ceramic wall tiles 30×60' },
-    { id: 'warm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.45 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [oak, 2.4], wall: '#DDD5C8', ceil: '#FFFFFF', sw: ['#C9A57A', '#DDD5C8', '#FFFFFF'],
-      arD: 'باركيه بلوط فاتح 20×120 · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Light oak planks 20×120 · greige paint · off-white ceilings' },
-    { id: 'calm', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.35 }, ar: 'هادئ محايد', en: 'Calm neutral', floor: [porcelain, 2.4], wall: '#E7E5E0', ceil: '#FFFFFF', sw: ['#DAD7D1', '#E7E5E0', '#6E7787'],
-      arD: 'بورسلين رمادي فاتح مطفي 120×120 · دهان أبيض دافئ · سقف أبيض', enD: 'Matte light-grey porcelain 120×120 · warm white paint · white ceilings' }
+    { id: 'warm', tint: '#EAE6DF', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'مودرن دافئ', en: 'Warm modern', floor: [marble, 2.4], wall: '#DDD5C8', ceil: '#FFFFFF', sw: ['#F3F1EC', '#DDD5C8', '#C9A57A'],
+      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان بيج رمادي (Greige) · سقف أبيض مكسور', enD: 'Polished white veined marble 120×120 · greige paint · off-white ceilings' },
+    { id: 'calm', tint: '#EAE6DF', zoneFloor: [porcelainSmall, 1.2], zoneWall: [ceramic, 1.2], rough: { floor: 0.12 }, ar: 'هادئ محايد', en: 'Calm neutral', floor: [marble, 2.4], wall: '#E7E5E0', ceil: '#FFFFFF', sw: ['#F3F1EC', '#E7E5E0', '#6E7787'],
+      arD: 'أرضيات رخام أبيض بعروق رمادية 120×120 مصقول · دهان أبيض دافئ · سقف أبيض', enD: 'Polished white veined marble 120×120 · warm white paint · white ceilings' }
   ];
   var texCache = {};
   var ROUGH = { wall: 0.92, ceil: 0.95, floor: 0.6, zoneFloor: 0.32, zoneWall: 0.18 };
@@ -2375,6 +2391,7 @@
       }
       function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
       if (kind === 'basin') {
+        washSpots.push({ x: O.x + X.x * xm, y: fy, z: O.z + X.z * xm }); // its wall gets tiled (maskWashAreas)
         // an existing counter around it? (a surface just below the basin's rim, beside it)
         var cTop = null; [1, -1].forEach(function (sg) {
           if (cTop != null) return;
@@ -3072,7 +3089,7 @@
             '  float fy = li < 0.5 ? zoneLv.x : li < 1.5 ? zoneLv.y : li < 2.5 ? zoneLv.z : zoneLv.w;',
             '  vec4 zm = texture2D(zoneMask, vec2(((zp.x - zoneB.x) / zoneB.z + li) * 0.25, (zp.y - zoneB.y) / zoneB.z));',
             '  float hy = vTriPos.y - fy;',
-            '  zoneW = (abs(zn.y) < 0.5) ? max(step(0.5, zm.r), step(0.5, zm.g) * step(0.9, hy) * step(hy, 1.55)) : 0.0;',
+            '  zoneW = (abs(zn.y) < 0.5) ? max(step(0.5, zm.r), step(0.5, zm.g)) : 0.0;',
             '  vec4 zt = texture2D(zoneTile, vTriPos.zy / 2.4) * triW.x + texture2D(zoneTile, vTriPos.xz / 2.4) * triW.y + texture2D(zoneTile, vTriPos.xy / 2.4) * triW.z;',
             '  diffuseColor.rgb = mix(diffuseColor.rgb, sRGBToLinear(zt).rgb, zoneW); }'].join('\n') : ''].join('\n'));
       if (zones) sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.14, zoneW);');
