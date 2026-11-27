@@ -916,7 +916,73 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, mask: function (x, z, li) { var Z = zoneUniforms(), cv = Z.zoneMask.value.image, N = cv.height, px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N); var d = cv.getContext('2d').getImageData(px, pz, 1, 1).data; return [d[0], d[1], d[2]]; }, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  /* Self-check (?debug, then __walk.audit()): every mistake found so far, measured on the loaded
+     villa. All "bad" counts must be 0 after any viewer change; run it on each new villa too.
+     - tiles: wall faces tiled although the point in front of them is not in a wet room, kitchen
+       or in sight of a basin (tiles showing through a wall: majlis, 2026-11-27);
+     - sanitary: wet rooms / bath labels with basins but no WC, or more basins than their size
+       allows (a WC read as a basin: guest toilet, 2026-11-27);
+     - walking: open floor of each level where a step is refused (stair gap, 2026-11-27);
+     - stairs: a Revit "stair" material present but no marble / railing dressing applied. */
+  function audit() {
+    scene.updateMatrixWorld(true);
+    var walls = [], out = { tiles: { checked: 0, tiled: 0, bad: [] }, sanitary: { pieces: sanitaryLog.length, bad: [] }, walking: { checked: 0, bad: [] }, stairs: {} };
+    ['wall', 'ext', 'arch'].forEach(function (g) { if (meshGroups[g]) meshGroups[g].traverse(function (o) { if (o.isMesh && o.visible && !o.material.transparent && o.material.side !== THREE.BackSide) walls.push(o); }); });
+    var Z = zoneUniforms(), cv = Z.zoneMask.value.image, ctx = cv.getContext('2d'), N = cv.height, img = ctx.getImageData(0, 0, cv.width, N).data;
+    function mask(x, z, li) { var px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N), i = (pz * cv.width + px) * 4; return [img[i], img[i + 1], img[i + 2]]; }
+    var lv = D.levels.map(function (L) { return L.elevation + (L._slabTop || 0); });
+    function li(y) { var k = 0; lv.forEach(function (f, i) { if (i < 4 && f - 0.3 <= y) k = i; }); return k; }
+    var rc2 = new THREE.Raycaster(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    function seenByBasin(p, k) {
+      return washSpots.some(function (sp) {
+        if (li(sp.y + 0.5) !== k) return false;
+        var o = new THREE.Vector3(sp.x + sp.fx * 0.3, sp.y + 1.3, sp.z + sp.fz * 0.3), t = new THREE.Vector3(p.x, sp.y + 1.3, p.z), d = t.sub(o), L = d.length();
+        if (L > 1.6) return false; rc2.set(o, d.normalize()); rc2.near = 0; rc2.far = Math.max(0.01, L - 0.02); return !rc2.intersectObjects(walls, false).length;
+      });
+    }
+    walls.forEach(function (o) {
+      var g = o.geometry, p = g.attributes.position, idx = g.index, cnt = idx ? idx.count : p.count;
+      for (var t = 0; t < cnt; t += 3) {
+        a.fromBufferAttribute(p, idx ? idx.getX(t) : t).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(p, idx ? idx.getX(t + 1) : t + 1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(p, idx ? idx.getX(t + 2) : t + 2).applyMatrix4(o.matrixWorld);
+        n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)); var area = n.length() / 2; if (area < 0.02) continue; n.normalize(); if (Math.abs(n.y) > 0.5) continue;
+        var cen = a.clone().add(b).add(c).multiplyScalar(1 / 3), k = li(cen.y); if (cen.y - lv[k] > 3.2) continue; out.tiles.checked++;
+        var sp = cen.addScaledVector(n, 0.15), m = mask(sp.x, sp.z, k); if (!(m[2] > 127 && (m[0] > 127 || m[1] > 127))) continue; out.tiles.tiled++;
+        var rt = roomTypeAt(sp.x, lv[k] + 0.1, sp.z); if (rt === 'wet' || rt === 'kitchen' || seenByBasin(sp, k)) continue;
+        out.tiles.bad.push(D.levels[k].id + ' ' + sp.x.toFixed(1) + ',' + sp.z.toFixed(1) + ' ' + (rt || '(no room)'));
+      }
+    });
+    // sanitary: group classified pieces by the wet room (or bath label) they stand in
+    var groups = {};
+    sanitaryLog.forEach(function (q) {
+      if (!q.kind) return;
+      var L = levelAt(q.y + 0.05), x = q.x + CX, y = -q.z + CY, r = L.rooms.filter(function (r2) { return inPoly(x, y, r2.poly); })[0], key, name, area;
+      if (r) { key = L.id + ':' + r.name + '@' + r._c.map(function (v) { return v.toFixed(1); }); name = r.name; area = r.area; }
+      else { var best = null, bd = 12; (L.notes || []).forEach(function (q2) { var d2 = (q2.x - x) * (q2.x - x) + (q2.y - y) * (q2.y - y); if (d2 < bd) { bd = d2; best = q2; } }); if (!best) return; key = L.id + ':' + best.name + '@' + best.x.toFixed(1) + ',' + best.y.toFixed(1); name = best.name || ''; area = null; }
+      var gr = groups[key] || (groups[key] = { name: name, area: area, basin: 0, wc: 0 }); gr[q.kind]++;
+    });
+    Object.keys(groups).forEach(function (k) {
+      var gr = groups[k], washOnly = /wash|مغسل/i.test(gr.name);
+      if (!washOnly && /toil|wc|bath|حمام|دورة/i.test(gr.name) && gr.basin && !gr.wc) out.sanitary.bad.push(k + ': ' + gr.basin + ' basin(s), no WC');
+      if (gr.area && gr.basin > Math.max(1, Math.floor(gr.area / 1.5))) /* two basins on a counter need ~3 m2 */ out.sanitary.bad.push(k + ': ' + gr.basin + ' basins in ' + gr.area.toFixed(1) + ' m2');
+    });
+    out.sanitary.rooms = Object.keys(groups).map(function (k) { return k.split('@')[0] + ' basin ' + groups[k].basin + ' wc ' + groups[k].wc; });
+    // walking: every open floor point of each level must accept a step
+    var keepF = W.floor;
+    if (!solids.length) colliders();
+    D.levels.forEach(function (L, k) {
+      var fl = lv[k]; if (!L.rooms.length) return;
+      for (var x = minX - CX; x <= maxX - CX; x += 0.5) for (var z = -(maxY - CY); z <= -(minY - CY); z += 0.5) {
+        var f = floorAt(x, z, fl + HEAD); if (f == null || Math.abs(f - fl) > 0.03) continue; /* open floor: nothing above it up to 2 m (not under a counter) */
+        W.floor = f; out.walking.checked++; if (!stepAt(x, z).ok) out.walking.bad.push(L.id + ' ' + x.toFixed(1) + ',' + z.toFixed(1));
+      }
+    });
+    W.floor = keepF;
+    var stairLook = (MESH.looks || []).some(function (l) { return /stair/i.test(l.name || ''); });
+    out.stairs = { revitStair: stairLook, dressed: stairSwaps.length, bad: stairLook && !stairSwaps.length ? ['stair material found but not dressed'] : [] };
+    out.ok = !out.tiles.bad.length && !out.sanitary.bad.length && !out.walking.bad.length && !out.stairs.bad.length;
+    return out;
+  }
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { audit: audit, W: W, mask: function (x, z, li) { var Z = zoneUniforms(), cv = Z.zoneMask.value.image, N = cv.height, px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N); var d = cv.getContext('2d').getImageData(px, pz, 1, 1).data; return [d[0], d[1], d[2]]; }, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1243,7 +1309,7 @@
         edgeQueue.forEach(function (e) { var eg = creaseEdges(e.g, 30); if (eg) e.grp.add(new THREE.LineSegments(eg, edgeMat)); });
         edgeQueue = [];
       }, 50);
-    }).catch(function () { note.textContent = 'تعذّر تحميل المجسّم'; });
+    }).catch(function (err) { console.error('showcase model:', err); note.hidden = false; note.textContent = 'تعذّر تحميل المجسّم'; }); // never swallow the cause
   }
   /* ---------- doors ----------
      Each leaf turns about its hinge (the centre of the door's plan swing arc in Revit) by the
@@ -1370,7 +1436,7 @@
   // Basins outside wet rooms (wash areas by the dining room, guest wash niches): the plan within
   // 0.9 m of each basin found by replaceSanitary joins the wet-room mask, so the wall behind it
   // is tiled like a bathroom. Ceramic vases and lamps are not basins and stay out.
-  var washSpots = [];
+  var washSpots = [], sanitaryLog = [];
   function maskWashAreas() {
     if (!washSpots.length) return;
     var Z = zoneUniforms(), cv = Z.zoneMask.value.image, c = cv.getContext('2d'), N = cv.height;
@@ -2350,21 +2416,41 @@
         }
       }
       if (P.tris.length < 12 || hy1 > 1.3 || hy1 < 0.3 || Math.max(P.x1 - P.x0, P.z1 - P.z0) > 1.0) return;
-      // the wall it hangs on: nearest wall face around it at mid height
-      var best = null, o = new THREE.Vector3(cx, Math.min(fy + hy1 - 0.05, fy + 0.7), cz);
+      /* The wall it stands against, and what it is. Every wall face around it (8 rays at mid height)
+         is a candidate frame, not just the nearest: a WC in a corner is nearer the side wall than
+         the wall its cistern is on, and read from the side it is wider than deep, i.e. a basin
+         (the guest toilet of villa 4067 got a second vanity). In each frame the shape and the
+         height profile decide: a WC is deeper than wide, stands on the floor, and is either low
+         all over (concealed cistern) or high at the back (cistern) and low at the front (bowl);
+         a basin is wider than deep with a level top. A WC reading in any frame wins. */
+      var o = new THREE.Vector3(cx, Math.min(fy + hy1 - 0.05, fy + 0.7), cz), frames = [];
       for (var k2 = 0; k2 < 8; k2++) {
         var ang = k2 * Math.PI / 4, d = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)); rc.set(o, d); rc.far = 1.2;
-        var h = rc.intersectObjects(walls, false)[0]; if (h && (!best || h.distance < best.h.distance)) best = { h: h, d: d };
+        var h = rc.intersectObjects(walls, false)[0]; if (!h) continue;
+        var nn = h.face.normal.clone().transformDirection(h.object.matrixWorld); nn.y = 0; if (nn.lengthSq() < 0.5) continue; nn.normalize(); if (nn.dot(d) > 0) nn.negate();
+        if (frames.some(function (f2) { return f2.F.dot(nn) > 0.97 && Math.abs(f2.dist - h.distance) < 0.1; })) continue;
+        frames.push({ F: nn, O: h.point.clone(), dist: h.distance });
       }
-      if (!best) { dbg.r = 'nowall'; return; }
-      var n = best.h.face.normal.clone().transformDirection(best.h.object.matrixWorld); n.y = 0; if (n.lengthSq() < 0.5) return; n.normalize(); if (n.dot(best.d) > 0) n.negate();
-      var F = n, X = new THREE.Vector3().crossVectors(up, F), O = best.h.point.clone(); O.y = fy;
-      var w0 = 1e9, w1 = -1e9, d0 = 1e9, d1 = -1e9;
-      P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var lx = (q.x - O.x) * X.x + (q.z - O.z) * X.z, lz = (q.x - O.x) * F.x + (q.z - O.z) * F.z; w0 = Math.min(w0, lx); w1 = Math.max(w1, lx); d0 = Math.min(d0, lz); d1 = Math.max(d1, lz); }); });
-      var W = w1 - w0, Dp = d1 - d0, xm = (w0 + w1) / 2; dbg.W = +W.toFixed(2); dbg.D = +Dp.toFixed(2); dbg.d0 = +d0.toFixed(2); dbg.h = [+hy0.toFixed(2), +hy1.toFixed(2)]; if (d0 > 0.25) { dbg.r = 'far'; return; } // not against a wall
-      var kind = (W >= Dp * 0.95 && W >= 0.38 && Dp >= 0.28 && hy1 > 0.7 && hy1 < 1.15 && W < 0.95 && Dp < 0.65) ? 'basin' : (Dp > W * 1.15 && hy0 < 0.45 && hy1 < 1.15 && W > 0.28 && W < 0.6 && Dp > 0.42 && Dp < 0.9) ? 'wc' : '';
+      if (!frames.length) { dbg.r = 'nowall'; return; }
+      frames.forEach(function (f2) {
+        var F2 = f2.F, X2 = new THREE.Vector3().crossVectors(up, F2), O2 = f2.O; O2.y = fy;
+        var w0 = 1e9, w1 = -1e9, d0 = 1e9, d1 = -1e9, pts = [];
+        P.tris.forEach(function (i) { T[i].pts.forEach(function (q) { var lx = (q.x - O2.x) * X2.x + (q.z - O2.z) * X2.z, lz = (q.x - O2.x) * F2.x + (q.z - O2.z) * F2.z; pts.push([lz, q.y - fy]); w0 = Math.min(w0, lx); w1 = Math.max(w1, lx); d0 = Math.min(d0, lz); d1 = Math.max(d1, lz); }); });
+        var mid = (d0 + d1) / 2, front = 0, back = 0; pts.forEach(function (q) { if (q[0] > mid) front = Math.max(front, q[1]); else back = Math.max(back, q[1]); });
+        var W = w1 - w0, Dp = d1 - d0, k = '';
+        if (d0 <= 0.25) {
+          if (Dp > W * 1.1 && hy0 < 0.45 && hy1 < 1.15 && W > 0.28 && W < 0.6 && Dp > 0.42 && Dp < 0.9 && (hy1 < 0.55 || front < back - 0.2)) k = 'wc';
+          else if (W >= Dp * 0.95 && W >= 0.38 && Dp >= 0.28 && hy1 > 0.7 && hy1 < 1.15 && W < 0.95 && Dp < 0.65 && front > hy1 - 0.2) k = 'basin';
+        }
+        Object.assign(f2, { X: X2, W: W, Dp: Dp, d0: d0, d1: d1, xm: (w0 + w1) / 2, k: k });
+      });
+      var pickF = frames.filter(function (f2) { return f2.k === 'wc'; })[0] || frames.filter(function (f2) { return f2.k === 'basin'; }).sort(function (p1, p2) { return p1.dist - p2.dist; })[0] || frames.sort(function (p1, p2) { return p1.dist - p2.dist; })[0];
+      var F = pickF.F, X = pickF.X, O = pickF.O, W = pickF.W, Dp = pickF.Dp, xm = pickF.xm, kind = pickF.k, d0 = pickF.d0, d1 = pickF.d1;
+      dbg.W = +W.toFixed(2); dbg.D = +Dp.toFixed(2); dbg.d0 = +pickF.d0.toFixed(2); dbg.h = [+hy0.toFixed(2), +hy1.toFixed(2)];
+      if (pickF.d0 > 0.25) { dbg.r = 'far'; return; } // not against a wall
       if (P.cls === 'x' && kind !== 'wc') kind = ''; // from other furniture: only a WC is taken
-      dbg.k = kind; if (!kind) return;
+      dbg.k = kind; sanitaryLog.push({ x: cx, z: cz, y: fy, kind: kind, W: W, D: Dp, h: [hy0, hy1], frames: frames.map(function (f2) { return f2.k || '-'; }).join('') });
+      if (!kind) return;
       var Gp = new THREE.Group(); Gp.matrixAutoUpdate = false; Gp.matrix.makeBasis(X, up, F).setPosition(O.x + X.x * xm, fy, O.z + X.z * xm); realGroup.add(Gp);
       function mirrorOver(lx, w, y0, h, framed) { // a real mirror on the face standing on the wall above the basin
         if (!THREE.Reflector) return;
