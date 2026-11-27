@@ -517,21 +517,37 @@
     var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object) && h.face && h.face.normal.y > 0; })[0];
     return f ? f.point.y : null;
   }
-  /* What a step to (x, z) meets, looking down from just above head height (2 m):
-     a tread or a threshold up to MAX_STEP higher is climbed; anything higher and lower than the
-     head (a flight seen from beside or below, a sill, a bed of the stairwell) blocks; a drop of
-     more than 0.4 m (the stairwell, a balcony edge) blocks too: the walker never falls a level.
-     Stairs down are a run of small drops, so they still work. Outside the model: keep height. */
-  var HEAD = 2.0, MAX_DROP = 0.4;
+  /* What a step to (x, z) meets, looking down from just above head height (2 m). Surfaces more
+     than KNEE (1.1 m) above the feet are overhead (a dropped ceiling, a bulkhead, a window sill,
+     the soffit of a flight above: walls and soffits that the body would hit are the chest ray's
+     job) and are looked past. The first surface at or below KNEE decides:
+     up to MAX_STEP higher is a tread or threshold, climbed; higher than that (a handrail, the
+     side of a flight, a ledge) blocks; more than MAX_DROP lower (the stairwell, a balcony edge)
+     blocks: the walker never falls a level. Stairs down are a run of small drops, so they work.
+     Nothing found (outside the model): keep the height. */
+  var HEAD = 2.0, KNEE = 1.1, MAX_DROP = 0.4, CRACK = 0.12;
+  function probe(x, z) {
+    hit.set(org.set(x, W.floor + HEAD, z), down); hit.near = 0; hit.far = 7;
+    var hs = hit.intersectObjects(solids, false);
+    for (var i = 0; i < hs.length; i++) {
+      var f = hs[i];
+      if (isGlass(f.object) || !f.face || f.face.normal.y <= 0.3) continue;
+      var h = f.point.y;
+      if (h - W.floor > KNEE) continue; // overhead
+      if (h - W.floor > MAX_STEP) return { ok: false, high: true, h: h };
+      if (W.floor - h > MAX_DROP) return { ok: false, h: h };
+      return { ok: true, f: h };
+    }
+    return { ok: true, f: null };
+  }
+  // Models leave hairline gaps (4 cm between a slab edge and the top tread in villa 4067): a drop
+  // with solid footing on two opposite sides within 12 cm is a crack to step over, not an edge.
   function stepAt(x, z) {
-    var top = W.floor + HEAD;
-    hit.set(org.set(x, top, z), down); hit.near = 0; hit.far = 7;
-    var f = hit.intersectObjects(solids, false).filter(function (h) { return !isGlass(h.object) && h.face && h.face.normal.y > 0.3; })[0];
-    if (!f) return { ok: true, f: null };
-    var h = f.point.y;
-    if (h - W.floor > MAX_STEP) return { ok: false };
-    if (W.floor - h > MAX_DROP) return { ok: false };
-    return { ok: true, f: h };
+    var r = probe(x, z);
+    if (r.ok || r.high) return r;
+    var a = probe(x + CRACK, z), b = probe(x - CRACK, z), c = probe(x, z + CRACK), d = probe(x, z - CRACK);
+    var across = (a.ok && a.f != null && b.ok && b.f != null) ? Math.max(a.f, b.f) : (c.ok && c.f != null && d.ok && d.f != null) ? Math.max(c.f, d.f) : null;
+    return across == null ? r : { ok: true, f: across };
   }
   function levelFloor() { var L = D.levels[S.level]; return L.elevation + (L._slabTop || 0); }
   // Inside a wall or column: looking out, a back face (the navy copy) comes before any front face.
@@ -900,7 +916,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
