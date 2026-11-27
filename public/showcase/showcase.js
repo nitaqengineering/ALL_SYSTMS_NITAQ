@@ -916,7 +916,7 @@
       if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
     return c;
   }
-  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
+  if (/[?&]debug(&|$)/.test(location.search)) window.__walk = { W: W, mask: function (x, z, li) { var Z = zoneUniforms(), cv = Z.zoneMask.value.image, N = cv.height, px = Math.floor((x - Z.zoneB.value.x) / Z.zoneB.value.z * N + li * N), pz = Math.floor((z - Z.zoneB.value.y) / Z.zoneB.value.z * N); var d = cv.getContext('2d').getImageData(px, pz, 1, 1).data; return [d[0], d[1], d[2]]; }, wash: function () { return washSpots; }, probeAt: function (eye, at, nx, ny) { camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); hit.setFromCamera(new THREE.Vector2(nx, ny), camera); hit.near = 0; hit.far = 80; var h = hit.intersectObjects(scene.children, true).filter(function (x) { return x.object.isMesh && x.object.visible; })[0]; if (!h) return null; var b = h.object.userData.bk, lk = b && lookOf(b), o = h.object, g = ''; while (o) { for (var k in meshGroups) if (meshGroups[k] === o) g = k; o = o.parent; } return { grp: g, look: lk ? lk.name : null, li: b ? b.look : null, rev: b ? b.color : null, col: h.object.material.color ? '#' + h.object.material.color.getHexString() : null, kind: h.object.material.userData && h.object.material.userData.kind, n: [h.face.normal.x, h.face.normal.y, h.face.normal.z].map(function (v) { return +v.toFixed(2); }), y: +h.point.y.toFixed(2), d: +h.distance.toFixed(2) }; }, stepAt: function (x, z) { return stepAt(x, z); }, unpack: function (b) { return unpackModel(b); }, blockedAt: blockedAt, floorAt: floorAt, solids: function () { return solids; }, doors: function () { return leafPivots; }, place: function (x, z) { return placeWalker(x, z); }, scene: scene, groups: meshGroups, cx: CX, cy: CY, orbit: function (x, y, h, r, th, ph) { goal.t.copy(P(x, y, h)); goal.r = r; goal.th = th; goal.ph = ph; }, frame: function (eye, at) { if (S.walk !== lastWalkL && meshReady) { lastWalkL = S.walk; applyNight(); } if (sky) sky.visible = S.walk; mirrorGroup.visible = S.walk; renderer.setSize(1200, 800, false); camera.aspect = 1.5; applyLens(); sizeAO(); renderer.shadowMap.needsUpdate = true; camera.position.copy(eye); camera.lookAt(at); camera.updateMatrixWorld(); if (useAO()) composer.render(); else renderer.render(scene, camera); var url = renderer.domElement.toDataURL('image/jpeg', 0.85); resize(); return url; }, interior: function () { return { spots: spots, cove: coveGroup.children.map(function (c) { return c.count; }), finish: finishMeshes.map(function (f) { return f.kind; }) }; } };
   window.addEventListener('keydown', function (e) {
     if (!S.walk || /input|textarea/i.test(e.target.tagName)) return;
     var k = e.key.toLowerCase();
@@ -1380,8 +1380,8 @@
       var li = D.levels.indexOf(levelAt(w.y + 0.5)); if (li < 0 || li > 3) return;
       // a 1.8 m wide strip in front of the basin, on its own side of the wall only (the other face
       // of that wall belongs to the next room)
-      var px = function (ax, az) { return [(ax - x0) / span * N + li * N, (az - z0) / span * N]; }, X2 = [-w.fz, w.fx];
-      var q = [[-0.9, 0.02], [0.9, 0.02], [0.9, 1.0], [-0.9, 1.0]].map(function (o) { return px(w.x + X2[0] * o[0] + w.fx * o[1], w.z + X2[1] * o[0] + w.fz * o[1]); });
+      var px = function (ax, az) { return [(ax - x0) / span * N + li * N, (az - z0) / span * N]; }, X2 = [w.fz, -w.fx]; // = up x F, the same X as where the strip was measured
+      var q = [[-w.l, 0.02], [w.r, 0.02], [w.r, w.d], [-w.l, w.d]].map(function (o) { return px(w.x + X2[0] * o[0] + w.fx * o[1], w.z + X2[1] * o[0] + w.fz * o[1]); });
       c.beginPath(); q.forEach(function (p2, k) { c[k ? 'lineTo' : 'moveTo'](p2[0], p2[1]); }); c.closePath(); c.fill();
     });
     Z.zoneMask.value.needsUpdate = true;
@@ -2395,7 +2395,17 @@
       }
       function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
       if (kind === 'basin') {
-        washSpots.push({ x: O.x + X.x * xm, y: fy, z: O.z + X.z * xm, fx: F.x, fz: F.z }); // its wall gets tiled (maskWashAreas); F points into its room
+        // its wall gets tiled (maskWashAreas): a strip up to 0.9 m each side and 1 m deep, stopped by
+        // the walls around the basin so it never runs past a corner into the next room
+        // measured at 1.3 m and again at 2.35 m (above door heads: a doorway is no gap in the room)
+        var wo = new THREE.Vector3(O.x + X.x * xm + F.x * 0.3, 0, O.z + X.z * xm + F.z * 0.3);
+        var reach = function (dv, cap) {
+          var best = cap;
+          [1.3, 2.35].forEach(function (hh0) { wo.y = fy + hh0; rc.set(wo, dv); rc.near = 0; rc.far = cap + 0.3; var hh = rc.intersectObjects(walls, false)[0]; if (hh) best = Math.min(best, hh.distance - 0.05); });
+          return Math.max(0, best);
+        };
+        washSpots.push({ x: O.x + X.x * xm, y: fy, z: O.z + X.z * xm, fx: F.x, fz: F.z,
+          l: reach(X.clone().negate(), 0.9), r: reach(X, 0.9), d: Math.min(1, 0.3 + reach(F, 0.7)) });
         // an existing counter around it? (a surface just below the basin's rim, beside it)
         var cTop = null; [1, -1].forEach(function (sg) {
           if (cTop != null) return;
