@@ -1378,7 +1378,11 @@
     c.globalCompositeOperation = 'lighter'; c.fillStyle = '#ff0000';
     washSpots.forEach(function (w) {
       var li = D.levels.indexOf(levelAt(w.y + 0.5)); if (li < 0 || li > 3) return;
-      c.beginPath(); c.arc((w.x - x0) / span * N + li * N, (w.z - z0) / span * N, 0.9 / span * N, 0, Math.PI * 2); c.fill();
+      // a 1.8 m wide strip in front of the basin, on its own side of the wall only (the other face
+      // of that wall belongs to the next room)
+      var px = function (ax, az) { return [(ax - x0) / span * N + li * N, (az - z0) / span * N]; }, X2 = [-w.fz, w.fx];
+      var q = [[-0.9, 0.02], [0.9, 0.02], [0.9, 1.0], [-0.9, 1.0]].map(function (o) { return px(w.x + X2[0] * o[0] + w.fx * o[1], w.z + X2[1] * o[0] + w.fz * o[1]); });
+      c.beginPath(); q.forEach(function (p2, k) { c[k ? 'lineTo' : 'moveTo'](p2[0], p2[1]); }); c.closePath(); c.fill();
     });
     Z.zoneMask.value.needsUpdate = true;
   }
@@ -2391,7 +2395,7 @@
       }
       function add(geo, mat, x, y, z, sx, sy, sz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); if (sx) mm.scale.set(sx, sy, sz); mm.castShadow = mm.receiveShadow = true; Gp.add(mm); return mm; }
       if (kind === 'basin') {
-        washSpots.push({ x: O.x + X.x * xm, y: fy, z: O.z + X.z * xm }); // its wall gets tiled (maskWashAreas)
+        washSpots.push({ x: O.x + X.x * xm, y: fy, z: O.z + X.z * xm, fx: F.x, fz: F.z }); // its wall gets tiled (maskWashAreas); F points into its room
         // an existing counter around it? (a surface just below the basin's rim, beside it)
         var cTop = null; [1, -1].forEach(function (sg) {
           if (cTop != null) return;
@@ -3357,7 +3361,7 @@
      - living / family rooms: a tailored contemporary sofa (track arms, crowned seat cushions,
        loose plump back cushions, layered scatter pillows, a throw) on a recessed plinth, with a
        tone-on-tone hand-tufted rug in front;
-     - majlis: low Arabic seating on a walnut base with a gold inlay, piped seat mattresses,
+     - majlis: low Arabic seating on a walnut base with a gold inlay, piped ivory seat mattresses,
        upright back cushions, bolsters at the open ends and a bordered medallion rug;
      - bedrooms: a soft boucle loveseat on walnut legs, or a barrel lounge chair. */
   var puffCache = {};
@@ -3527,7 +3531,7 @@
     return true;
   }
 
-  var majSeq = 0; // cushions alternate terracotta / ivory along the whole majlis
+  var majSeq = 0; // cushions alternate camel / ivory along the whole majlis
   function seatMajlis(F, G, mt) {
     var r = F.r, du = r.u1 - r.u0, dv = r.v1 - r.v0, cu = (r.u0 + r.u1) / 2, cv = (r.v0 + r.v1) / 2;
     if (!F.backs.length) { var bm = -1; F.sides.forEach(function (st, s) { if (st.maxh > bm) { bm = st.maxh; F.backs = [s]; } }); }
@@ -3554,7 +3558,7 @@
         tilt(bc, sd, 0.05);
         if (k % 2) return; // a small square cushion in front of every other one
         var at = (rc[0] + rc[1]) / 2, pr = sideRect(r, sd, 0.22, 0.12, at - 0.21, at + 0.21);
-        var pl = put(G, puffyGeo(sd < 2 ? 0.12 : 0.42, 0.42, sd < 2 ? 0.42 : 0.12, 0.02, sd < 2 ? 0.05 : 0.025, 0.025, sd < 2 ? 0.025 : 0.05), (mt.pilRust ? ((majSeq++) % 2 ? mt.pilCream : mt.pilRust) : mt.pipe), pr.u, seatTop + 0.2, pr.v);
+        var pl = put(G, puffyGeo(sd < 2 ? 0.12 : 0.42, 0.42, sd < 2 ? 0.42 : 0.12, 0.02, sd < 2 ? 0.05 : 0.025, 0.025, sd < 2 ? 0.025 : 0.05), (mt.majCamel ? ((majSeq++) % 2 ? mt.pilCream : mt.majCamel) : mt.pipe), pr.u, seatTop + 0.2, pr.v);
         tilt(pl, sd, 0.18);
       });
       // bolsters at the open ends of the run, gold end caps
@@ -3715,8 +3719,8 @@
     c.strokeStyle = 'rgba(150,135,115,.35)'; c.lineWidth = m * 0.012; c.strokeRect(b, b, W - 2 * b, H - 2 * b);
     c.strokeStyle = 'rgba(150,135,115,.5)'; c.lineWidth = 8; c.strokeRect(4, 4, W - 8, H - 8);
   }
-  function rugPersian(c, W, H, r) { // bordered medallion rug in navy, rust, gold and ivory
-    var navy = '#1E2A44', gold = '#B8955A', ivory = '#E8DFCC', rust = '#7E3E30', m = Math.min(W, H);
+  function rugPersian(c, W, H, r) { // bordered medallion rug in mocha, camel, gold and ivory (the majlis palette)
+    var navy = '#5E4C3D', gold = '#B8955A', ivory = '#E8DFCC', rust = '#A07A57', m = Math.min(W, H);
     var b1 = m * 0.03, b2 = m * 0.12, bw = b2 - b1;
     c.fillStyle = ivory; c.fillRect(0, 0, W, H);
     c.fillStyle = navy; c.fillRect(b1, b1, W - 2 * b1, H - 2 * b1);
@@ -3789,10 +3793,13 @@
     b.bedUph = rmat('bedUph', 0.5, '#8C7A68', 0.95, 'fabric', 0.1);
     b.runR = rmat('runR', 0.3, '#7A432D', 0.95, 'fabric', 0.1); b.runO = rmat('runO', 0.3, '#565C3E', 0.95, 'fabric', 0.1); b.runN = rmat('runN', 0.2, '#242E3D', 0.95, 'fabric', 0.1);
     b.accNavy = rmat('pillowN', 0.25, '#2F3A4B', 0.95, 'fabric', 0.1);
-    // majlis: sand seats, deep navy backs and bolsters, gold piping, terracotta and ivory cushions
+    // majlis, tone on tone with the room (walnut tables, oak panelling, warm walls): ivory linen
+    // seats, mocha velvet backs and bolsters, brass piping, ivory boucle and soft camel cushions.
+    // No navy: in this palette it read as a stray, eye-catching colour.
     b.creamLacq = rmat('creamL', 0.9, '#EFE9DE', 0.16); // cream gloss lacquer
-    b.majSeat = rmat('majSeat', 0.7, '#C9B99E', 0.9, 'fabric', 0.09);
-    b.majBack = rmat('majBack', 0.15, '#232D45', 0.82, 'fabric', 0.09);
+    b.majSeat = rmat('majSeat', 0.78, '#D8CDBB', 0.92, 'fabric', 0.09);
+    b.majBack = rmat('majBack', 0.42, '#8F7A64', 0.8, 'fabric', 0.09);
+    b.majCamel = rmat('majCamel', 0.55, '#B8956C', 0.92, 'fabric', 0.1);
     return b;
   }
   function glowMatBed() {
@@ -4362,11 +4369,15 @@
     var mats = {};
     function mat(k) {
       if (mats[k]) return mats[k];
-      var P = { marble: { kind: 'calacatta', color: new THREE.Color('#EFEBE4'), rough: 0.12, metal: 0, tex: 'calacatta', scale: 1.3 },
+      // stairs: a warm taupe marble, honed, clearly darker than the hall floor (#EAE6DF): treads take
+      // the full overhead light, so the tone has to be deep to read darker at all
+      var P = { marble: { kind: 'calacatta', color: new THREE.Color('#9C8D77'), rough: 0.34, metal: 0, tex: 'calacatta', scale: 1.3 },
         walnut: { kind: 'walnut', color: new THREE.Color('#FFFFFF'), rough: 0.35, metal: 0, tex: 'walnut', scale: 1.1 },
         bronze: { kind: 'bronze', color: new THREE.Color('#8E6F48'), rough: 0.32, metal: 0.9, tex: null, scale: 1 },
         plaster: { kind: 'plaster', color: new THREE.Color('#ECE8E2'), rough: 0.92, metal: 0, tex: 'gypsum', scale: 1.6 } }[k];
-      return (mats[k] = makeMaterial(P, k === 'walnut' || k === 'bronze'));
+      mats[k] = makeMaterial(P, k === 'walnut' || k === 'bronze');
+      if (k === 'marble') mats[k].envMapIntensity = 0.18; // honed treads (safer underfoot): a polished one mirrors the bright hall and reads as white
+      return mats[k];
     }
     meshes.forEach(function (o) {
       var l = lookOf(o.userData.bk), name = (l && l.name) || '', kind = nameKind(l);
